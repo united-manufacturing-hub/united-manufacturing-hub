@@ -21,13 +21,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 )
 
 // A read can start failing at any point, not only at startup: a remount, a
 // reconfiguration, a failure that recovers. Construction-only reporting leaves
 // all of it silent.
 var _ = Describe("a read that starts failing later is reported too", func() {
-	cpuset := cgroupBase + "/cpuset.cpus.effective"
+	cpuset := constants.CgroupMountPath + "/cpuset.cpus.effective"
 	ctx := context.Background()
 
 	missing := func(p string) error {

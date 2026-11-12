@@ -25,6 +25,21 @@ import (
 	"go.uber.org/zap"
 )
 
+// BypassWriteFlowValidationEnv is the name of the BYPASS_WRITE_FLOW_VALIDATION environment
+// variable. When it is true, bridge write flow topics may name unchecked data contracts:
+// contracts that are not declared in dataContracts: or have no version. A bridge that
+// relies on this runs its write flow but reports degraded.
+const BypassWriteFlowValidationEnv = "BYPASS_WRITE_FLOW_VALIDATION"
+
+// BypassWriteFlowValidation reports whether BYPASS_WRITE_FLOW_VALIDATION is true. A value
+// that is not a boolean counts as false. main reads it once at startup and hands it to the
+// config manager, which sets it on AgentConfig.BypassWriteFlowValidation.
+func BypassWriteFlowValidation() bool {
+	bypass, _ := env.GetAsBool(BypassWriteFlowValidationEnv, false, false)
+
+	return bypass
+}
+
 // LoadConfigWithEnvOverrides loads the config file and applies environment variable overrides.
 // This function is used during initial application startup to handle configuration from both
 // persistent config files and runtime environment variables passed via docker -e flags.
@@ -126,8 +141,8 @@ func LoadConfigWithEnvOverrides(ctx context.Context, configManager *FileConfigMa
 					DesiredFSMState: "active", // Default desired state for Redpanda
 				},
 				RedpandaServiceConfig: redpandaserviceconfig.RedpandaServiceConfig{
-				Topic:     redpandaserviceconfig.TopicConfig{},
-				Resources: redpandaserviceconfig.ResourcesConfig{},
+					Topic:     redpandaserviceconfig.TopicConfig{},
+					Resources: redpandaserviceconfig.ResourcesConfig{},
 				},
 			},
 			TopicBrowser: TopicBrowserConfig{

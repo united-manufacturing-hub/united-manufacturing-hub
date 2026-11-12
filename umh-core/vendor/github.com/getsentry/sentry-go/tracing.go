@@ -551,7 +551,7 @@ func (s *Span) updateFromBaggage(header []byte) {
 
 func (s *Span) clientOptions() *ClientOptions {
 	client := hubFromContext(s.ctx).Client()
-	if client != nil {
+	if client.IsEnabled() {
 		return &client.options
 	}
 	return &ClientOptions{}
@@ -933,8 +933,8 @@ type TraceContext struct {
 
 func (tc TraceContext) Map() map[string]interface{} {
 	m := map[string]interface{}{
-		"trace_id": tc.TraceID,
-		"span_id":  tc.SpanID,
+		traceIDContextKey: tc.TraceID,
+		spanIDContextKey:  tc.SpanID,
 	}
 
 	if tc.ParentSpanID != [8]byte{} {
@@ -1202,7 +1202,7 @@ func HTTPtoSpanStatus(code int) SpanStatus {
 }
 
 func shouldContinueTrace(client *Client, dsc DynamicSamplingContext) bool {
-	if client == nil {
+	if !client.IsEnabled() {
 		return true
 	}
 

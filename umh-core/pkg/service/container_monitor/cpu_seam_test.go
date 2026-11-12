@@ -27,16 +27,16 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 )
@@ -92,7 +92,7 @@ var workerHealthyMessage = cpuhealth.ComposeMessage(
 const supervisorNotRunningMessage = "USE_FSMV2_CPU is enabled but the fsmv2 supervisor is not running, so CPU is not measured"
 
 // cpuStubStateReader is the cpuStubReader harness pattern from
-// pkg/fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
+// fsmv2/fsmv2client/freshness_test.go: a deps.StateReader that serves a
 // staged fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]] verbatim, letting
 // the test drive a REAL fsmv2 client's read side without a storage engine. The
 // framework wraps the worker's CPUStatus in simple.Status — the developer
@@ -120,6 +120,11 @@ func (s *cpuStubStateReader) LoadObservedTyped(_ context.Context, _, _ string, r
 	*out = *s.obs
 
 	return nil
+}
+
+// LoadDesiredTyped reports that no desired state is saved.
+func (*cpuStubStateReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
 }
 
 var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
@@ -1352,6 +1357,32 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 		})
 	})
 
+	Context("[default-on]", func() {
+		It("should take CPU health from the worker when USE_FSMV2_CPU is unset", func() {
+			GinkgoT().Setenv(envFlag, "")
+			Expect(os.Unsetenv(envFlag)).To(Succeed())
+			publishWorkerClient(&fsmv2.Observation[simple.Status[fsmv2cpu.CPUStatus]]{
+				CollectedAt: time.Now().Add(-500 * time.Millisecond),
+				Status: simple.Status[fsmv2cpu.CPUStatus]{
+					Result: fsmv2cpu.CPUStatus{
+						Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
+						Message: workerVerdictMessage,
+					},
+				},
+			})
+
+			service = container_monitor.NewContainerMonitorServiceWithPath(mockFS, testDataPath)
+
+			status, err := service.GetStatus(ctx)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The worker's message is a value the legacy path can never emit, so
+			// seeing it proves the unset flag selected the worker.
+			Expect(status.CPUHealth).To(Equal(models.Degraded))
+			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
+		})
+	})
+
 	Context("[legacy-off]", func() {
 		It("should keep filling status.CPU through the legacy getCPUMetrics path when USE_FSMV2_CPU is off, even though a worker observation exists", func() {
 			setFlag("false")
@@ -1504,10 +1535,6 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 // reachable through GetStatus too, but only with a published fsmv2 client and a
 // staged store.
 var _ = Describe("the CPU seam's judgement, called without a client", func() {
-	// The window the stale message quotes, derived the way production derives
-	// it, so a change to the worker's poll interval moves both together.
-	maxAge := 3 * fsmv2cpu.PollInterval
-
 	It("keeps the store's own error in the message of a failed read", func() {
 		health, cpuHealth := container_monitor.JudgeWorkerCPUReadError(errors.New("boltdb: bucket not found"))
 
@@ -1532,7 +1559,7 @@ var _ = Describe("the CPU seam's judgement, called without a client", func() {
 			Expect(cpuHealth).To(BeNil(), "no arm here judged a measurement")
 		},
 		Entry("stale", fsmv2client.Stale,
-			"CPU worker observation is stale (older than "+maxAge.String()+"); cannot trust the verdict it carries"),
+			"CPU worker observation is stale (older than "+fsmv2cpu.MaxObservationAge.String()+"); cannot trust the verdict it carries"),
 		Entry("never observed", fsmv2client.NotFound,
 			"CPU worker has never observed; no measurement to judge"),
 		Entry("removed", fsmv2client.Deleted,

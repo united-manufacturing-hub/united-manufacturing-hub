@@ -32,7 +32,7 @@ _ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm
 | **Evaluate** (`State.Next()`) | Checks shutdown, hello said, mood — returns state or action |
 | **Execute** (Actions) | `SayHello` logs a greeting and calls `deps.SetHelloSaid(true)` |
 
-See the parent [README's control loop section](../../../README.md#the-control-loop) for the general pattern.
+See the framework [README's control loop section](../../../../../fsmv2/README.md#the-control-loop) for the general pattern.
 
 ## File Layout
 

@@ -24,14 +24,16 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence/memory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application/snapshot"
 	child "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/persistence/memory"
 )
 
 func GetGoroutineCount() int {
@@ -304,6 +306,54 @@ type MockConnection struct{}
 
 func (m *MockConnection) IsHealthy() bool {
 	return true
+}
+
+func setupTestStoreForScenario(logger deps.FSMLogger) storage.TriangularStoreInterface {
+	basicStore := memory.NewInMemoryStore()
+
+	return storage.NewTriangularStore(basicStore, logger)
+}
+
+func getWorkersFromStore(store storage.TriangularStoreInterface) []scenariorunner.WorkerSnapshot {
+	ctx := context.Background()
+
+	resp, err := store.GetDeltas(ctx, storage.Subscription{LastSyncID: 0})
+	if err != nil {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+
+	var workers []scenariorunner.WorkerSnapshot
+
+	for _, delta := range resp.Deltas {
+		key := delta.WorkerType + "/" + delta.WorkerID
+		if seen[key] {
+			continue
+		}
+
+		seen[key] = true
+
+		snapshot, err := store.LoadSnapshot(ctx, delta.WorkerType, delta.WorkerID)
+		if err != nil {
+			continue
+		}
+
+		var observedDoc persistence.Document
+		if doc, ok := snapshot.Observed.(persistence.Document); ok {
+			observedDoc = doc
+		}
+
+		workers = append(workers, scenariorunner.WorkerSnapshot{
+			WorkerType: delta.WorkerType,
+			WorkerID:   delta.WorkerID,
+			Identity:   snapshot.Identity,
+			Desired:    snapshot.Desired,
+			Observed:   observedDoc,
+		})
+	}
+
+	return workers
 }
 
 func NewTestApplicationSupervisor(yamlConfig string, logger deps.FSMLogger) (*supervisor.Supervisor[fsmv2.Observation[snapshot.ApplicationStatus], *fsmv2.WrappedDesiredState[snapshot.ApplicationConfig]], error) {

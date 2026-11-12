@@ -19,17 +19,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/communication_state"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	"go.uber.org/zap/zaptest"
 )
 
 func TestMain(t *testing.T) {
@@ -37,15 +39,14 @@ func TestMain(t *testing.T) {
 	RunSpecs(t, "Main Suite")
 }
 
-var _ = Describe("communicatorEnabled", func() {
-	// communicatorEnabled is the decision main() consults to gate the FSMv2
-	// communicator. It is a pure function of the backend configuration, so it
-	// is asserted directly here rather than by running main(). The
-	// keep-the-legacy knob (UseFSMv2Transport) no longer routes anywhere: the
-	// legacy backend path was deleted, so the communicator is the only path it
-	// gates.
+var _ = Describe("hasRelayCredentials", func() {
+	// startFSMv2Runtime calls hasRelayCredentials to decide whether to start
+	// the Management Console module and the router. The check depends only on
+	// the agent config, so these specs call it directly instead of running
+	// main(). UseFSMv2Transport no longer has any effect, because the legacy
+	// backend path was deleted.
 
-	It("enables the communicator when credentials are present, even with the legacy transport switch off", func() {
+	It("enables the router when credentials are present, even with the legacy transport switch off", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL:            "http://fsmv2.invalid:9999",
@@ -54,16 +55,16 @@ var _ = Describe("communicatorEnabled", func() {
 			},
 		}
 
-		Expect(communicatorEnabled(cfg)).To(BeTrue())
+		Expect(hasRelayCredentials(cfg)).To(BeTrue())
 	})
 
-	It("does not enable the communicator when credentials are absent", func() {
+	It("does not enable the router when credentials are absent", func() {
 		cfg := config.AgentConfig{}
 
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 
-	It("does not enable the communicator when only API_URL is set", func() {
+	It("does not enable the router when only API_URL is set", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				APIURL: "http://fsmv2.invalid:9999",
@@ -72,17 +73,17 @@ var _ = Describe("communicatorEnabled", func() {
 
 		// The && credential contract must reject partial state; an operator with
 		// one field empty should not run without a token.
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 
-	It("does not enable the communicator when only AUTH_TOKEN is set", func() {
+	It("does not enable the router when only AUTH_TOKEN is set", func() {
 		cfg := config.AgentConfig{
 			CommunicatorConfig: config.CommunicatorConfig{
 				AuthToken: "test-token",
 			},
 		}
 
-		Expect(communicatorEnabled(cfg)).To(BeFalse())
+		Expect(hasRelayCredentials(cfg)).To(BeFalse())
 	})
 })
 
@@ -153,7 +154,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 	// The constructor reads neither credential today, so what this spec pins is
 	// their absence: it starts failing the moment either one is consulted here.
 	// It does not exercise credential handling, which lives in
-	// communicatorEnabled.
+	// hasRelayCredentials.
 	//
 	// The nil arguments below are unread on this path. Four of them panic if
 	// that ever changes, which a spec reports as a failure. The nil
@@ -182,18 +183,11 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 			nil,
 		)
 
-		// The channel bridge this builds starts two goroutines that exit only on
-		// ctx.Done(), and cleanup cannot reap them, so the context has to be
-		// cancellable. context.Background() would leak both for the life of the
-		// test binary.
-		ctx, cancel := context.WithCancel(context.Background())
-		DeferCleanup(cancel)
-
-		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(appSup).NotTo(BeNil())
+		Expect(applicationSupervisor).NotTo(BeNil())
 	})
 
 	// Without credentials and with USE_FSMV2_CPU on, the CPU worker must run.
@@ -230,11 +224,11 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		appSup, _, _, _, cleanup, err := buildFSMv2Supervisor(ctx, cfg, commState, logger.For(logger.ComponentCore), nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 		Expect(err).NotTo(HaveOccurred())
 
-		go func() { _ = appSup.Run(ctx) }()
+		go func() { _ = applicationSupervisor.Run(ctx) }()
 
 		Eventually(func() fsmv2client.Freshness {
 			_, freshness, err := fsmv2client.GetFresh[simple.Status[fsmv2cpu.CPUStatus]](
@@ -245,5 +239,62 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 
 			return freshness
 		}, 15*time.Second, 200*time.Millisecond).Should(Equal(fsmv2client.Fresh))
+	})
+})
+
+var _ = Describe("applyAuthenticatedUUID", func() {
+	const authenticatedUUID = "a4c3c2b3-1fe8-465f-a73f-0222b1da17b5"
+
+	var transport *sentry.MockTransport
+
+	BeforeEach(func() {
+		transport = &sentry.MockTransport{}
+		client, err := sentry.NewClient(sentry.ClientOptions{
+			Dsn:       "https://test@sentry.io/123",
+			Transport: transport,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The pushed scope confines the instance_uuid tag to this spec;
+		// PopScope in teardown drops it, so later specs see an untagged scope.
+		sentry.CurrentHub().PushScope()
+		sentry.CurrentHub().BindClient(client)
+	})
+
+	AfterEach(func() {
+		sentry.CurrentHub().PopScope()
+	})
+
+	It("tags later Sentry events with the applied UUID and keeps the login response apply", func() {
+		// NewCommunicationState initializes both mutexes; a bare struct
+		// literal leaves the unexported mu nil, and SetLoginResponseForFSMv2
+		// panics locking it.
+		cs := communication_state.NewCommunicationState(
+			nil,
+			nil,
+			nil,
+			"",
+			nil,
+			nil,
+			zaptest.NewLogger(GinkgoT()).Sugar(),
+			nil,
+			nil,
+		)
+
+		applyAuthenticatedUUID(authenticatedUUID, cs)
+
+		By("keeping the login response apply")
+		cs.LoginResponseMu.RLock()
+		loginResponse := cs.LoginResponse
+		cs.LoginResponseMu.RUnlock()
+		Expect(loginResponse).NotTo(BeNil())
+		Expect(loginResponse.UUID.String()).To(Equal(authenticatedUUID))
+
+		By("tagging a later Sentry event")
+		sentry.CaptureMessage("applyAuthenticatedUUID capstone")
+
+		events := transport.Events()
+		Expect(events).To(HaveLen(1), "expected exactly one captured event")
+		Expect(events[0].Tags["instance_uuid"]).To(Equal(authenticatedUUID))
 	})
 })

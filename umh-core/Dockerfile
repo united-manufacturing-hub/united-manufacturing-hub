@@ -14,8 +14,9 @@
 
 # --- Build Stage ---
 ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
-# Global so FROM crypto-${CRYPTOLIB} resolves; off means no ManagementConsole/mc context needed.
-ARG CRYPTOLIB=false
+# Global, so that FROM managementconsole-${MANAGEMENTCONSOLE} resolves. false builds
+# the open-source image, true the official image, local a development image.
+ARG MANAGEMENTCONSOLE=false
 
 # --- Cache Stage ---
 FROM scratch AS cache
@@ -26,7 +27,7 @@ COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS downloader
+FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -74,25 +75,58 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build-base
+FROM golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS build-base
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 # Copy dependency manifests first — only invalidated when deps change
-COPY ./go.mod ./go.sum ./
+COPY ./go.mod ./go.sum ./go.work ./go.work.sum ./
 # Copy vendored dependencies — invalidated only when vendor/ changes
 COPY ./vendor ./vendor
+COPY ./fsmv2 ./fsmv2
 
-# cryptolib disabled (default): no ManagementConsole sources; build falls back to the noop validator
-FROM build-base AS crypto-false
+# Open-source build: no Management Console module.
+FROM build-base AS managementconsole-false
 
-# cryptolib enabled: inject private ManagementConsole sources (provided via --build-context mc=...)
-FROM build-base AS crypto-true
+# Official build: fetch the Management Console module at the version go.mod
+# pins and add its source to vendor/. Only the parts of the module that the
+# binary uses are fetched: those vendor/modules.txt lists packages for. Each
+# download must match its go.sum line, or the build fails. The read token
+# comes in as the build secret github_token and is sent only as an HTTP header
+# inside this step, so it reaches no layer and no log.
+FROM build-base AS managementconsole-true
+RUN apk add --no-cache git
+RUN --mount=type=secret,id=github_token,required=true \
+    set -eu; \
+    auth="$(printf 'x-access-token:%s' "$(cat /run/secrets/github_token)" | base64 | tr -d '\n')"; \
+    export GOPRIVATE=github.com/united-manufacturing-hub/ManagementConsole GIT_TERMINAL_PROMPT=0 \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=http.https://github.com/united-manufacturing-hub/ManagementConsole.extraheader \
+    GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${auth}"; \
+    modules="$(awk ' \
+    /^# github.com\/united-manufacturing-hub\/ManagementConsole\// { m = $2; v = ($4 == "=>") ? $6 : $3; next } \
+    /^# / { m = ""; next } \
+    m != "" && $1 !~ /^#/ { print m "@" v; m = "" }' vendor/modules.txt)"; \
+    [ -n "$modules" ] || { echo "vendor/modules.txt lists no Management Console package"; exit 1; }; \
+    for mv in $modules; do \
+    path="${mv%@*}"; version="${mv#*@}"; \
+    json="$(go mod download -json "$mv")"; \
+    dir="$(printf '%s\n' "$json" | sed -n 's/^[[:space:]]*"Dir": "\(.*\)",$/\1/p')"; \
+    sum="$(printf '%s\n' "$json" | sed -n 's/^[[:space:]]*"Sum": "\(.*\)",$/\1/p')"; \
+    want="$(awk -v p="$path" -v v="$version" '$1 == p && $2 == v { print $3 }' go.sum)"; \
+    [ -n "$dir" ] && [ -n "$want" ] && [ "$sum" = "$want" ] \
+    || { echo "$mv does not match go.sum"; exit 1; }; \
+    mkdir -p "vendor/$path"; \
+    cp -R "$dir/." "vendor/$path/"; \
+    done
+
+# Local development build: the Management Console module from a local checkout
+# (--build-context mc=...). The Makefile refuses it in CI.
+FROM build-base AS managementconsole-local
 COPY --from=mc cryptolib ./vendor/github.com/united-manufacturing-hub/ManagementConsole/cryptolib
 COPY --from=mc shared ./vendor/github.com/united-manufacturing-hub/ManagementConsole/shared
 
-# Only crypto-true references the mc context, so the default build needs no ManagementConsole.
-FROM crypto-${CRYPTOLIB} AS build
-ARG CRYPTOLIB=false
+FROM managementconsole-${MANAGEMENTCONSOLE} AS build
+ARG MANAGEMENTCONSOLE=false
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -105,9 +139,17 @@ COPY ./pkg ./pkg
 COPY ./internal ./internal
 RUN echo "GOOS: ${GOOS:-$(go env GOOS)}, GOARCH: ${GOARCH:-$(go env GOARCH)}"
 RUN echo "Go version: $(go version)"
+# An image built with the Management Console module must link it. The build
+# fails when the module's package that checks incoming messages is not part of
+# the binary.
+RUN if [ "$MANAGEMENTCONSOLE" != "false" ]; then \
+    go list -mod=vendor -tags managementconsole -deps ./cmd \
+    | grep -qx 'github.com/united-manufacturing-hub/ManagementConsole/cryptolib/syncengine/instance/gatekeeper' \
+    || { echo "the Management Console module is not linked: its message check package is missing"; exit 1; }; \
+    fi
 # CGO_ENABLED=1 is needed for the race detector to work
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    if [ "$CRYPTOLIB" = "true" ]; then BASE_TAGS="cryptolib"; else BASE_TAGS=""; fi; \
+    if [ "$MANAGEMENTCONSOLE" != "false" ]; then BASE_TAGS="managementconsole"; else BASE_TAGS=""; fi; \
     if [ "$DEBUG" = "true" ]; then \
     CGO_ENABLED=1 go build \
     -race \
@@ -137,7 +179,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     fi
 
 # --- Final Stage ---
-FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS runner
+FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
@@ -147,9 +189,10 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
-# Added manually for an Aikido finding: the alpine base image still ships openssl 3.5.7-r0.
+# Added manually for Aikido findings: the alpine base image still ships openssl 3.5.7-r0
+# and zlib 1.3.2-r1 (CVE-2026-4738). The zlib floor fails the build rather than shipping an older one.
 # Must stay after the COPY --from=downloader, which replaces this stage's root.
-RUN apk add --no-cache --upgrade libcrypto3 libssl3
+RUN apk add --no-cache --upgrade libcrypto3 libssl3 'zlib>=1.4-r0'
 
 # Create non-root user and set ownership at build-time
 RUN adduser -D -u 1000 -s /bin/sh umhuser && \

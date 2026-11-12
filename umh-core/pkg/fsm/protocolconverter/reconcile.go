@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internal_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 	standarderrors "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/standarderrors"
@@ -410,6 +410,16 @@ func (p *ProtocolConverterInstance) reconcileStartingStates(ctx context.Context,
 			p.baseFSMInstance.GetLogger().Debugf("Failed to start flow: %v", err)
 
 			return err, false
+		}
+
+		// A write flow config that was rejected, or accepted only through
+		// BYPASS_WRITE_FLOW_VALIDATION, never makes the bridge healthy. Waiting here would
+		// hold the bridge in starting forever and make the read flow look stopped. Degrade
+		// instead: the read flow keeps running and the reason is visible.
+		if p.writeFlowConfigErr != nil {
+			p.ObservedState.ServiceInfo.StatusReason = "flow degraded: " + p.writeFlowConfigErr.Error()
+
+			return p.baseFSMInstance.SendEvent(ctx, EventDFCDegraded), true
 		}
 
 		// Now check whether the flow is healthy

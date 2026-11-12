@@ -20,10 +20,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 
 	// Blank-import the kernel config worker plus the dynamic worker the registry
 	// declares, so their init() registrations exist before the supervisor ticks.
@@ -40,7 +40,7 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("removes the helloworld child after Delete while the config-worker kernel survives", func() {
@@ -51,7 +51,7 @@ var _ = Describe("Application supervisor tears down a registry-deleted worker", 
 		// app supervisor constructs the application worker (so the COS read sees
 		// a non-nil handle).
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// Upsert a helloworld child and drive the supervisor on its started
 		// context so the spawned child's action executor runs.

@@ -14,7 +14,7 @@
 
 package example_slow
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 
 // ExampleslowConfig is the typed configuration for the slow worker.
 type ExampleslowConfig struct {

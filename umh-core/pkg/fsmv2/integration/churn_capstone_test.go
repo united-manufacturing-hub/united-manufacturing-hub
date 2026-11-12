@@ -21,13 +21,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 
 	// Blank-import the kernel config worker plus the dynamic worker the registry
 	// declares, so their init() registrations exist before the supervisor ticks.
@@ -43,7 +43,7 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 	)
 
 	AfterEach(func() {
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
 	It("Upserts K=3 helloworld workers to Running, then Deletes all and converges to exactly the kernel", func() {
@@ -55,7 +55,7 @@ var _ = Describe("Migration-API seam capstone: example-worker churn end-to-end",
 		// non-nil handle and the kernel is emitted. The config-worker kernel and
 		// the application read the same registry instance.
 		w := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configWorkerKey, w.Registry())
 
 		// An fsmv2Client over that Writer (writes) and the supervisor's store
 		// (reads) -- built once the store exists below. HEADLESS: no Agent block,

@@ -42,10 +42,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/simple"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -85,17 +86,18 @@ type TimescaleStatus struct {
 	// Host is the observed timescale host.
 	Host string `json:"host"`
 	// Auth reports whether the endpoint accepted the credentials and database
-	// name. It is TimescaleAuthUnknown when nothing answered (a network or timeout
-	// fault), TimescaleAuthInvalid when the server answered but rejected the
-	// config, and TimescaleAuthValid on a successful query.
+	// name. It is TimescaleAuthValid on a successful query, TimescaleAuthInvalid
+	// when the server rejected the credentials or database name, and
+	// TimescaleAuthUnknown on any other failure, including a server error that
+	// is not an auth fault.
 	Auth models.TimescaleAuthState `json:"auth"`
 	// LatencyMs is the query round-trip time in milliseconds.
 	LatencyMs float64 `json:"latency_ms"`
 	// Port is the observed timescale port.
 	Port uint16 `json:"port"`
-	// Reachable is true when the endpoint answered, whether the query succeeded
-	// or the server rejected the credentials/database (an auth fault). It is
-	// false only for network or timeout faults, where nothing answered.
+	// Reachable is true when the server answered: the query succeeded or the
+	// server returned an error. It is false when nothing answered (a network or
+	// timeout fault) and when the connection pool could not be built.
 	Reachable bool `json:"reachable"`
 	// Read on a slower schedule than the connection check, keeping its last value
 	// between reads, so it is empty only until the first one completes.
@@ -123,12 +125,17 @@ type TimescaleStatus struct {
 // respawn with an identical DSN then gets the cached pool.
 var sharedPool = &poolHolder{}
 
+// DatabaseKey holds a database Poll queries instead of the shared pool.
+var DatabaseKey = fsmv2config.NewDependencyKey[timescalemetrics.Database]("historian-timescale.database")
+
 // Deps carries what Poll needs: this instance's BaseDependencies, whose logger
-// Poll writes to, and the holder it queries through.
+// Poll writes to, and what it queries. That is the database stored under
+// DatabaseKey, or the shared pool when none is stored.
 type Deps struct {
 	*deps.BaseDependencies
 
 	pool         *poolHolder
+	database     timescalemetrics.Database // nil in production
 	summary      *readCache[timescalemetrics.Summary]
 	databaseSize *readCache[int64]
 }
@@ -138,13 +145,29 @@ type Deps struct {
 // names the worker, and hands out sharedPool rather than building a holder,
 // because the framework never releases what a worker holds. The identity is
 // unused: nothing else here varies per instance.
-func newDeps(_ deps.Identity, bd *deps.BaseDependencies) Deps {
+func newDeps(_ deps.Identity, bd *deps.BaseDependencies, m map[string]any) Deps {
+	database, _ := fsmv2config.LookupDependency(m, DatabaseKey)
+
 	return Deps{
 		BaseDependencies: bd,
 		pool:             sharedPool,
+		database:         database,
 		summary:          sharedSummary,
 		databaseSize:     sharedDatabaseSize,
 	}
+}
+
+func (d Deps) databaseFor(dsn string) (timescalemetrics.Database, error) {
+	if d.database != nil {
+		return d.database, nil
+	}
+
+	pool, err := d.pool.get(dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	return pool, nil
 }
 
 // poolHolder caches a single pgx pool, rebuilding it when the DSN changes (for
@@ -241,25 +264,51 @@ func authRejected(err error) bool {
 	return badCredentials || unknownDatabase
 }
 
-// Poll runs a `SELECT 1` over the shared pool once and logs the outcome. A
+func unexpectedQueryFailure(err error) bool {
+	return serverAnswered(err) && !authRejected(err)
+}
+
+type failureTag string
+
+const (
+	tagPoolFailed             failureTag = "historian::pool_failed"
+	tagQueryFailed            failureTag = "historian::query_failed"
+	tagSummaryReadFailed      failureTag = "historian::summary_read_failed"
+	tagDatabaseSizeReadFailed failureTag = "historian::database_size_read_failed"
+)
+
+func (d Deps) report(ctx context.Context, tag failureTag, host string, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	d.GetLogger().SentryWarn(deps.FeatureSupportHistorian, d.GetHierarchyPath(), string(tag),
+		deps.String("host", host),
+		deps.Err(err))
+}
+
+// Poll runs a `SELECT 1` once and logs the outcome. It queries the database
+// stored under DatabaseKey, or the shared pool when none is stored. A
 // successful query returns a reachable, auth-valid status with the measured
-// latency. On error it returns an unreachable status and wraps the error, which
-// the framework persists as a degraded verdict; an authentication or
-// unknown-database error additionally sets Auth=TimescaleAuthInvalid to flag a
-// configuration fault, while a network or timeout error leaves
-// Auth=TimescaleAuthUnknown.
+// latency. A failed query is an observation, returned with a nil error for
+// health to judge: an authentication or unknown-database error sets
+// Auth=TimescaleAuthInvalid, and a network or timeout error leaves
+// Reachable=false and Auth=TimescaleAuthUnknown. Poll returns an error only when
+// it could not observe: the pool could not be built, or the worker is shutting
+// down.
 func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	cfg = cfg.WithDefaults()
 	host, port := cfg.Timescale.Host, cfg.Timescale.Port
 
 	dsn := cfg.Timescale.ToDSN()
 
-	pool, err := d.pool.get(dsn)
+	db, err := d.databaseFor(dsn)
 	if err != nil {
 		d.GetLogger().Debug("timescale connection check",
 			deps.String("host", host),
 			deps.Bool("reachable", false),
 			deps.Err(err))
+		d.report(ctx, tagPoolFailed, host, err)
 
 		return TimescaleStatus{
 			Host:                      host,
@@ -273,7 +322,17 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	start := time.Now()
 
 	var one int
-	if err := pool.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
+	if err := db.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return TimescaleStatus{
+				Host:                      host,
+				Port:                      port,
+				Auth:                      models.TimescaleAuthUnknown,
+				Summary:                   d.summary.last(dsn),
+				DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+			}, fmt.Errorf("timescale query %s cancelled: %w", host, ctx.Err())
+		}
+
 		// Any server-side PgError means the endpoint is reachable. Auth is proven
 		// invalid only when the server rejected the credentials or database name;
 		// other server errors leave the config unverified. A non-PgError (network,
@@ -289,6 +348,10 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.String("auth", string(auth)),
 			deps.Err(err))
 
+		if unexpectedQueryFailure(err) {
+			d.report(ctx, tagQueryFailed, host, err)
+		}
+
 		return TimescaleStatus{
 			Host:                      host,
 			Port:                      port,
@@ -296,7 +359,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			Auth:                      auth,
 			Summary:                   d.summary.last(dsn),
 			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
-		}, fmt.Errorf("timescale query %s: %w", host, err)
+		}, nil
 	}
 
 	elapsedMs := float64(time.Since(start).Microseconds()) / 1000.0
@@ -314,21 +377,22 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		LatencyMs:                 elapsedMs,
 		Port:                      port,
 		Reachable:                 true,
-		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, pool, host)),
-		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, pool, host)),
+		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, db, host)),
+		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, db, host)),
 	}, nil
 }
 
-// The error is logged and discarded: a summary that cannot be read is not a
-// connection fault, and returning it would drive the worker degraded for a
-// database that is answering.
-func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (timescalemetrics.Summary, bool) {
+// The error is logged and reported, not returned: a summary that cannot be
+// read is not a connection fault, and returning it would drive the worker
+// degraded for a database that is answering.
+func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, bool) {
 	return func() (timescalemetrics.Summary, bool) {
-		summary, err := timescalemetrics.CollectSummary(ctx, pool)
+		summary, err := timescalemetrics.CollectSummary(ctx, db)
 		if err != nil {
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
 				deps.Err(err))
+			d.report(ctx, tagSummaryReadFailed, host, err)
 
 			return timescalemetrics.Summary{}, false
 		}
@@ -337,13 +401,14 @@ func summaryReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string)
 	}
 }
 
-func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host string) func() (int64, bool) {
+func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, bool) {
 	return func() (int64, bool) {
-		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, pool)
+		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, db)
 		if err != nil {
 			d.GetLogger().Debug("timescale database size",
 				deps.String("host", host),
 				deps.Err(err))
+			d.report(ctx, tagDatabaseSizeReadFailed, host, err)
 
 			return 0, false
 		}
@@ -352,11 +417,28 @@ func databaseSizeReader(ctx context.Context, d Deps, pool *pgxpool.Pool, host st
 	}
 }
 
+func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
+	if status.Auth == models.TimescaleAuthValid {
+		return simple.Healthy("connected to TimescaleDB")
+	}
+
+	if status.Auth == models.TimescaleAuthInvalid {
+		return simple.Degraded("TimescaleDB rejected the credentials or the database name")
+	}
+
+	if !status.Reachable {
+		return simple.Degraded("TimescaleDB is unreachable")
+	}
+
+	return simple.Degraded("TimescaleDB answered, but the connection check failed")
+}
+
 func init() {
 	simple.Register(simple.MonitorSpec[config.HistorianConfig, TimescaleStatus, Deps]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
 		Poll:       Poll,
+		Health:     health,
 		NewDeps:    newDeps,
 	})
 }

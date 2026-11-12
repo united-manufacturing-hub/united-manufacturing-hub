@@ -14,7 +14,7 @@
 
 package examplepanic
 
-import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+import "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 
 // ExamplepanicConfig is the typed configuration for the panic worker.
 type ExamplepanicConfig struct {

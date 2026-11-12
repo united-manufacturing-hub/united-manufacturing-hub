@@ -27,7 +27,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 )
 
 // fastNormalize drops the third return value of normalizeValue. It lives here

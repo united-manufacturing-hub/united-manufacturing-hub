@@ -17,7 +17,7 @@ package examplepanic
 import (
 	"sync"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
 // ExamplepanicDepsIface is the minimal interface used by action files.

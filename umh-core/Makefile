@@ -70,7 +70,7 @@ S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
 ## Each benthos-umh release opens a PR (author umh-cross-repo-automation) that bumps this value and adds the CHANGELOG entry. Review that PR instead of bumping by hand.
-BENTHOS_UMH_VERSION = 0.16.0
+BENTHOS_UMH_VERSION = 0.16.2
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -201,13 +201,25 @@ COMMON_ARGS = \
 ROOT_DIR := $(shell git rev-parse --show-toplevel)
 MC_PATH := $(ROOT_DIR)/../ManagementConsole
 
-# CRYPTOLIB=true builds the private cryptolib validator (needs mc context); false is noop, no MC.
-CRYPTOLIB ?= false
-MC_CONTEXT_ARG = $(if $(filter true,$(CRYPTOLIB)),--build-context mc=$(MC_PATH),)
+# MANAGEMENTCONSOLE selects the Management Console module:
+#   false  the open-source image, without the module (default);
+#   true   the official image, with the module at the version go.mod pins. It
+#          needs a read token for the private module in MC_READ_TOKEN, which
+#          reaches the build only as the secret github_token;
+#   local  a development image, with the module from the checkout at MC_PATH.
+#          CI refuses it.
+MANAGEMENTCONSOLE ?= false
+comma := ,
+MC_BUILD_ARGS = --build-arg MANAGEMENTCONSOLE=$(MANAGEMENTCONSOLE) \
+	$(if $(filter true,$(MANAGEMENTCONSOLE)),--secret id=github_token$(comma)env=MC_READ_TOKEN,) \
+	$(if $(filter local,$(MANAGEMENTCONSOLE)),--build-context mc=$(MC_PATH),)
+ifeq ($(CI)-$(MANAGEMENTCONSOLE),true-local)
+$(error MANAGEMENTCONSOLE=local is for development only; CI builds use true or false)
+endif
 
 define DOCKER_BUILD
 	docker buildx build $(COMMON_ARGS) $(EXTRA_ARGS) \
-		--build-arg CRYPTOLIB=$(CRYPTOLIB) $(MC_CONTEXT_ARG) \
+		$(MC_BUILD_ARGS) \
 		--progress=plain --load -f Dockerfile \
 		-t $(IMAGE_NAME):$(TAG) .
 endef
@@ -220,7 +232,7 @@ CI_ARGS = \
 # TAGS should be passed as: TAGS="-t ghcr.io/.../umh-core:tag1 -t ghcr.io/.../umh-core:tag2"
 define DEPOT_BUILD
 	depot build $(CI_ARGS) $(EXTRA_ARGS) \
-		--build-arg CRYPTOLIB=$(CRYPTOLIB) $(MC_CONTEXT_ARG) \
+		$(MC_BUILD_ARGS) \
 		--project $(DEPOT_PROJECT_ID) \
 		--push \
 		--progress=plain -f Dockerfile \
@@ -238,9 +250,12 @@ UNIT_LABEL_FILTER := !integration && !redpanda-extended && !tls && !live
 # Explicit list: excludes integration/ (requires Docker; has its own make target)
 UNIT_TEST_PKGS := ./cmd/... ./internal/... ./pkg/... ./test/...
 # Package that runs its Ginkgo suite in parallel (--procs); must be kept separate
-UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/examples/...
+UNIT_TEST_PKGS_PARALLEL := ./pkg/fsmv2/scenarios/...
 # All unit-test packages except the parallel ones (evaluated on first use)
-UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/examples' | tr '\n' ' ')
+UNIT_TEST_PKGS_SERIAL = $(shell go list -tags=test ./cmd/... ./internal/... ./pkg/... ./test/... | grep -v 'fsmv2/scenarios' | tr '\n' ' ')
+# The fsmv2 module (./fsmv2) is its own Go module, so umh-core's ./... does not
+# reach it. vet, lint, nilaway, test, unit-test and benchmark also run there.
+FSMV2_DIR := fsmv2
 
 build:
 build-pprof:       EXTRA_ARGS := --build-arg PPROF=true
@@ -253,8 +268,8 @@ build build-pprof build-debug: build-protobuf download-docker-binaries
 # CI build using Depot (multi-arch)
 # Note: Skips build-protobuf since pb.go files are committed to repo
 # Usage: make build-depot DEPOT_PROJECT_ID=xxx TAGS="-t ghcr.io/.../umh-core:v1.0.0" VERSION=v1.0.0
-# Release images always ship the real cryptolib validator.
-build-depot: CRYPTOLIB := true
+# Release images always link the Management Console module.
+build-depot: MANAGEMENTCONSOLE := true
 build-depot: download-docker-binaries
 	$(call DEPOT_BUILD)
 
@@ -338,9 +353,11 @@ cleanup-all: cleanup-ci cleanup-tmp cleanup-data
 
 vet:
 	go vet -tags=test ./...
+	cd $(FSMV2_DIR) && go vet -tags=test ./...
 
 lint:
 	golangci-lint run --fix ./...
+	cd $(FSMV2_DIR) && golangci-lint run --fix ./...
 
 nilaway:
 	# See lefthook.yaml for more details
@@ -349,12 +366,16 @@ nilaway:
 		-exclude-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/redpanda" \
 		-exclude-errors-in-files="integration/" \
 		./...
+	cd $(FSMV2_DIR) && nilaway \
+		-include-pkgs="github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core" \
+		./...
 
 # Meta target for vet, nilaway and lint
 vet-nilaway-lint: vet nilaway lint
 
 test: vet-nilaway-lint
 	go test -race -v -tags=test ./...
+	cd $(FSMV2_DIR) && go test -race -v -tags=test ./...
 
 unit-test:
 ifeq ($(CI), true)
@@ -362,6 +383,9 @@ ifeq ($(CI), true)
 	gotestsum --junitfile unit-test-report.xml -- -race -v -tags=test -count=1 -failfast -p 4 \
 		$(UNIT_TEST_PKGS_SERIAL) \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color || FAILED=1; \
+	(cd $(FSMV2_DIR) && gotestsum --junitfile ../unit-test-report-fsmv2.xml -- -race -v -tags=test -count=1 -failfast -p 4 \
+		./... \
+		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)' -ginkgo.no-color) || FAILED=1; \
 	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
 		--label-filter='$(UNIT_LABEL_FILTER)' --junit-report=unit-test-report-parallel.xml \
 		--no-color \
@@ -370,6 +394,8 @@ ifeq ($(CI), true)
 else
 	go test -race -v -tags=test -count=1 -failfast -p 4 \
 		$(UNIT_TEST_PKGS_SERIAL) \
+		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
+	cd $(FSMV2_DIR) && go test -race -v -tags=test -count=1 -failfast -p 4 ./... \
 		-args -ginkgo.label-filter='$(UNIT_LABEL_FILTER)'
 	go run github.com/onsi/ginkgo/v2/ginkgo run --procs=30 --race --tags=test \
 		--label-filter='$(UNIT_LABEL_FILTER)' \
@@ -383,6 +409,7 @@ unit-test-fail-slow: vet-nilaway-lint
 benchmark:
 	@echo "Running benchmarks..."
 	go test -race -bench=. -benchmem ./...
+	cd $(FSMV2_DIR) && go test -race -bench=. -benchmem ./...
 
 benchmark-config:
 	@echo "Running config package benchmarks..."
@@ -432,8 +459,24 @@ badssl-test: pre-test
 
 update-go-dependencies:
 	go get -u ./...
+	cd $(FSMV2_DIR) && go get -u ./... && go mod tidy
 	go mod tidy
-	go mod vendor
+	go work vendor
+	rm -rf vendor/$(MC_MODULE)
+
+MC_MODULE := github.com/united-manufacturing-hub/ManagementConsole
+
+# moves the module pin to REF, a ManagementConsole commit on staging or a tag
+bump-managementconsole:
+	@test -n "$(REF)" || { echo "usage: make bump-managementconsole REF=<commit or tag>"; exit 1; }
+	@status="$$(gh api repos/united-manufacturing-hub/ManagementConsole/compare/staging...$(REF) --jq .status)"; \
+	  [ "$$status" = "behind" ] || [ "$$status" = "identical" ] || { echo "$(REF) is not on ManagementConsole staging"; exit 1; }
+	GOPRIVATE=$(MC_MODULE) go get $(MC_MODULE)/cryptolib@$(REF)
+	version="$$(go list -m -f '{{.Version}}' $(MC_MODULE)/cryptolib)"; \
+	  go mod edit -replace=$(MC_MODULE)/shared@v0.0.0=$(MC_MODULE)/shared@$$version
+	GOPRIVATE=$(MC_MODULE) go mod tidy
+	GOPRIVATE=$(MC_MODULE) go work vendor
+	rm -rf vendor/$(MC_MODULE)
 
 # Print version variables for use in other scripts/tools
 print-versions:

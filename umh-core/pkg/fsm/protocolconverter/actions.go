@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
@@ -29,7 +30,6 @@ import (
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
 	redpandafsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
@@ -335,11 +335,34 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 		agentLocationStr,
 		nil, // TODO: add global vars
 		snapshot.CurrentConfig.Historian,
+		snapshot.CurrentConfig.DataContracts,
+		snapshot.CurrentConfig.Agent.BypassWriteFlowValidation,
 		runtime_config.BridgedByPlaceholder,
 		p.baseFSMInstance.GetID(),
 	)
-	if err != nil {
-		p.baseFSMInstance.GetLogger().Errorf("failed to build runtime config: %v", err)
+	// A failure confined to the write flow leaves connection and read flow rendered, so the
+	// bridge keeps serving them. With BYPASS_WRITE_FLOW_VALIDATION the write flow may be
+	// rendered and running too, but the bridge still reports degraded. Any other failure
+	// means no usable config at all.
+	var writeFlowErr *runtime_config.WriteFlowConfigError
+
+	p.writeFlowConfigErr = nil
+
+	switch {
+	case errors.As(err, &writeFlowErr):
+		p.writeFlowConfigErr = writeFlowErr
+		p.ObservedState.ServiceInfo.StatusReason = writeFlowErr.Error()
+
+		if writeFlowErr.Bypassed {
+			// BYPASS_WRITE_FLOW_VALIDATION: the write flow runs. The degraded status already
+			// shows the reason, so it is logged at debug level only.
+			p.baseFSMInstance.Logger.Debugf("write flow degraded: %v", writeFlowErr)
+		} else {
+			// Repeats every tick until the config is fixed, so dedup by format string.
+			p.baseFSMInstance.Logger.LogErrorDedup("write flow not started: %v", writeFlowErr)
+		}
+	case err != nil:
+		p.baseFSMInstance.Logger.LogErrorDedup("failed to build runtime config: %v", err)
 		// Capture the configuration error in StatusReason for troubleshooting
 		p.ObservedState.ServiceInfo.StatusReason = "config error: " + err.Error()
 
@@ -357,8 +380,8 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	// Exclude such a DFC from the divergence comparison to avoid a permanent
 	// false divergence and endless re-apply loop.
 	pcStopped := p.baseFSMInstance.GetDesiredFSMState() == OperationalStateStopped
-	readStopped := pcStopped || p.specConfig.ReadDFCDesiredState == OperationalStateStopped
-	writeStopped := pcStopped || p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+	readStopped := pcStopped || p.specConfig.ReadDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
+	writeStopped := pcStopped || p.specConfig.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
 
 	if !protocolconverterserviceconfig.ConfigsEqualRuntimeWithDFCState(p.runtimeConfig, p.ObservedState.ObservedProtocolConverterRuntimeConfig, readStopped, writeStopped) {
 		p.baseFSMInstance.GetLogger().Debugf("Observed bridge config is different from desired config, updating bridge configuration")
@@ -478,14 +501,22 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	writeRunning := writeState == dataflowfsm.OperationalStateIdle || writeState == dataflowfsm.OperationalStateActive
 
 	// Intentionally stopped counts as healthy
-	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == OperationalStateStopped
-	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == OperationalStateStopped
+	readIntentionallyStopped := p.specConfig.ReadDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
+	writeIntentionallyStopped := p.specConfig.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
 
 	readHasConfig := len(p.specConfig.Config.DataflowComponentReadServiceConfig.BenthosConfig.Input) > 0
 	writeHasConfig := p.specConfig.Config.DataflowComponentWriteServiceConfig.HasOutput()
 
 	readHealthy := readRunning || readIntentionallyStopped || !readHasConfig
 	writeHealthy := writeRunning || writeIntentionallyStopped || !writeHasConfig
+
+	// A rejected write flow is kept out of the runtime, so it reads as stopped rather than
+	// failed. Without this the bridge would recover to idle and degrade again every tick.
+	// With BYPASS_WRITE_FLOW_VALIDATION the write flow runs, but the bridge stays degraded
+	// while its topics break the data contract rules.
+	if p.writeFlowConfigErr != nil && !writeIntentionallyStopped {
+		writeHealthy = false
+	}
 
 	if readHealthy && writeHealthy {
 		return true, ""
@@ -500,6 +531,15 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 		return false, statusReason
 	}
 
+	// With BYPASS_WRITE_FLOW_VALIDATION the write flow runs, so once it stops running its
+	// own reason is the more useful one, for example an output that cannot connect.
+	if p.writeFlowConfigErr != nil {
+		bypassedWriteFlowFailed := p.writeFlowConfigErr.Bypassed && !writeRunning
+		if !bypassedWriteFlowFailed {
+			return false, p.writeFlowConfigErr.Error()
+		}
+	}
+
 	statusReason := p.ObservedState.ServiceInfo.DataflowComponentWriteObservedState.ServiceInfo.StatusReason
 	if statusReason == "" {
 		statusReason = "flow health status unknown"
@@ -511,8 +551,8 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 // areBothDFCsIntentionallyStopped returns true when both the read and write DFC
 // desired states are set to stopped and at least one of them has a config deployed.
 func (p *ProtocolConverterInstance) areBothDFCsIntentionallyStopped() bool {
-	if p.specConfig.ReadDFCDesiredState != OperationalStateStopped ||
-		p.specConfig.WriteDFCDesiredState != OperationalStateStopped {
+	if p.specConfig.ReadDFCDesiredState != protocolconverterserviceconfig.DFCDesiredStateStopped ||
+		p.specConfig.WriteDFCDesiredState != protocolconverterserviceconfig.DFCDesiredStateStopped {
 		return false
 	}
 
@@ -554,12 +594,12 @@ func safeBenthosMetricsFrom(obs dataflowfsm.DataflowComponentObservedState) (inp
 	metrics := obs.ServiceInfo.BenthosObservedState.ServiceInfo.BenthosStatus.BenthosMetrics.Metrics
 
 	return connectionMetrics{
-			ConnectionUp:   metrics.InputConnectionUpTotal(),
-			ConnectionLost: metrics.InputConnectionLostTotal(),
-		}, connectionMetrics{
-			ConnectionUp:   metrics.OutputConnectionUpTotal(),
-			ConnectionLost: metrics.OutputConnectionLostTotal(),
-		}
+		ConnectionUp:   metrics.InputConnectionUpTotal(),
+		ConnectionLost: metrics.InputConnectionLostTotal(),
+	}, connectionMetrics{
+		ConnectionUp:   metrics.OutputConnectionUpTotal(),
+		ConnectionLost: metrics.OutputConnectionLostTotal(),
+	}
 }
 
 // IsOtherDegraded checks for certain states that should never happen

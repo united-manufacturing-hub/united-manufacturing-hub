@@ -20,9 +20,9 @@ package snapshot
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
 // Default intervals applied when a PersistenceConfig field is left at its
@@ -34,8 +34,8 @@ const (
 )
 
 // PersistenceConfig holds the user-provided configuration for the persistence worker.
-// Embeds BaseUserSpec so the worker's DeriveDesiredState can read the user-facing
-// State from the "state" YAML field.
+// It embeds BaseUserSpec, so the "state" YAML field parses, but no persistence
+// code reads it.
 type PersistenceConfig struct {
 	config.BaseUserSpec `yaml:",inline"`
 	CompactionInterval  time.Duration `json:"compactionInterval"  yaml:"compactionInterval"`

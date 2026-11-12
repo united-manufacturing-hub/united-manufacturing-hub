@@ -26,3 +26,7 @@ changelog-images/
 tools/
 integration/
 test/
+
+# The Management Console module's source never goes into the image context;
+# the official build fetches it at the version go.mod pins.
+vendor/github.com/united-manufacturing-hub/ManagementConsole/

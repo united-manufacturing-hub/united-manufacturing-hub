@@ -18,7 +18,7 @@
 //
 // The state-machine shape and the RenderChildren-based parent-child pattern
 // in this package are the intended templates for new workers. See
-// pkg/fsmv2/doc.go § Parent-child workers for the contract.
+// fsmv2/doc.go § Parent-child workers for the contract.
 //
 // # WARNING: do NOT copy the timing-variable test pattern
 //
@@ -31,7 +31,7 @@
 //
 // # References
 //
-// pkg/fsmv2/doc.go § Parent-child workers points at this package as the
+// fsmv2/doc.go § Parent-child workers points at this package as the
 // despawn example (children are stateless). For the variant where stopped
 // children stay resident (not despawned), see workers/transport.
 //

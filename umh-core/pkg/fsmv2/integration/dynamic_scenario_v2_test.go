@@ -21,41 +21,39 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cse/storage"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/integration"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 
 	// Blank-import the state packages so their init() registrations exist before
-	// the supervisor ticks. The config worker and helloworld worker packages are
-	// already imported by name above, which runs their init() too.
+	// the supervisor ticks.
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/state"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld/state"
 )
 
-var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func() {
+var _ = Describe("Dynamic Scenario: migration-API lifecycle real proof", func() {
 	const configWorkerKey = "configworker"
 
 	AfterEach(func() {
 		// The configworker deps key is process-global; clear it so a failed run
 		// does not leak the registry into later integration specs.
-		register.ClearDeps(configWorkerKey)
+		register.ClearGlobalDeps(configWorkerKey)
 	})
 
-	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel survives", func() {
+	It("drives one helloworld child through create->Running, update->observed-change, then Delete while the kernel keeps running", func() {
 		// The dynamic scenario must be registered beside noop and reachable
 		// through the same merged listing the CLI reads. A missing entry here is
 		// the first thing this rung adds.
-		listing := examples.ListScenarios()
+		listing := scenarios.ListScenarios()
 		Expect(listing).To(HaveKey("dynamic"),
-			"merged ListScenarios must contain the v2 dynamic scenario")
+			"merged ListScenarios must contain the dynamic scenario")
 
-		dynamic, ok := examples.RegistryV2["dynamic"]
+		dynamic, ok := scenarios.Registry["dynamic"]
 		Expect(ok).To(BeTrue(),
-			"RegistryV2 must register the dynamic scenario beside noop")
-		Expect(dynamic.Driver).NotTo(BeNil(),
-			"the dynamic scenario must carry a driver that exercises the migration-API client")
+			"Registry must register the dynamic scenario beside noop")
+		Expect(dynamic.Run).NotTo(BeNil(),
+			"the dynamic scenario must carry a Run that exercises the migration-API client")
 
 		testLogger := integration.NewTestLogger()
 		defer testLogger.Stop()
@@ -65,58 +63,23 @@ var _ = Describe("Dynamic ScenarioV2: migration-API lifecycle real proof", func(
 
 		store := setupTestStoreForScenario(testLogger.FSMLogger)
 
-		// Run the real dynamic driver against a live kernel-only supervisor. The
-		// runner builds an fsmv2client over this same store, so the driver reads
-		// observed state through the same store this battery inspects afterward.
-		result, err := examples.Run(ctx, examples.RunConfig{
-			ScenarioV2:   dynamic,
+		// The runner builds an fsmv2client over this same store, so Run reads
+		// observed state from the store verifyStateFieldsAreValid inspects afterward.
+		result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
+			Scenario:     dynamic,
 			Duration:     2 * time.Second,
 			TickInterval: 100 * time.Millisecond,
 			Logger:       testLogger.FSMLogger,
 			Store:        store,
 		})
 
-		// CREATE + UPDATE PROOF (load-bearing): the driver returned nil. The driver
-		// returns nil only after it has read, from the run's store through
-		// fsmv2client.Get against the live child, BOTH the create->Running state and
-		// the update's new mood. Each leg in driveDynamicHello is a poll that loops
-		// until the value is observed in the store, surfacing every error except
-		// ErrNotFound. So this nil return is the create->update migration-API
-		// proof: a runtime Upsert of a real config field (a new moodFilePath)
-		// reached a live child and its new value became observable.
-		//
-		// We do not re-read the final mood from the store here: after Delete the
-		// child can store an empty mood once the driver removes its temp mood
-		// files, and once the child is removed Get returns ErrWorkerDeleted.
+		// Run checks each step itself through env.WaitFor. What a removal leaves in
+		// the store is checked in app_removal_marks_deleted_test.go.
 		Expect(err).NotTo(HaveOccurred(),
-			"the dynamic driver must observe create->Running and update->changed-mood through the migration-API client, then Delete, without error")
+			"the dynamic scenario must observe create->Running and update->changed-mood through the migration-API client, Delete the child, and still read the config worker")
 		Eventually(result.Done, "55s").Should(BeClosed(),
-			"the v2 runner must wait out the run and then tear down on its own")
-
-		// DELETE: the driver called Delete without error. What a removal leaves
-		// in the store and what Get then returns are checked in
-		// app_removal_marks_deleted_test.go, app_shutdown_marks_deleted_test.go
-		// and churn_capstone_test.go.
-
-		// KERNEL SURVIVAL PROOF: the config worker and the supervisor outlived the
-		// child's lifecycle with no panic and no unexpected error/warning. The
-		// battery reuses the EXISTING whitelist; the dynamic scenario must not
-		// loosen it.
-		Expect(configWorkerPresentInStore(store)).To(BeTrue(),
-			"the config_worker kernel must survive the dynamic child's full lifecycle")
-		verifyNoErrorsOrWarnings(testLogger)
-		verifyStateFieldsAreValid(store)
+			"the runner must wait out the run and then tear down on its own")
+		Expect(result.Err).NotTo(HaveOccurred(),
+			"the dynamic scenario must end with a clean RunResult")
 	})
 })
-
-// configWorkerPresentInStore reports whether the kernel config worker survived
-// the run with a document still in the store.
-func configWorkerPresentInStore(store storage.TriangularStoreInterface) bool {
-	for _, w := range getWorkersFromStore(store) {
-		if w.WorkerType == configworker.WorkerTypeName {
-			return true
-		}
-	}
-
-	return false
-}

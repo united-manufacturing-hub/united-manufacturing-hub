@@ -21,7 +21,7 @@
 package cpuhealth
 
 import (
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // The signal names. Every window CPU reads back is named by one of these, in

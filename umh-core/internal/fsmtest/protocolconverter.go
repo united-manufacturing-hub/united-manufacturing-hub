@@ -54,7 +54,32 @@ var (
 
 	goodDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 		Source: dataflowcomponentserviceconfig.WriteConfigSource{
-			Topics: "umh.v1.test.*",
+			// Beneath the agent location the harness sets ("test-location") and naming a
+			// data contract, as the topic checks require.
+			Topics: "^umh\\.v1\\.test-location\\._historian\\.",
+		},
+		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+			Protocol: "stdout",
+		},
+	}
+
+	// outsideLocationDataflowComponentWriteConfig subscribes above the bridge location the
+	// harness sets, which the topic hierarchy check rejects.
+	outsideLocationDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+		Source: dataflowcomponentserviceconfig.WriteConfigSource{
+			Topics: "^umh\\.v1\\.some-other-location\\._historian\\.",
+		},
+		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
+			Protocol: "stdout",
+		},
+	}
+
+	// uncheckedContractDataflowComponentWriteConfig subscribes beneath the bridge location
+	// to `_mes_order`, a data contract that is not declared. Only
+	// BYPASS_WRITE_FLOW_VALIDATION lets it run.
+	uncheckedContractDataflowComponentWriteConfig = dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
+		Source: dataflowcomponentserviceconfig.WriteConfigSource{
+			Topics: "^umh\\.v1\\.test-location\\._mes_order\\.",
 		},
 		Destination: dataflowcomponentserviceconfig.WriteConfigDestination{
 			Protocol: "stdout",
@@ -96,6 +121,39 @@ func CreateProtocolConverterTestConfig(name string, desiredState string) config.
 			},
 		},
 	}
+}
+
+// SetupProtocolConverterInstanceWithOutsideLocationWriteTopics creates and configures a
+// ProtocolConverter instance whose write flow topics lie outside the bridge location, which
+// the topic hierarchy check rejects. Returns the instance, the mock service, and the config.
+func SetupProtocolConverterInstanceWithOutsideLocationWriteTopics(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
+	cfg.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = outsideLocationDataflowComponentWriteConfig
+
+	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockService.ExistingComponents = map[string]bool{serviceName: true}
+	ConfigureProtocolConverterServiceConfig(mockService)
+
+	instance := setUpMockProtocolConverterInstance(cfg, mockService, serviceregistry.NewMockRegistry())
+
+	return instance, mockService, cfg
+}
+
+// SetupProtocolConverterInstanceWithUncheckedContractWriteTopics creates and configures a
+// ProtocolConverter instance whose write flow topic names an unchecked data contract, which
+// only BYPASS_WRITE_FLOW_VALIDATION allows. Returns the instance, the mock service, and the
+// config.
+func SetupProtocolConverterInstanceWithUncheckedContractWriteTopics(serviceName string, desiredState string) (*protocolconverterfsm.ProtocolConverterInstance, *protocolconvertersvc.MockProtocolConverterService, config.ProtocolConverterConfig) {
+	cfg := CreateProtocolConverterTestConfig(serviceName, desiredState)
+	cfg.ProtocolConverterServiceConfig.Config.DataflowComponentWriteServiceConfig = uncheckedContractDataflowComponentWriteConfig
+
+	mockService := protocolconvertersvc.NewMockProtocolConverterService()
+	mockService.ExistingComponents = map[string]bool{serviceName: true}
+	ConfigureProtocolConverterServiceConfig(mockService)
+
+	instance := setUpMockProtocolConverterInstance(cfg, mockService, serviceregistry.NewMockRegistry())
+
+	return instance, mockService, cfg
 }
 
 // CreateProtocolConverterTestConfigWithMissingDfc creates a standard ProtocolConverter config for testing
@@ -428,6 +486,33 @@ func TestProtocolConverterStateTransition(
 	startTick uint64,
 	startTimestamp time.Time,
 ) (uint64, error) {
+	currentConfig := config.FullConfig{
+		Agent: config.AgentConfig{
+			Location: map[int]string{
+				0: "test-location",
+			},
+		},
+	}
+
+	return TestProtocolConverterStateTransitionWithConfig(ctx, instance, mockService, services, serviceName,
+		fromState, toState, maxAttempts, startTick, startTimestamp, currentConfig)
+}
+
+// TestProtocolConverterStateTransitionWithConfig is TestProtocolConverterStateTransition
+// with the config the snapshot of every reconcile carries.
+func TestProtocolConverterStateTransitionWithConfig(
+	ctx context.Context,
+	instance *protocolconverterfsm.ProtocolConverterInstance,
+	mockService *protocolconvertersvc.MockProtocolConverterService,
+	services serviceregistry.Provider,
+	serviceName string,
+	fromState string,
+	toState string,
+	maxAttempts int,
+	startTick uint64,
+	startTimestamp time.Time,
+	currentConfig config.FullConfig,
+) (uint64, error) {
 	// 1. Verify we are in the correct starting state
 	if instance.GetCurrentFSMState() != fromState {
 		return startTick, fmt.Errorf("instance not in expected state; want '%s', got '%s'", fromState, instance.GetCurrentFSMState())
@@ -446,15 +531,9 @@ func TestProtocolConverterStateTransition(
 
 		// Call reconcile directly on the instance
 		snapshot := fsm.SystemSnapshot{
-			Tick:         tick,
-			SnapshotTime: startTimestamp.Add(time.Duration(tick) * constants.DefaultTickerTime),
-			CurrentConfig: config.FullConfig{
-				Agent: config.AgentConfig{
-					Location: map[int]string{
-						0: "test-location",
-					},
-				},
-			},
+			Tick:          tick,
+			SnapshotTime:  startTimestamp.Add(time.Duration(tick) * constants.DefaultTickerTime),
+			CurrentConfig: currentConfig,
 		}
 		err, _ := instance.Reconcile(ctx, snapshot, services)
 		if err != nil {

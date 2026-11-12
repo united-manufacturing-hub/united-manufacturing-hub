@@ -20,7 +20,7 @@ package snapshot
 import (
 	"fmt"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 )
 
 // ApplicationConfig holds the user-provided configuration for the application

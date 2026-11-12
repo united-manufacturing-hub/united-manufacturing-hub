@@ -41,7 +41,7 @@ Programmatic access at `http://localhost:8090/graphql` (per instance).
 
 ```yaml
 internal:
-  topicBrowser:
+  topicbrowser:
     desiredState: "active"  # Enable/disable
 
 agent:

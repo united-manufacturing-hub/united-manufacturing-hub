@@ -2,9 +2,71 @@
 
 ## Unreleased
 
+### Improvements
+
+- Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+
 ### Fixes
 
 - A historian setting containing `{{`, such as a password, no longer stops the historian status from being reported
+- Updated dependencies with known vulnerabilities:
+  - zlib, now 1.4-r0 (CVE-2026-4738)
+  - MongoDB Go driver, now 2.9.3 (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
+  - go-jose, now 4.1.9 (CVE-2026-116587, CVE-2026-116585, CVE-2026-116586)
+
+  Update to reduce your attack surface.
+
+## [0.45.0]
+
+### New Features
+
+- Preview of more detailed memory reporting. Memory is judged on its average over the last 60 seconds, and a degraded status names the cause: the container's memory limit, the machine's memory, processes waiting for memory, or a process stopped because memory ran out. Turn it on with `USE_FSMV2_MEMORY_MONITOR=true` and recreate the container
+
+### Improvements
+
+- A write flow can now only subscribe to topics beneath the location of its own bridge, so a bridge at `enterprise.site.line` no longer reads data from elsewhere in the hierarchy. Existing write flows that subscribe outside their location stop writing after the upgrade and name the offending topics in the bridge's status, and the bridge's read flow keeps running while the topics are corrected
+- Each write flow topic must now name one existing data contract, such as `umh.v1.enterprise.site.line._historian.*`, instead of covering every contract of a location at once. Accepted contracts are `_raw`, `_historian`, and the ones listed under `dataContracts:`, so a typo no longer silently subscribes to nothing. Existing write flows whose topics name no contract, or one that does not exist, stop writing after the upgrade and the bridge's status names the offending topics alongside the contracts they may use
+- Setting the environment variable `BYPASS_WRITE_FLOW_VALIDATION=true` lets existing write flows keep running while their topics name a data contract that is not declared under `dataContracts:` or has no version, such as `_mes_order`. Use it to migrate write flows to the new topic rules without stopping them. The bridge then reports degraded and its status names the offending topics. All other topic rules still apply
+
+
+### Fixes
+
+- A bridge deploy now fails within seconds when benthos rejects the configuration before it starts, for example a misspelled setting (`field retension not recognised`). The error names every rejected setting at once. The bridge is kept and only the rejected flow is stopped. Before, the deploy waited 30 seconds and failed without naming the setting
+- Deploying or editing a stand-alone flow, or editing a bridge, with a configuration benthos rejects now shows the benthos error instead of "check the component logs"
+- Connection checks now exclusively use FSMv2. `NMAP_BACKEND` is ignored and can be removed from configuration; the FSMv1 fallback is no longer available.
+- Updated golang.org/x/net to v0.62.0 in the umh-core binary to patch CVE-2026-78661, where crafted HTML makes parsing use excessive resources, and CVE-2026-97045, where rendering HTML could break out of raw text.
+
+## [0.44.46]
+
+### Improvements
+
+- The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, when its CPU headroom is gone, its work is measurably delayed or its CPU cannot be measured, not whenever usage reaches 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
+
+## [0.44.45]
+
+### Improvements
+
+- Wait time between reads on the S7 input is now configurable with `timeBetweenReads`, for example `500ms` or `2s`. The default is unchanged at `1s`, and very short values can overload the PLC 
+
+### Fixes
+
+- The Snowflake output uses version 2 of the Snowflake Go driver, the same version Redpanda Connect uses, so benthos no longer exits at startup with "sql: Register called twice for driver snowflake" 
+- Beckhoff ADS symbol names are cut at the first NUL byte, so padding after the name no longer ends up in the symbol name 
+- The instance now reports the state of its historian database on TimescaleDB 2.26 or later. Before, the report failed with `column ch.dropped does not exist`
+
+## [0.44.44]
+
+### Improvements
+
+- When a bridge's connection is down, the tooltip on the bridge's connection status now says why, for example that the DNS lookup timed out or the device refused the connection, and what to check
+- Routine start-up and restart messages from umh-core's internal components are now DEBUG instead of INFO, which makes state changes, warnings and errors easier to spot
+- If umh-core cannot start its FSMv2 supervisor, the container now exits with code 1, so its restart policy can start it again. Before, it kept running without FSMv2
+- `USE_GATEKEEPER` no longer has any effect and can be removed from your configuration. The `useGatekeeper` key in config.yaml is ignored
+
+### Fixes
+
+- The historian status message now reads "connected to TimescaleDB" instead of "running (no health check)", and a degraded historian says whether TimescaleDB is unreachable or rejected the credentials or database name
+- A bridge variable named `historian` is now always ignored, like `location`. Before, `{{ .historian.* }}` rendered that variable when no valid `historian:` section was configured. The bridge now fails with the error to add or fix the `historian:` section, which also says the variable was ignored
 
 ## [0.44.43]
 

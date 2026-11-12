@@ -27,10 +27,10 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
@@ -137,8 +137,8 @@ func baseUnder(parent string) *deps.BaseDependencies {
 
 var _ = Describe("newDeps, the helper", func() {
 	It("hands every instance the same pool holder", func() {
-		a := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
-		b := newDeps(idUnder("parent-b"), baseUnder("parent-b"))
+		a := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+		b := newDeps(idUnder("parent-b"), baseUnder("parent-b"), nil)
 
 		Expect(a.pool).NotTo(BeNil(), "the holder exists, so the comparison below is not vacuous")
 		Expect(a.pool).To(BeIdenticalTo(b.pool),
@@ -148,7 +148,7 @@ var _ = Describe("newDeps, the helper", func() {
 	It("keeps the BaseDependencies it was handed rather than building its own logger", func() {
 		bd := baseUnder("parent-a")
 
-		d := newDeps(idUnder("parent-a"), bd)
+		d := newDeps(idUnder("parent-a"), bd, nil)
 
 		Expect(d.BaseDependencies).To(BeIdenticalTo(bd),
 			"the deps carry the framework's own BaseDependencies, so Poll's logger is the one enriched with this worker's identity, not a package global")
@@ -203,17 +203,13 @@ var _ = Describe("the registered worker type", func() {
 var _ = Describe("Poll", func() {
 	It("reports unreachable with authentication unknown when the host is malformed", func() {
 		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
-			Host:     "host:with:colons",
-			Password: "unlikely-to-appear-by-accident",
+			Host: "host:with:colons",
 		}}
 
 		status, err := Poll(context.Background(),
-			newDeps(idUnder("parent-a"), baseUnder("parent-a")), cfg)
+			newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil), cfg)
 
-		Expect(err).To(MatchError(ContainSubstring(cfg.Timescale.Host)),
-			"the error names the host, so the degraded verdict names the cause")
-		Expect(err).NotTo(MatchError(ContainSubstring(cfg.Timescale.Password)),
-			"this error is logged, so it must not carry the password")
+		Expect(err).NotTo(HaveOccurred(), "the DSN parsed, so the failed dial is an observation")
 		Expect(status.Reachable).To(BeFalse(), "no server answered, so the endpoint is not proven reachable")
 		Expect(status.Auth).To(Equal(models.TimescaleAuthUnknown),
 			"no server answered, so the credentials stay unverified rather than rejected")
@@ -240,18 +236,19 @@ var _ = Describe("Poll", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
 
-		_, err := Poll(ctx, d, cfg)
-		Expect(err).To(MatchError(ContainSubstring("timescale query")),
-			"the DSN parsed and the pool was built, so the failure is the refused SELECT 1")
+		status, err := Poll(ctx, d, cfg)
+		Expect(err).NotTo(HaveOccurred(), "a refused SELECT 1 is an observation, not a failure to observe")
+		Expect(status.Reachable).To(BeFalse(), "the DSN parsed and the pool was built, so the refused SELECT 1 is what failed")
 
 		first := pooledBy(d.pool)
 		Expect(first).NotTo(BeNil(),
 			"Poll went through the holder in its deps: a Poll that built its own pool leaves this nil")
 
-		_, err = Poll(ctx, d, cfg)
-		Expect(err).To(HaveOccurred(), "still nothing listening on the port")
+		status, err = Poll(ctx, d, cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Reachable).To(BeFalse(), "still nothing listening on the port")
 
 		Expect(pooledBy(d.pool)).To(BeIdenticalTo(first),
 			"the second poll reused the cached pool rather than building a second one")
@@ -266,7 +263,7 @@ var _ = Describe("Poll on a connection fault", func() {
 			SSLMode: config.HistorianSSLModeDisable,
 		}}
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"))
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
 		dsn := cfg.WithDefaults().Timescale.ToDSN()
 		d.summary = &readCache[timescalemetrics.Summary]{
 			interval: time.Minute,
@@ -286,11 +283,45 @@ var _ = Describe("Poll on a connection fault", func() {
 
 		status, err := Poll(ctx, d, cfg)
 
-		Expect(err).To(MatchError(ContainSubstring("timescale query")))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(status.Reachable).To(BeFalse())
 		Expect(status.TableNames).To(ConsistOf("value_bench"))
 		Expect(status.JobCount).To(Equal(2))
 		Expect(status.DatabaseOccupiedDiskBytes).To(Equal(int64(900_000_000)))
 	})
+})
+
+var _ = Describe("Poll during shutdown", func() {
+	It("returns an error instead of reporting the endpoint unreachable", func() {
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			Port:    closedPort(),
+			SSLMode: config.HistorianSSLModeDisable,
+		}}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := Poll(ctx, newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil), cfg)
+
+		Expect(err).To(MatchError(context.Canceled))
+	})
+})
+
+var _ = Describe("health", func() {
+	DescribeTable("derives the verdict from the observed status",
+		func(status TimescaleStatus, wantDegraded bool) {
+			Expect(health(config.HistorianConfig{}, status).Degraded).To(Equal(wantDegraded))
+		},
+		Entry("query succeeded",
+			TimescaleStatus{Reachable: true, Auth: models.TimescaleAuthValid}, false),
+		Entry("credentials or database name rejected",
+			TimescaleStatus{Reachable: true, Auth: models.TimescaleAuthInvalid}, true),
+		Entry("nothing answered",
+			TimescaleStatus{Reachable: false, Auth: models.TimescaleAuthUnknown}, true),
+		Entry("server answered with another error",
+			TimescaleStatus{Reachable: true, Auth: models.TimescaleAuthUnknown}, true),
+	)
 })
 
 var _ = Describe("the summary cache", func() {
@@ -365,5 +396,137 @@ var _ = Describe("the summary cache", func() {
 
 		Expect(cache.last(dsnA).TableNames).To(ConsistOf("value_bench"))
 		Expect(cache.last(dsnB).TableNames).To(BeEmpty())
+	})
+})
+
+var _ = DescribeTable("unexpectedQueryFailure",
+	func(err error, want bool) {
+		Expect(unexpectedQueryFailure(err)).To(Equal(want))
+	},
+	Entry("server error outside the auth classes",
+		&pgconn.PgError{Code: "42601", Message: "syntax error"}, true),
+	Entry("credentials rejected",
+		&pgconn.PgError{Code: "28P01", Message: "password authentication failed"}, false),
+	Entry("unknown database",
+		&pgconn.PgError{Code: "3D000", Message: `database "nope" does not exist`}, false),
+	Entry("nothing answered",
+		errors.New("dial tcp: connection refused"), false),
+)
+
+type sentryEvent struct {
+	message string
+	err     error
+}
+
+type recordingLogger struct {
+	deps.FSMLogger
+
+	events *[]sentryEvent
+}
+
+func (l recordingLogger) With(fields ...deps.Field) deps.FSMLogger {
+	return recordingLogger{FSMLogger: l.FSMLogger.With(fields...), events: l.events}
+}
+
+func (l recordingLogger) SentryWarn(feature deps.Feature, hierarchyPath, msg string, fields ...deps.Field) {
+	event := sentryEvent{message: msg}
+
+	for _, field := range fields {
+		if fieldErr, isErr := field.Value.(error); isErr {
+			event.err = fieldErr
+		}
+	}
+
+	*l.events = append(*l.events, event)
+	l.FSMLogger.SentryWarn(feature, hierarchyPath, msg, fields...)
+}
+
+var _ = Describe("Sentry reporting", func() {
+	var (
+		events []sentryEvent
+		d      Deps
+	)
+
+	BeforeEach(func() {
+		events = nil
+		logger := recordingLogger{FSMLogger: deps.NewNopFSMLogger(), events: &events}
+		d = newDeps(idUnder("parent-a"), deps.NewBaseDependencies(logger, nil, idUnder("parent-a")), nil)
+	})
+
+	unreachableConfig := func() config.HistorianConfig {
+		return config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			Port:    closedPort(),
+			SSLMode: config.HistorianSSLModeDisable,
+		}}
+	}
+
+	unbuildablePoolConfig := func() config.HistorianConfig {
+		return config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:     "127.0.0.1",
+			Password: "unlikely-to-appear-by-accident",
+			SSLMode:  "not-a-mode",
+		}}
+	}
+
+	It("reports a pool that cannot be built, without the password", func() {
+		cfg := unbuildablePoolConfig()
+
+		_, err := Poll(context.Background(), d, cfg)
+		Expect(err).To(HaveOccurred())
+
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].message).To(Equal(string(tagPoolFailed)))
+		Expect(events[0].err).NotTo(MatchError(ContainSubstring(cfg.Timescale.Password)))
+	})
+
+	It("reports nothing for an unreachable database", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := Poll(ctx, d, unreachableConfig())
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(events).To(BeEmpty())
+	})
+
+	It("reports nothing during shutdown", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := Poll(ctx, d, unbuildablePoolConfig())
+
+		Expect(err).To(MatchError(ContainSubstring("timescale pool")))
+		Expect(events).To(BeEmpty())
+	})
+
+	It("reports a failed summary read", func() {
+		cfg := unreachableConfig().WithDefaults()
+		pool, err := d.pool.get(cfg.Timescale.ToDSN())
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, read := summaryReader(ctx, d, pool, cfg.Timescale.Host)()
+
+		Expect(read).To(BeFalse())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].message).To(Equal(string(tagSummaryReadFailed)))
+	})
+
+	It("reports a failed database size read", func() {
+		cfg := unreachableConfig().WithDefaults()
+		pool, err := d.pool.get(cfg.Timescale.ToDSN())
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, read := databaseSizeReader(ctx, d, pool, cfg.Timescale.Host)()
+
+		Expect(read).To(BeFalse())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].message).To(Equal(string(tagDatabaseSizeReadFailed)))
 	})
 })

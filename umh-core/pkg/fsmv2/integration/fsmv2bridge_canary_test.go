@@ -23,11 +23,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	hello_world "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
 	// Blank-import the helloworld state subpackage so its init() registers the
@@ -52,7 +52,7 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		// The configworker deps key and the client singleton are process-global;
 		// a spec that fails mid-run would otherwise leak them into later specs.
 		fsmv2client.SetClient(nil)
-		register.ClearDeps(configworker.WorkerTypeName)
+		register.ClearGlobalDeps(configworker.WorkerTypeName)
 	})
 
 	It("drives a helloworld child through the client: Upsert, Fresh+Running, Delete, reap, Deleted, respawn with a new mood", func() {
@@ -65,7 +65,7 @@ var _ = Describe("fsmv2bridge helloworld canary", func() {
 		// configworker kernel and enables dynamic spawning) and publish the
 		// process-scoped client bound to this store.
 		dynWriter := dynamicchildren.NewWriter()
-		register.SetDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
+		register.SetGlobalDeps[*dynamicchildren.Registry](configworker.WorkerTypeName, dynWriter.Registry())
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynWriter, store))
 
 		sup.TestMarkAsStarted()

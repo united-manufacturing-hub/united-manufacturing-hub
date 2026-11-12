@@ -18,10 +18,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 )
 
 const workerTypeName = "exampleparent"
@@ -54,19 +54,6 @@ func NewParentWorker(
 	return w, nil
 }
 
-// GetDependencies returns the typed ParentDependencies.
-// Panics with a clear message if BindDeps was not called before this worker is used.
-func (w *ParentWorker) GetDependencies() *ParentDependencies {
-	raw := w.GetDependenciesAny()
-
-	d, ok := raw.(*ParentDependencies)
-	if !ok || d == nil {
-		panic("ParentWorker: GetDependencies called before BindDeps")
-	}
-
-	return d
-}
-
 // CollectObservedState returns the current observed state of the parent worker.
 func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
@@ -75,7 +62,7 @@ func (w *ParentWorker) CollectObservedState(ctx context.Context, _ fsmv2.Desired
 	default:
 	}
 
-	d := w.GetDependencies()
+	d := w.Deps()
 
 	// Framework state and action history are injected before COS and consumed by
 	// the collector wrapper after NewObservation returns. Calling them here satisfies
@@ -115,7 +102,7 @@ func (w *ParentWorker) DeriveDesiredState(spec interface{}) (fsmv2.DesiredState,
 
 func init() {
 	register.Worker[ExampleparentConfig, ExampleparentStatus, *ParentDependencies](workerTypeName,
-		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader) (fsmv2.Worker, error) {
+		func(id deps.Identity, logger deps.FSMLogger, sr deps.StateReader, _ map[string]any) (fsmv2.Worker, error) {
 			return NewParentWorker(id, logger, sr)
 		})
 }

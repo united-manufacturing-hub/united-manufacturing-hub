@@ -22,7 +22,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 )
 
 // canonicalizeFastEnv turns off the walk in canonicalize_walk.go, leaving every

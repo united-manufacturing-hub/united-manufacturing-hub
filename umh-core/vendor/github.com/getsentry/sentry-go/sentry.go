@@ -6,7 +6,7 @@ import (
 )
 
 // The version of the SDK.
-const SDKVersion = "0.49.0"
+const SDKVersion = "0.50.0"
 
 // apiVersion is the minimum version of the Sentry API compatible with the
 // sentry-go SDK.
@@ -52,6 +52,26 @@ func CaptureException(exception error) *EventID {
 func CaptureCheckIn(checkIn *CheckIn, monitorConfig *MonitorConfig) *EventID {
 	hub := CurrentHub()
 	return hub.CaptureCheckIn(checkIn, monitorConfig)
+}
+
+// WithMonitor runs fn and reports its outcome as check-ins for the cron
+// monitor identified by monitorSlug, creating or updating the monitor with
+// monitorConfig when it is not nil. It is a shorthand for
+// CurrentHub().WithMonitor.
+//
+// Example:
+//
+//	err := sentry.WithMonitor("nightly-cleanup", &sentry.MonitorConfig{
+//		Schedule:      sentry.CrontabSchedule("0 3 * * *"),
+//		CheckInMargin: 5,
+//		MaxRuntime:    30,
+//		Timezone:      "UTC",
+//	}, func() error {
+//		return cleanup()
+//	})
+func WithMonitor(monitorSlug string, monitorConfig *MonitorConfig, fn func() error) error {
+	hub := CurrentHub()
+	return hub.WithMonitor(monitorSlug, monitorConfig, fn)
 }
 
 // CaptureEvent captures an event on the currently active client if any.
@@ -129,9 +149,10 @@ func Flush(timeout time.Duration) bool {
 }
 
 // FlushWithContext waits until the underlying Transport sends any buffered events
-// to the Sentry server, blocking for at most the duration specified by the context.
-// It returns false if the context is canceled before the events are sent. In such a case,
-// some events may not be delivered.
+// to the Sentry server, blocking for at most the duration specified by the
+// context. It returns false if capture is disabled or the context is canceled
+// before the events are sent. In the latter case, some events may not be
+// delivered.
 //
 // FlushWithContext should be called before terminating the program to ensure no
 // events are unintentionally dropped.

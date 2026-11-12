@@ -28,15 +28,16 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/examples"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/scenarios"
 )
 
 func main() {
 	// Command-line flags
 	var (
 		scenarioName = flag.String("scenario", "simple", "scenario name from registry")
-		duration     = flag.Duration("duration", 0, "run duration, 0 means endless until Ctrl+C")
+		duration     = flag.Duration("duration", 0, fmt.Sprintf("settle window after the scenario ends (default %s when unset); 0 means endless until Ctrl+C", defaultSettleWindow))
 		logLevel     = flag.String("log-level", "info", "debug, info, warn, error")
 		tickInterval = flag.Duration("tick", 100*time.Millisecond, "tick interval")
 		listFlag     = flag.Bool("list", false, "list available scenarios and exit")
@@ -45,6 +46,8 @@ func main() {
 	)
 
 	flag.Parse()
+
+	durationSet := durationWasSet(flag.CommandLine)
 
 	// Validate tick interval and duration to prevent runtime panics
 	if *tickInterval <= 0 {
@@ -60,17 +63,17 @@ func main() {
 	if *listFlag {
 		fmt.Println("Available scenarios:")
 
-		scenarios := examples.ListScenarios()
+		listed := scenarios.ListScenarios()
 
-		names := make([]string, 0, len(scenarios))
-		for name := range scenarios {
+		names := make([]string, 0, len(listed))
+		for name := range listed {
 			names = append(names, name)
 		}
 
 		sort.Strings(names)
 
 		for _, name := range names {
-			fmt.Printf("  %-15s - %s\n", name, scenarios[name])
+			fmt.Printf("  %-15s - %s\n", name, listed[name])
 		}
 
 		return
@@ -111,36 +114,33 @@ func main() {
 
 	defer func() { _ = logger.Sync() }()
 
-	v1Scenario, isV1 := examples.Registry[*scenarioName]
-	v2Scenario, isV2 := examples.RegistryV2[*scenarioName]
+	scenario, found := scenarios.Registry[*scenarioName]
 
-	if !isV1 && !isV2 {
+	if !found {
+		liveScenario, isLive := scenarios.LiveRegistry[*scenarioName]
+		if isLive {
+			scenario, found = liveScenario, true
+		}
+	}
+
+	if !found {
 		logger.Fatal("Scenario not found",
 			zap.String("scenario", *scenarioName),
 			zap.String("hint", "Use --list to see available scenarios"),
 		)
 	}
 
-	description := v1Scenario.Description
-	if isV2 {
-		description = v2Scenario.Description
-	}
+	description := scenario.Description
 
 	// One signal owner: the CLI creates the cancellable ctx and is the only
-	// signal.Notify site, installed BEFORE examples.Run so a SIGINT during a
-	// running driver cannot kill the process without teardown. The first
-	// SIGINT cancels the ctx (a v2 driver sees it, the runner tears down
+	// signal.Notify site, installed BEFORE scenarios.Run so a SIGINT during a
+	// running scenario cannot kill the process without teardown. The first
+	// SIGINT cancels the ctx (a scenario sees it, the runner tears down
 	// gracefully); a second SIGINT force-exits.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	runDuration, applyCtxTimeout := routeDuration(isV2, *duration)
-	if applyCtxTimeout {
-		var timeoutCancel context.CancelFunc
-
-		ctx, timeoutCancel = context.WithTimeout(ctx, *duration)
-		defer timeoutCancel()
-	}
+	settleWindow, defaulted := resolveDuration(durationSet, *duration)
 
 	// runDone closes once main returns, i.e. once the run has fully torn down.
 	// The signal owner waits on it so a second SIGINT can still force-exit
@@ -167,26 +167,26 @@ func main() {
 		},
 	)
 
-	store := examples.SetupStore(deps.NewFSMLogger(logger.Sugar()))
+	store := scenariorunner.SetupStore(newRunLogger(logger))
 
 	durationStr := "endless (until Ctrl+C)"
-	if *duration > 0 {
-		durationStr = duration.String()
+
+	switch {
+	case defaulted:
+		durationStr = fmt.Sprintf("%s after the scenario ends", defaultSettleWindow)
+	case settleWindow > 0:
+		durationStr = settleWindow.String()
 	}
 
 	logger.Info("Starting scenario",
-		zap.String("name", *scenarioName),
-		zap.String("description", description),
-		zap.String("duration", durationStr),
-		zap.Duration("tick", *tickInterval),
+		startingScenarioFields(*scenarioName, description, durationStr, *tickInterval, scenario)...,
 	)
 
-	result, err := examples.Run(ctx, examples.RunConfig{
-		Scenario:           v1Scenario,
-		ScenarioV2:         v2Scenario,
-		Duration:           runDuration,
+	result, err := scenarios.Run(ctx, scenariorunner.RunConfig{
+		Scenario:           scenario,
+		Duration:           settleWindow,
 		TickInterval:       *tickInterval,
-		Logger:             deps.NewFSMLogger(logger.Sugar()),
+		Logger:             newRunLogger(logger),
 		Store:              store,
 		EnableTraceLogging: *traceFlag,
 		DumpStore:          *dumpStore,
@@ -200,7 +200,7 @@ func main() {
 			return
 		}
 
-		logger.Fatal("Failed to start scenario", zap.Error(err))
+		logger.Fatal(fatalMessage(err), zap.Error(err))
 	}
 
 	<-result.Done
@@ -215,41 +215,73 @@ func main() {
 	// normally so the deferred teardown (logger.Sync, cancels, close(runDone))
 	// still runs; os.Exit would skip those.
 	if code := shutdownExitCode(result); code != 0 {
-		logger.Sugar().Warnw("scenario_shutdown_unclean",
-			"scenario", *scenarioName,
-			"exit_code", code)
+		if !result.ShutdownClean {
+			logger.Sugar().Warnw("scenario_shutdown_unclean",
+				"scenario", *scenarioName,
+				"exit_code", code)
+		}
+
+		if result.Err != nil {
+			logger.Sugar().Warnw("scenario_run_failed",
+				"scenario", *scenarioName,
+				"error", result.Err,
+				"exit_code", code)
+		}
+
 		_ = logger.Sync()
-		//nolint:gocritic // exitAfterDefer is intentional here: the degraded-shutdown path must exit non-zero, logger.Sync is flushed above, and the remaining defers (cancel, close(runDone)) are moot once the process exits.
+		//nolint:gocritic // exitAfterDefer: logger.Sync ran above, and the other defers do not matter once the process exits.
 		os.Exit(code)
 	}
 }
 
+func fatalMessage(runErr error) string {
+	if errors.Is(runErr, scenariorunner.ErrScenarioFailed) {
+		return "Scenario failed"
+	}
+
+	return "Failed to start scenario"
+}
+
 // shutdownExitCode returns the process exit code for a completed scenario run.
-// A scenario whose supervisor did not drain cleanly within its budget exits
-// non-zero so an outer harness/CI can detect a degraded shutdown.
-func shutdownExitCode(result *examples.RunResult) int {
-	if result != nil && !result.ShutdownClean {
+func shutdownExitCode(result *scenariorunner.RunResult) int {
+	if result == nil {
+		return 0
+	}
+
+	if result.Err != nil {
+		return 1
+	}
+
+	if !result.ShutdownClean {
 		return 1
 	}
 
 	return 0
 }
 
-// routeDuration decides how a --duration flag binds to a run. A v2 scenario
-// treats the duration as a post-driver settle window, so it flows into
-// RunConfig.Duration and never bounds the run with a ctx timeout. A v1 scenario
-// has no settle window, so the duration bounds the whole run via a ctx timeout.
-// A zero duration stays endless on both paths.
-func routeDuration(isV2 bool, duration time.Duration) (runDuration time.Duration, applyCtxTimeout bool) {
-	if duration <= 0 {
-		return 0, false
+// defaultSettleWindow is the settle window of a run given no --duration: how
+// long the run keeps going after the scenario's Run returns.
+const defaultSettleWindow = time.Second
+
+func resolveDuration(durationSet bool, duration time.Duration) (effective time.Duration, defaulted bool) {
+	if !durationSet {
+		return defaultSettleWindow, true
 	}
 
-	if isV2 {
-		return duration, false
-	}
+	return duration, false
+}
 
-	return 0, true
+// durationWasSet tells an explicit --duration=0 apart from no --duration.
+func durationWasSet(fs *flag.FlagSet) bool {
+	set := false
+
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "duration" {
+			set = true
+		}
+	})
+
+	return set
 }
 
 // isCleanInterruptExit reports whether a run error is an interrupt-induced
@@ -272,6 +304,52 @@ func handleSignals(sigCh <-chan os.Signal, done <-chan struct{}, onFirstSignal f
 		forceExit()
 	case <-done:
 	}
+}
+
+// newRunLogger is unsampled, so the CLI prints every line a run logs.
+func newRunLogger(logger *zap.Logger) deps.FSMLogger {
+	return deps.NewUnsampledFSMLogger(logger.Sugar())
+}
+
+func startingScenarioFields(name, description, duration string, tick time.Duration, s scenariorunner.Scenario) []zap.Field {
+	return append([]zap.Field{
+		zap.String("name", name),
+		zap.String("description", description),
+		zap.String("duration", duration),
+		zap.Duration("tick", tick),
+	}, expectedFields(s)...)
+}
+
+// expectedFields returns one field per expectation list the scenario fills.
+func expectedFields(s scenariorunner.Scenario) []zap.Field {
+	var fields []zap.Field
+
+	if len(s.ExpectedErrors) > 0 {
+		fields = append(fields, zap.Reflect("expected_errors", s.ExpectedErrors))
+	}
+
+	if causes := nonNilCauseMessages(s.ExpectedErrorCauses); len(causes) > 0 {
+		fields = append(fields, zap.Reflect("expected_error_causes", causes))
+	}
+
+	if len(s.ExpectedWarnings) > 0 {
+		fields = append(fields, zap.Reflect("expected_warnings", s.ExpectedWarnings))
+	}
+
+	return fields
+}
+
+// nonNilCauseMessages skips nil causes: errorMatchesCause never matches one.
+func nonNilCauseMessages(causes []error) []string {
+	messages := make([]string, 0, len(causes))
+
+	for _, cause := range causes {
+		if cause != nil {
+			messages = append(messages, cause.Error())
+		}
+	}
+
+	return messages
 }
 
 // parseLogLevel converts string log level to zap level using zap's built-in parser.

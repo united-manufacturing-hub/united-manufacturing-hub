@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build test
+
 // Every registered worker type gets framework metrics on its Observation,
 // whatever its TDeps and whatever GetDependenciesAny returns. The collector
 // injects framework metrics from its own locals before the deps guard, so a
 // struct{}-deps worker (nmap) carries them like any other.
 //
 // The registry is populated by package init(). A missing blank import leaves it
-// empty, so the HaveLen(16) floor below is what makes a forgotten import fail
-// loudly instead of passing trivially; a 17th registration also reddens it.
+// empty, so the HaveLen(13) floor below is what makes a forgotten import fail
+// loudly instead of passing trivially; a 14th registration also reddens it.
 
 package collection_test
 
@@ -31,20 +33,21 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/testutil"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/config"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/factory"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/supervisor/internal/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 
 	// Named imports for the config types these workers' DesiredState requires;
 	// the import itself triggers init(), which is the registration these package
 	// names contribute to the factory registry.
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
+	fsmv2memory "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplefailing"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplepanic"
 	// helloworld and exampleslow declare their package names as hello_world and
@@ -53,42 +56,35 @@ import (
 	helloworld "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/helloworld"
 
 	// Blank imports populate the factory registry via init(). If any of these is
-	// forgotten, ListRegisteredTypes() returns fewer types and the HaveLen(16)
+	// forgotten, ListRegisteredTypes() returns fewer types and the HaveLen(13)
 	// floor below fails loudly instead of letting the test pass trivially.
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/application"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/communicator"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/examplechild"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/example/exampleparent"
 	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/pull"
-	_ "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/transport/push"
 )
 
 // registeredFloor is the hard lower bound on the number of registered worker
 // types. factory.ListRegisteredTypes() is populated by package init(), so a
 // test that forgets a blank import returns zero types and passes trivially;
 // asserting an exact count catches both a missing import (returns 0) and a new
-// 17th registration (returns 17). Measured at this HEAD: exactly 16, and the
+// 14th registration (returns 14). Measured at this HEAD: exactly 13, and the
 // registered historian type is "historian-timescale", not "historian".
-const registeredFloor = 16
+const registeredFloor = 13
 
-// panicOnConstruction names the five types that panic rather than error when
+// panicOnConstruction names the types that panic rather than error when
 // built via factory.NewWorkerByType in this isolated test process, because
-// register.Worker wraps constructor failure in a panic. Each constructor's
-// dependency is published by a parent or the transport channel singleton that
-// this test does not wire up. They are skipped below with the stated reason, and
+// register.Worker wraps constructor failure in a panic. Each needs a dependency
+// that cmd/main.go or a parent worker supplies, through the dependency map or
+// register.GlobalDeps. This test supplies none of them.
+// These types are skipped below with the stated reason, and
 // the recovered panic is asserted to match that reason, so a skip cannot hide a
 // constructor regression inside one of them.
 var panicOnConstruction = map[string]string{
-	"communicator": "ChannelProvider must be set",
-	"transport":    "ChannelProvider must be set",
-	"persistence":  "requires a store",
-	"pull":         "deps builder returned",
-	"push":         "deps builder returned",
+	"persistence": `no store under "persistence.store"`,
 }
 
 // targetWorkers are the three workers the design exists to fix: they are the
@@ -136,6 +132,10 @@ func desiredProviderFor(workerType string) func() (fsmv2.DesiredState, error) {
 	case "cpu":
 		return func() (fsmv2.DesiredState, error) {
 			return &fsmv2.WrappedDesiredState[fsmv2cpu.CPUConfig]{Config: fsmv2cpu.CPUConfig{}}, nil
+		}
+	case "memory":
+		return func() (fsmv2.DesiredState, error) {
+			return &fsmv2.WrappedDesiredState[fsmv2memory.MemoryConfig]{Config: fsmv2memory.MemoryConfig{}}, nil
 		}
 	case "historian-timescale":
 		return func() (fsmv2.DesiredState, error) {
@@ -196,7 +196,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 	id := deps.Identity{ID: workerType + "-probe", WorkerType: workerType, Name: workerType + "-probe"}
 	store := supervisor.CreateTestTriangularStoreForWorkerType(workerType)
 
-	cfg := collection.CollectorConfig[fsmv2.ObservedState]{
+	cfg := testutil.CollectorConfig[fsmv2.ObservedState]{
 		Worker:               w,
 		Identity:             id,
 		Store:                store,
@@ -209,7 +209,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 		},
 	}
 
-	c := collection.NewCollector[fsmv2.ObservedState](cfg)
+	c := testutil.NewCollector[fsmv2.ObservedState](cfg)
 
 	ctx := context.Background()
 	Expect(c.Start(ctx)).To(Succeed())
@@ -223,7 +223,7 @@ func probeFrameworkMetrics(workerType string, w fsmv2.Worker, sentinel int64) in
 }
 
 var _ = Describe("Framework metrics on every registered worker type", func() {
-	It("enumerates exactly the registered worker types (hard floor: catches a missing blank import or a 17th type)", func() {
+	It("enumerates exactly the registered worker types (hard floor: catches a missing blank import or a 14th type)", func() {
 		Expect(factory.ListRegisteredTypes()).To(HaveLen(registeredFloor))
 	})
 
@@ -232,7 +232,7 @@ var _ = Describe("Framework metrics on every registered worker type", func() {
 		// one line of setup: a published dynamic-children registry. Without it
 		// the constructor fails (wrapped in a panic). Its ConfigManager is
 		// optional, so nil is fine.
-		register.SetDeps[*dynamicchildren.Registry]("configworker", &dynamicchildren.Registry{})
+		register.SetGlobalDeps[*dynamicchildren.Registry]("configworker", &dynamicchildren.Registry{})
 
 		types := factory.ListRegisteredTypes()
 		Expect(types).To(HaveLen(registeredFloor))

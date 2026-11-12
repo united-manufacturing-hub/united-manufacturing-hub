@@ -20,7 +20,7 @@ package cpuhealth
 import (
 	"time"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // This pair is a ratio on a 0..1 scale with capacity 1.0, marking the

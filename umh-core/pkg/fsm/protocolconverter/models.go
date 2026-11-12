@@ -19,6 +19,7 @@ import (
 	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 )
 
 // Operational state constants (using internal_fsm compatible naming).
@@ -201,6 +202,14 @@ type ProtocolConverterInstance struct {
 	// that are updated at the beginning of Reconcile and then used to
 	// determine the next state
 	ObservedState ProtocolConverterObservedState
+
+	// writeFlowConfigErr is why the write flow keeps the bridge in degraded_dfc, or nil.
+	// Its Bypassed field tells the two cases apart:
+	//   - false: the write flow config is rejected, for example topics outside the bridge
+	//     location. The write flow is kept out of the runtime and never starts.
+	//   - true: BYPASS_WRITE_FLOW_VALIDATION lets the write flow run although its topics
+	//     name unchecked data contracts.
+	writeFlowConfigErr *runtime_config.WriteFlowConfigError
 
 	// debugLevel controls whether debug logging is enabled for the underlying Benthos processes
 	debugLevel bool

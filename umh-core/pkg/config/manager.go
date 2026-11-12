@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -33,14 +34,14 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/google/uuid"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
+	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/sentry"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/backoff"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxmutex"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/ctxutil/ctxrwmutex"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	fsmv2sentry "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	filesystem "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -532,6 +533,10 @@ type FileConfigManagerWithBackoff struct {
 
 	// Backoff manager
 	backoffManager *backoff.BackoffManager
+
+	// bypassWriteFlowValidation is set on Agent.BypassWriteFlowValidation of every config
+	// GetConfig returns.
+	bypassWriteFlowValidation bool
 }
 
 // NewFileConfigManagerWithBackoff creates a new FileConfigManagerWithBackoff with exponential backoff.
@@ -577,6 +582,13 @@ func (m *FileConfigManagerWithBackoff) Stop() {
 // SetConfigBackupEnabled controls whether config backups are created before writes.
 func (m *FileConfigManagerWithBackoff) SetConfigBackupEnabled(enabled bool) {
 	m.configManager.backupEnabled = enabled
+}
+
+// SetBypassWriteFlowValidation sets the value of BYPASS_WRITE_FLOW_VALIDATION that GetConfig
+// puts on every config it returns, so that every reader of the config renders bridges the
+// same way.
+func (m *FileConfigManagerWithBackoff) SetBypassWriteFlowValidation(bypass bool) {
+	m.bypassWriteFlowValidation = bypass
 }
 
 // GetBackupCount returns the number of config backups created since startup.
@@ -758,6 +770,8 @@ func (m *FileConfigManagerWithBackoff) GetConfig(ctx context.Context, tick uint6
 	// Reset backoff state on successful operation
 	m.backoffManager.Reset()
 
+	config.Agent.BypassWriteFlowValidation = m.bypassWriteFlowValidation
+
 	return config, nil
 }
 
@@ -778,6 +792,54 @@ func (m *FileConfigManagerWithBackoff) GetLastError() error {
 	return m.backoffManager.GetLastError()
 }
 
+// ApplyAgentLocation sets the agent location and copies each of its levels onto every
+// bridge and stream processor, overriding their own value for that level. Levels the agent
+// location does not set keep the component's value. It modifies the bridge and stream
+// processor slice elements in place, which a shallow copy of c shares, so callers that
+// still need the original apply it to a Clone.
+func (c *FullConfig) ApplyAgentLocation(location models.EditInstanceLocationModel) {
+	c.Agent.Location = agentLocationLevels(location)
+
+	for i := range c.ProtocolConverter {
+		spec := &c.ProtocolConverter[i].ProtocolConverterServiceConfig
+		spec.Location = overrideLocationLevels(spec.Location, c.Agent.Location)
+	}
+
+	for i := range c.StreamProcessor {
+		spec := &c.StreamProcessor[i].StreamProcessorServiceConfig
+		spec.Location = overrideLocationLevels(spec.Location, c.Agent.Location)
+	}
+}
+
+// agentLocationLevels returns the agent location keyed by level: 0 enterprise, 1 site,
+// 2 area, 3 line, 4 work cell. Levels the location does not set are absent.
+func agentLocationLevels(location models.EditInstanceLocationModel) map[int]string {
+	levels := map[int]string{0: location.Enterprise}
+
+	for level, value := range map[int]*string{1: location.Site, 2: location.Area, 3: location.Line, 4: location.WorkCell} {
+		if value != nil {
+			levels[level] = *value
+		}
+	}
+
+	return levels
+}
+
+// overrideLocationLevels returns a copy of component with every level of agent set to the
+// agent's value. It never modifies component, so a Clone that shares the map is unaffected.
+func overrideLocationLevels(component map[string]string, agent map[int]string) map[string]string {
+	merged := maps.Clone(component)
+	if merged == nil {
+		merged = make(map[string]string, len(agent))
+	}
+
+	for level, value := range agent {
+		merged[strconv.Itoa(level)] = value
+	}
+
+	return merged
+}
+
 // AtomicSetLocation sets the location in the config atomically
 // This function updates the agent location and propagates the changes to all
 // other components (ProtocolConverter, StreamProcessor) to maintain consistency.
@@ -794,61 +856,7 @@ func (m *FileConfigManager) AtomicSetLocation(ctx context.Context, location mode
 		return fmt.Errorf("failed to get config: %w", err)
 	}
 
-	// Always create a new location map like in the mock implementation
-	config.Agent.Location = make(map[int]string)
-
-	// Location is a hierarchical structure represented as map[int]string
-	// 0: Enterprise, 1: Site, 2: Area, 3: Line, 4: WorkCell
-	config.Agent.Location[0] = location.Enterprise
-
-	// Update optional fields if they exist
-	if location.Site != nil {
-		config.Agent.Location[1] = *location.Site
-	}
-
-	if location.Area != nil {
-		config.Agent.Location[2] = *location.Area
-	}
-
-	if location.Line != nil {
-		config.Agent.Location[3] = *location.Line
-	}
-
-	if location.WorkCell != nil {
-		config.Agent.Location[4] = *location.WorkCell
-	}
-
-	// Convert the agent location to string map for use in other components
-	agentLocationStr := make(map[string]string)
-	for k, v := range config.Agent.Location {
-		agentLocationStr[strconv.Itoa(k)] = v
-	}
-
-	// Update all ProtocolConverter locations to match the agent location
-	for i := range config.ProtocolConverter {
-		if config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location == nil {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location = make(map[string]string)
-		}
-
-		// Update each level in the protocol converter location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.ProtocolConverter[i].ProtocolConverterServiceConfig.Location[levelStr] = value
-		}
-	}
-
-	// Update all StreamProcessor locations to match the agent location
-	for i := range config.StreamProcessor {
-		if config.StreamProcessor[i].StreamProcessorServiceConfig.Location == nil {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location = make(map[string]string)
-		}
-
-		// Update each level in the stream processor location with the agent location
-		// Only update levels that exist in the agent location
-		for levelStr, value := range agentLocationStr {
-			config.StreamProcessor[i].StreamProcessorServiceConfig.Location[levelStr] = value
-		}
-	}
+	config.ApplyAgentLocation(location)
 
 	// write the config
 	if err := m.writeConfig(ctx, config); err != nil {

@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
+	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"go.uber.org/zap"
 )
 
@@ -114,9 +115,11 @@ func buildProtocolConverterAsDfc(
 
 	if observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate != nil &&
 		observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target != "" {
+		lastScan := observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan
+
 		var lastLatencyMs float64
-		if observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan != nil {
-			lastLatencyMs = observed.ServiceInfo.ConnectionObservedState.ServiceInfo.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.LatencyMs
+		if lastScan != nil {
+			lastLatencyMs = lastScan.PortResult.LatencyMs
 		}
 
 		specTarget := observed.ObservedProtocolConverterSpecConfig.Config.ConnectionServiceConfig.NmapTemplate.Target
@@ -144,7 +147,7 @@ func buildProtocolConverterAsDfc(
 			UUID: dataflowcomponentserviceconfig.GenerateUUIDFromName(instance.ID + "-connection").String(), // Derive connection UUID from PC UUID
 			URI:  fmt.Sprintf("%s:%s", target, port),
 			Health: &models.Health{
-				Message:       observed.ServiceInfo.ConnectionFSMState,
+				Message:       connectionHealthMessage(observed.ServiceInfo.ConnectionFSMState, target, port, lastScan),
 				ObservedState: observed.ServiceInfo.ConnectionFSMState,
 				DesiredState:  "up", // Connection desired state is typically "up"
 				Category:      getHealthCategoryFromState(observed.ServiceInfo.ConnectionFSMState),
@@ -405,6 +408,40 @@ func getDFCHealthCategory(state string) models.HealthCategory {
 		return models.Degraded
 	default:
 		return models.Neutral
+	}
+}
+
+func connectionHealthMessage(state string, target string, port string, lastScan *nmapservice.NmapScanResult) string {
+	connectionFailing := state == connection.OperationalStateDown || state == connection.OperationalStateDegraded
+	if !connectionFailing {
+		return state
+	}
+
+	if lastScan == nil {
+		return state
+	}
+
+	if lastScan.DialFailure == nil {
+		return state
+	}
+
+	return dialFailureMessage(*lastScan.DialFailure, target, port, lastScan.DialError)
+}
+
+func dialFailureMessage(failure nmapservice.DialFailure, target string, port string, dialError string) string {
+	switch failure {
+	case nmapservice.DialFailureDNSTimeout:
+		return fmt.Sprintf("The lookup of %s timed out. Check the DNS server this instance uses.", target)
+	case nmapservice.DialFailureDNSError:
+		return target + " could not be found. Check the host name in the bridge's connection, or use the IP address."
+	case nmapservice.DialFailureRefused:
+		return fmt.Sprintf("The device at %s refused the connection on port %s. Check the port and that the device's server is running.", target, port)
+	case nmapservice.DialFailureUnreachable:
+		return fmt.Sprintf("The device at %s can't be reached from this instance. Check the network route and the firewall.", target)
+	case nmapservice.DialFailureConnectTimeout:
+		return fmt.Sprintf("The device at %s isn't responding on port %s. Check if it's powered on and connected to the network.", target, port)
+	default:
+		return fmt.Sprintf("The connection check to %s:%s failed: %s", target, port, dialError)
 	}
 }
 

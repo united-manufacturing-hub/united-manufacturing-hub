@@ -18,13 +18,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/deps"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/register"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 )
 
@@ -34,10 +34,10 @@ func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.Confi
 	t.Helper()
 
 	shared := dynamicchildren.NewWriter().Registry()
-	register.SetDeps[*dynamicchildren.Registry](workerType, shared)
-	t.Cleanup(func() { register.ClearDeps(workerType) })
-	register.SetDeps[bool](configworker.CPUEnabledDepsKey, cpuEnabled)
-	t.Cleanup(func() { register.ClearDeps(configworker.CPUEnabledDepsKey) })
+	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
+	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
+	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, cpuEnabled)
+	t.Cleanup(func() { register.ClearGlobalDeps(configworker.CPUEnabledDepsKey) })
 
 	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
 

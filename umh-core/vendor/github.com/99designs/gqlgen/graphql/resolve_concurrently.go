@@ -1,0 +1,121 @@
+package graphql
+
+import "context"
+
+// ResolveConcurrently schedules the concurrent resolution of field i of m,
+// covering the panic guard, the invalids bookkeeping and the @defer group
+// accounting the generated executor needs per field.
+//
+// When recoverFromPanic is true a panic raised by resolve is reported through
+// oc and the field resolves to Null, counted against m.Invalids when the
+// field is non-null. nonNull picks the field's invalid result, the value that
+// marks the enclosing object invalid: Null for non-null fields, RequiredNull
+// for nullable ones.
+//
+// A field carrying a @defer directive is scheduled on deferred.FieldSet rather
+// than on m, and registered in deferred.Defers under each of its labels so the
+// incremental payload for a label is emitted once every field under it
+// resolves. m keeps Null at i, so the initial response reports the field as
+// null until the incremental payload replaces it.
+//
+// Like NewView, this schedules work rather than doing it, so it must be called
+// from the single goroutine that owns m and deferred, before either field set
+// is dispatched.
+func (m *FieldSet) ResolveConcurrently(
+	oc *OperationContext,
+	deferred *DeferredGroup,
+	i int,
+	recoverFromPanic bool,
+	nonNull bool,
+	resolve func(ctx context.Context) Marshaler,
+) {
+	field := m.fields[i]
+	if field.IsDeferred() {
+		// Bind the field set rather than the group: capturing deferred in the
+		// closure below would push the caller's group onto the heap.
+		fs := deferred.FieldSet
+		fs.AddField(field)
+		fieldIndex := len(fs.Values) - 1
+		fs.concurrentlyCounting(
+			fieldIndex,
+			invalidResultFor(nonNull),
+			func(ctx context.Context) Marshaler {
+				return recoverToNull(ctx, oc, recoverFromPanic, resolve)
+			},
+		)
+
+		for _, deferrable := range field.Deferrables {
+			view, ok := deferred.Defers[deferrable.Label]
+			if !ok {
+				view = fs.NewView()
+				deferred.Defers[deferrable.Label] = view
+			}
+			view.AddIndices(fieldIndex)
+		}
+
+		// Not scheduled on m: the value travels in a later incremental
+		// payload. Null rather than leaving the slot unset, because
+		// marshalFieldSet dereferences every entry.
+		m.Values[i] = Null
+		return
+	}
+
+	m.concurrentlyCounting(i, invalidResultFor(nonNull), func(ctx context.Context) Marshaler {
+		return recoverToNull(ctx, oc, recoverFromPanic, resolve)
+	})
+}
+
+// ResolveRootConcurrently schedules the concurrent resolution of field i of m,
+// a Query or Mutation field, running it under the operation's
+// RootResolverMiddleware. Root fields are never deferred.
+//
+// ctx must be the context carrying this field's RootFieldContext. The context
+// Dispatch hands to the callback is deliberately ignored so that every root
+// field runs under its own RootFieldContext.
+//
+// The value counted against m.Invalids is the one the middleware returns, as
+// for a synchronous root field: it is the value stored and marshalled.
+func (m *FieldSet) ResolveRootConcurrently(
+	ctx context.Context,
+	oc *OperationContext,
+	i int,
+	recoverFromPanic bool,
+	nonNull bool,
+	resolve func(ctx context.Context) Marshaler,
+) {
+	m.concurrentlyCounting(i, invalidResultFor(nonNull), func(context.Context) Marshaler {
+		return oc.RootResolverMiddleware(ctx, func(ctx context.Context) Marshaler {
+			return recoverToNull(ctx, oc, recoverFromPanic, resolve)
+		})
+	})
+}
+
+// invalidResultFor returns the value that, resolved for a field, marks its
+// enclosing object invalid.
+func invalidResultFor(nonNull bool) Marshaler {
+	if nonNull {
+		return Null
+	}
+	return RequiredNull
+}
+
+// recoverToNull runs resolve. When recoverFromPanic is true a panic is
+// reported through oc and resolves to Null, which is what a resolver
+// returning an error leaves and what ResolveField's own guard returns; the
+// field set then counts it like any other result.
+func recoverToNull(
+	ctx context.Context,
+	oc *OperationContext,
+	recoverFromPanic bool,
+	resolve func(ctx context.Context) Marshaler,
+) (res Marshaler) {
+	if recoverFromPanic {
+		defer func() {
+			if r := recover(); r != nil {
+				oc.Error(ctx, oc.Recover(ctx, r))
+				res = Null
+			}
+		}()
+	}
+	return resolve(ctx)
+}
