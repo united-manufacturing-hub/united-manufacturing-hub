@@ -118,13 +118,9 @@ type MockProtocolConverterService struct {
 	ServiceExistsResult        bool
 	ReconcileManagerReconciled bool
 
-	// BridgeMustWaitReason makes BridgeAdmission hold every bridge back with
-	// this reason. Empty admits every bridge.
-	BridgeMustWaitReason string
-	// BridgeMustWaitCause is the cause BridgeAdmission returns while
-	// BridgeMustWaitReason is set. bridgeadmission.None means BridgeLimit,
-	// because a refusal always has a cause.
-	BridgeMustWaitCause bridgeadmission.Cause
+	// BridgeAdmissionDecision is what BridgeAdmission returns for every
+	// bridge. The zero Decision admits every bridge.
+	BridgeAdmissionDecision bridgeadmission.Decision
 }
 
 // Ensure MockProtocolConverterService implements IProtocolConverterService.
@@ -753,17 +749,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 	return nil
 }
 
-// BridgeAdmission holds every bridge back while BridgeMustWaitReason is set,
-// and admits every bridge otherwise.
+// BridgeAdmission returns BridgeAdmissionDecision for every bridge.
 func (m *MockProtocolConverterService) BridgeAdmission(snapshot fsm.SystemSnapshot, bridgeName string) bridgeadmission.Decision {
-	if m.BridgeMustWaitReason == "" {
-		return bridgeadmission.Decision{}
-	}
-
-	cause := m.BridgeMustWaitCause
-	if cause == bridgeadmission.None {
-		cause = bridgeadmission.BridgeLimit
-	}
-
-	return bridgeadmission.Decision{Cause: cause, Reason: m.BridgeMustWaitReason}
+	return m.BridgeAdmissionDecision
 }

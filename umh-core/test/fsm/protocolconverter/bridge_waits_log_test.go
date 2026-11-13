@@ -53,7 +53,7 @@ var _ = Describe("a bridge that waits", func() {
 
 		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance(name, protocolconverterfsm.OperationalStateActive)
 		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
-		mockService.BridgeMustWaitReason = "Cannot create bridge - limit exceeded"
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.BridgeLimit, Reason: "Cannot create bridge - limit exceeded"}
 		registry := serviceregistry.NewMockRegistry()
 		start := time.Now()
 
@@ -80,8 +80,7 @@ var _ = Describe("a bridge that waits", func() {
 	It("records its admission refusal, and clears it once admitted", func() {
 		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-refused", protocolconverterfsm.OperationalStateActive)
 		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
-		mockService.BridgeMustWaitReason = "Memory degraded"
-		mockService.BridgeMustWaitCause = bridgeadmission.Memory
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
 		registry := serviceregistry.NewMockRegistry()
 
 		admissionRefusal := func() *bridgeadmission.Decision {
@@ -104,7 +103,7 @@ var _ = Describe("a bridge that waits", func() {
 		Expect(admissionRefusal()).NotTo(BeNil())
 		Expect(admissionRefusal().Cause).To(Equal(bridgeadmission.Memory))
 
-		mockService.BridgeMustWaitReason = ""
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{}
 		snapshot.Tick = 1
 
 		err, _ = instance.Reconcile(context.Background(), snapshot, registry)
