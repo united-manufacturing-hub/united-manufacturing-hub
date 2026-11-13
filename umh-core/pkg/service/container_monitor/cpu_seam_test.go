@@ -223,7 +223,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// never remove it.
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...and the framework reason must land where the protocol-converter
-			// resource-limit check (BridgeMustWait) reads the block message.
+			// resource-limit check (BridgeAdmission) reads the block message.
 			Expect(status.CPU.Health.Message).To(Equal(pollErrReason))
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
 			Expect(status.CPU.Health.ObservedState).To(Equal("degraded"))
@@ -260,7 +260,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// verdict, never pull it back to Active).
 			Expect(status.OverallHealth).To(Equal(models.Degraded))
 			// ...the worker's message lands where the protocol-converter
-			// resource-limit check (BridgeMustWait) reads it...
+			// resource-limit check (BridgeAdmission) reads it...
 			Expect(status.CPU.Health.Message).To(Equal(workerVerdictMessage))
 			// ...the nested category follows the verdict...
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))
@@ -1099,7 +1099,7 @@ var _ = Describe("the CPU seam (USE_FSMV2_CPU)", func() {
 			// closed and drive the service-level CPU health to degraded...
 			Expect(status.CPUHealth).To(Equal(models.Degraded))
 			// ...and the degrade must say so in words, because the
-			// protocol-converter resource-limit check (BridgeMustWait) reads
+			// protocol-converter resource-limit check (BridgeAdmission) reads
 			// CPU.Health.Message as its block reason — the healthy verdict must
 			// also not sail through.
 			Expect(status.CPU.Health.Category).To(Equal(models.Degraded))

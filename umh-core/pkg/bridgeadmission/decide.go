@@ -85,9 +85,9 @@ const (
 	BridgeLimit
 )
 
-// Decision is the result of Decide.
+// Decision is the result of Decide. The zero Decision admits the bridge.
 type Decision struct {
-	Admit  bool
+	// Cause is why the bridge must wait. None admits it.
 	Cause  Cause
 	Reason string
 	// MaxBridges is how many bridges this instance may have, or nil when
@@ -95,8 +95,15 @@ type Decision struct {
 	MaxBridges *int
 }
 
+// Admitted reports whether the bridge may be created.
+func (d Decision) Admitted() bool {
+	return d.Cause == None
+}
+
+// Message is the reason the bridge waits, with the emergency hint. It is empty
+// when the bridge is admitted.
 func (d Decision) Message() string {
-	if d.Admit {
+	if d.Admitted() {
 		return ""
 	}
 
@@ -106,7 +113,7 @@ func (d Decision) Message() string {
 // Decide returns whether a bridge may be created.
 func Decide(in Input) Decision {
 	if !in.EnableResourceLimitBlocking {
-		return Decision{Admit: true}
+		return Decision{}
 	}
 
 	for _, res := range in.resourcesInRefusalOrder() {
@@ -133,7 +140,7 @@ func Decide(in Input) Decision {
 		return d
 	}
 
-	return Decision{Admit: true, MaxBridges: &maxBridges}
+	return Decision{MaxBridges: &maxBridges}
 }
 
 func refuse(cause Cause, reason string) Decision {
