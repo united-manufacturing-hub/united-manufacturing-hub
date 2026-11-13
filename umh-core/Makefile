@@ -191,7 +191,9 @@ benthosmetrics-fixture:
 		-v $(PWD)/pkg/benthosmetrics/testdata/capture.yaml:/benthos.yaml:ro \
 		ghcr.io/united-manufacturing-hub/benthos-umh:$(BENTHOS_UMH_VERSION)
 	sleep 35
-	curl -s localhost:4195/metrics > pkg/benthosmetrics/testdata/metrics.txt
+	curl -fsS localhost:4195/metrics > pkg/benthosmetrics/testdata/metrics.txt.tmp || \
+		{ rm -f pkg/benthosmetrics/testdata/metrics.txt.tmp; docker rm -f benthosmetrics-fixture; exit 1; }
+	mv pkg/benthosmetrics/testdata/metrics.txt.tmp pkg/benthosmetrics/testdata/metrics.txt
 	echo $(BENTHOS_UMH_VERSION) > pkg/benthosmetrics/testdata/VERSION
 	docker rm -f benthosmetrics-fixture
 

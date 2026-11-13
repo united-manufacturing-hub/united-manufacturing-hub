@@ -1,10 +1,10 @@
 # HELP http_request_latency_ns Benthos Timing metric
 # TYPE http_request_latency_ns summary
-http_request_latency_ns{label="http_unreachable",path="root.output.broker.outputs.2",quantile="0.5"} 263010
-http_request_latency_ns{label="http_unreachable",path="root.output.broker.outputs.2",quantile="0.9"} 473797
-http_request_latency_ns{label="http_unreachable",path="root.output.broker.outputs.2",quantile="0.99"} 1.276717e+06
-http_request_latency_ns_sum{label="http_unreachable",path="root.output.broker.outputs.2"} 1.9099413e+07
-http_request_latency_ns_count{label="http_unreachable",path="root.output.broker.outputs.2"} 60
+http_request_latency_ns{label="http_unreachable",path="root.output.broker.outputs.2",quantile="0.5"} 249973
+http_request_latency_ns{label="http_unreachable",path="root.output.broker.outputs.2",quantile="0.9"} 271947
+http_request_latency_ns{label="http_unreachable",path="root.output.broker.outputs.2",quantile="0.99"} 1.520689e+06
+http_request_latency_ns_sum{label="http_unreachable",path="root.output.broker.outputs.2"} 1.5443986e+07
+http_request_latency_ns_count{label="http_unreachable",path="root.output.broker.outputs.2"} 56
 # HELP input_connection_failed Benthos Counter metric
 # TYPE input_connection_failed counter
 input_connection_failed{label="",path="root.input"} 0
@@ -46,8 +46,8 @@ output_connection_up{label="reject_all",path="root.output.broker.outputs.1"} 1
 output_connection_up{label="stdout_ok",path="root.output.broker.outputs.0"} 1
 # HELP output_error Benthos Counter metric
 # TYPE output_error counter
-output_error{label="http_unreachable",path="root.output.broker.outputs.2"} 15
-output_error{label="reject_all",path="root.output.broker.outputs.1"} 28
+output_error{label="http_unreachable",path="root.output.broker.outputs.2"} 14
+output_error{label="reject_all",path="root.output.broker.outputs.1"} 27
 output_error{label="stdout_ok",path="root.output.broker.outputs.0"} 0
 # HELP output_latency_ns Benthos Timing metric
 # TYPE output_latency_ns summary
@@ -61,10 +61,10 @@ output_latency_ns{label="reject_all",path="root.output.broker.outputs.1",quantil
 output_latency_ns{label="reject_all",path="root.output.broker.outputs.1",quantile="0.99"} NaN
 output_latency_ns_sum{label="reject_all",path="root.output.broker.outputs.1"} 0
 output_latency_ns_count{label="reject_all",path="root.output.broker.outputs.1"} 0
-output_latency_ns{label="stdout_ok",path="root.output.broker.outputs.0",quantile="0.5"} 2093
-output_latency_ns{label="stdout_ok",path="root.output.broker.outputs.0",quantile="0.9"} 32044
-output_latency_ns{label="stdout_ok",path="root.output.broker.outputs.0",quantile="0.99"} 300026
-output_latency_ns_sum{label="stdout_ok",path="root.output.broker.outputs.0"} 527439
+output_latency_ns{label="stdout_ok",path="root.output.broker.outputs.0",quantile="0.5"} 2120
+output_latency_ns{label="stdout_ok",path="root.output.broker.outputs.0",quantile="0.9"} 24552
+output_latency_ns{label="stdout_ok",path="root.output.broker.outputs.0",quantile="0.99"} 75440
+output_latency_ns_sum{label="stdout_ok",path="root.output.broker.outputs.0"} 237739
 output_latency_ns_count{label="stdout_ok",path="root.output.broker.outputs.0"} 30
 # HELP output_rejected Benthos Counter metric
 # TYPE output_rejected counter
@@ -87,10 +87,10 @@ processor_batch_sent{label="fail_every_second",path="root.pipeline.processors.0"
 processor_error{label="fail_every_second",path="root.pipeline.processors.0"} 30
 # HELP processor_latency_ns Benthos Timing metric
 # TYPE processor_latency_ns summary
-processor_latency_ns{label="fail_every_second",path="root.pipeline.processors.0",quantile="0.5"} 357361
-processor_latency_ns{label="fail_every_second",path="root.pipeline.processors.0",quantile="0.9"} 628160
-processor_latency_ns{label="fail_every_second",path="root.pipeline.processors.0",quantile="0.99"} 628160
-processor_latency_ns_sum{label="fail_every_second",path="root.pipeline.processors.0"} 2.246081e+06
+processor_latency_ns{label="fail_every_second",path="root.pipeline.processors.0",quantile="0.5"} 314169
+processor_latency_ns{label="fail_every_second",path="root.pipeline.processors.0",quantile="0.9"} 390189
+processor_latency_ns{label="fail_every_second",path="root.pipeline.processors.0",quantile="0.99"} 390189
+processor_latency_ns_sum{label="fail_every_second",path="root.pipeline.processors.0"} 1.691512e+06
 processor_latency_ns_count{label="fail_every_second",path="root.pipeline.processors.0"} 6
 # HELP processor_received Benthos Counter metric
 # TYPE processor_received counter
