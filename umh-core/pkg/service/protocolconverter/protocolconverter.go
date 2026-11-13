@@ -118,8 +118,13 @@ type IProtocolConverterService interface {
 	BridgeAdmission(snapshot fsm.SystemSnapshot, bridgeName string) bridgeadmission.Decision
 }
 
-// ServiceInfo holds information about the ProtocolConverters underlying health states.
+// ServiceInfo is what the service reports about one bridge: its admission
+// decision before the bridge is created, and the health of its underlying
+// components after.
 type ServiceInfo struct {
+	// Admission is the bridge admission decision while the bridge waits to be
+	// created. It is the zero Decision, which admits, once the bridge exists.
+	Admission bridgeadmission.Decision
 
 	// DataflowComponentReadObservedState mirrors the DFC manager.
 	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState

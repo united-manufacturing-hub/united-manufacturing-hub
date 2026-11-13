@@ -233,36 +233,13 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 	// Report current and desired state metrics
 	metrics.UpdateServiceState(metrics.ComponentProtocolConverterInstance, p.baseFSMInstance.GetID(), currentState, desiredState)
 
-	// Only a bridge that waits in to_be_created below has an admission refusal.
-	p.ObservedState.AdmissionRefusal = nil
+	// A bridge that bridge admission refuses stays in to_be_created.
+	admission := p.ObservedState.ServiceInfo.Admission
+	if currentState == internal_fsm.LifecycleStateToBeCreated && !admission.Admitted() {
+		// This runs on every tick, so the warning is throttled per bridge.
+		logger.ThrottledWarn("bridge-waits:"+p.baseFSMInstance.GetID(), "Bridge %s waits: %s", p.baseFSMInstance.GetID(), admission.Message())
 
-	// Check resource limits before allowing bridge creation
-	// BUT allow transition if the desired state is "stopped" (which leads to removal)
-	if currentState == internal_fsm.LifecycleStateToBeCreated {
-		// Check if we're trying to stop/remove this bridge
-		// When desired state is "stopped" for something in to_be_created, it means we want to remove it
-		if desiredState == OperationalStateStopped || desiredState == internal_fsm.LifecycleStateRemoving || desiredState == internal_fsm.LifecycleStateRemoved {
-			// Allow transition to removal even if resources are limited
-			p.baseFSMInstance.GetLogger().Debugf("Bridge %s in to_be_created with desired state %s - allowing removal despite resource limits", p.baseFSMInstance.GetID(), desiredState)
-			// KNOWN EDGE CASE: A user could potentially bypass resource limits by:
-			// 1. Creating a bridge when at resource limits (it gets stuck in to_be_created)
-			// 2. Setting desired state to "stopped" (transitions to creating->stopped)
-			// 3. Setting desired state back to "active" (now bypasses the resource check)
-			// This is acceptable as it requires deliberate action and the resource limits
-			// will still protect against accidental overload. The system will degrade
-			// appropriately if actually overloaded.
-		} else if decision := p.service.BridgeAdmission(snapshot, p.baseFSMInstance.GetID()); !decision.Admitted() {
-			reason := decision.Message()
-			// Block creation due to resource limits. This runs on every tick, so
-			// the warning is throttled per bridge.
-			logger.ThrottledWarn("bridge-waits:"+p.baseFSMInstance.GetID(), "Bridge %s waits: %s", p.baseFSMInstance.GetID(), reason)
-			p.ObservedState.AdmissionRefusal = &decision
-			// Set the status reason so it appears in the snapshot logger and frontend
-			// Just use the reason directly - it's already clear and actionable
-			p.ObservedState.ServiceInfo.StatusReason = reason
-			// Don't transition, just return (stay in to_be_created state)
-			return nil, false
-		}
+		return nil, false
 	}
 
 	// Handle lifecycle states first - these take precedence over operational states

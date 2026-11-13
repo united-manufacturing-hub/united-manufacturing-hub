@@ -16,7 +16,6 @@ package protocolconverter
 
 import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	protocolconverterconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
@@ -169,10 +168,6 @@ type ProtocolConverterObservedState struct {
 
 	// ServiceInfo contains information about the ProtocolConverter service
 	ServiceInfo protocolconvertersvc.ServiceInfo
-
-	// AdmissionRefusal is the bridge admission decision that holds the bridge
-	// back while it waits in to_be_created. It is nil on every other tick.
-	AdmissionRefusal *bridgeadmission.Decision
 }
 
 // IsObservedState implements the ObservedState interface.

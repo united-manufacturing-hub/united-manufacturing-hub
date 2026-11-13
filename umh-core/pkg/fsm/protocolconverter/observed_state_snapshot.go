@@ -17,7 +17,6 @@ package protocolconverter
 import (
 	"github.com/tiendc/go-deepcopy"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -29,8 +28,6 @@ type ProtocolConverterObservedStateSnapshot struct {
 	ObservedProtocolConverterSpecConfig    protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec
 	ObservedProtocolConverterRuntimeConfig protocolconverterserviceconfig.ProtocolConverterServiceConfigRuntime
 	ServiceInfo                            protocolconverter.ServiceInfo
-	// AdmissionRefusal is ProtocolConverterObservedState.AdmissionRefusal.
-	AdmissionRefusal *bridgeadmission.Decision
 }
 
 // IsObservedStateSnapshot implements the fsm.ObservedStateSnapshot interface.
@@ -65,17 +62,6 @@ func (d *ProtocolConverterInstance) CreateObservedStateSnapshot() fsm.ObservedSt
 		sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy service info: %v", err)
 
 		return nil
-	}
-
-	if refusal := d.ObservedState.AdmissionRefusal; refusal != nil {
-		snapshot.AdmissionRefusal = &bridgeadmission.Decision{}
-
-		err = deepcopy.Copy(snapshot.AdmissionRefusal, refusal)
-		if err != nil {
-			sentry.ReportIssuef(sentry.IssueTypeError, d.baseFSMInstance.GetLogger(), "failed to deep copy admission refusal: %v", err)
-
-			return nil
-		}
 	}
 
 	return snapshot

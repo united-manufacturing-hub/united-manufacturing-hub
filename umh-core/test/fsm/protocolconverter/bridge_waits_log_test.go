@@ -77,17 +77,17 @@ var _ = Describe("a bridge that waits", func() {
 		Expect(waits.Len()).To(Equal(2))
 	})
 
-	It("records its admission refusal, and clears it once admitted", func() {
+	It("records its admission refusal in ServiceInfo, and clears it once admitted", func() {
 		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-refused", protocolconverterfsm.OperationalStateActive)
 		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
 		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
 		registry := serviceregistry.NewMockRegistry()
 
-		admissionRefusal := func() *bridgeadmission.Decision {
+		admission := func() bridgeadmission.Decision {
 			snapshot, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
 			Expect(ok).To(BeTrue())
 
-			return snapshot.AdmissionRefusal
+			return snapshot.ServiceInfo.Admission
 		}
 
 		snapshot := fsm.SystemSnapshot{
@@ -100,14 +100,36 @@ var _ = Describe("a bridge that waits", func() {
 		err, _ := instance.Reconcile(context.Background(), snapshot, registry)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateToBeCreated))
-		Expect(admissionRefusal()).NotTo(BeNil())
-		Expect(admissionRefusal().Cause).To(Equal(bridgeadmission.Memory))
+		Expect(admission().Cause).To(Equal(bridgeadmission.Memory))
 
 		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{}
 		snapshot.Tick = 1
 
 		err, _ = instance.Reconcile(context.Background(), snapshot, registry)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(admissionRefusal()).To(BeNil())
+		Expect(instance.GetCurrentFSMState()).NotTo(Equal(internalfsm.LifecycleStateToBeCreated))
+		Expect(admission().Admitted()).To(BeTrue())
+	})
+
+	It("leaves to_be_created despite a refusal when it is going to be stopped", func() {
+		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-stopped", protocolconverterfsm.OperationalStateStopped)
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateStopped)).To(Succeed())
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
+		registry := serviceregistry.NewMockRegistry()
+
+		snapshot := fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{Location: map[int]string{0: "test-location"}},
+			},
+		}
+
+		err, _ := instance.Reconcile(context.Background(), snapshot, registry)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.GetCurrentFSMState()).NotTo(Equal(internalfsm.LifecycleStateToBeCreated))
+
+		observed, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
+		Expect(ok).To(BeTrue())
+		Expect(observed.ServiceInfo.Admission.Admitted()).To(BeTrue())
 	})
 })
