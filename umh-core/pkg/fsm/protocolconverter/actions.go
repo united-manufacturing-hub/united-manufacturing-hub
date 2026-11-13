@@ -284,15 +284,13 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	currentState := p.baseFSMInstance.GetCurrentFSMState()
 	desiredState := p.baseFSMInstance.GetDesiredFSMState()
 
-	// For to_be_created/creating states, spec config is stored above
-	// but service doesn't exist yet, so return early to avoid service operations
-	if currentState == internalfsm.LifecycleStateToBeCreated {
+	// The service does not exist before creation, so there is no status to read.
+	switch currentState {
+	case internalfsm.LifecycleStateToBeCreated:
 		p.observeAdmission(snapshot, desiredState)
 
 		return nil
-	}
-
-	if currentState == internalfsm.LifecycleStateCreating {
+	case internalfsm.LifecycleStateCreating:
 		return nil
 	}
 
