@@ -20,141 +20,56 @@ package benthosmetrics
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics/benthosmetricstest"
 )
 
-// benthosServer answers like a Benthos instance: the four endpoints the
-// scrape reads. The counters are read under mu, because the handler runs on
-// the server's goroutine.
-type benthosServer struct {
-	mu      sync.Mutex
-	server  *httptest.Server
-	input   int64
-	output  int64
-	failOn  map[string]int
-	request []string
-
-	// override, when set, answers before the default handler and before
-	// failOn; it returns true when it answered.
-	override func(w http.ResponseWriter, r *http.Request) bool
-}
-
-func newBenthosServer(input, output int64, failOn map[string]int, override func(w http.ResponseWriter, r *http.Request) bool) *benthosServer {
-	s := &benthosServer{input: input, output: output, failOn: failOn, override: override}
-	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.mu.Lock()
-		s.request = append(s.request, r.URL.Path)
-		s.mu.Unlock()
-
-		if s.override != nil && s.override(w, r) {
-			return
-		}
-
-		s.mu.Lock()
-		input, output := s.input, s.output
-		code, fail := s.failOn[r.URL.Path]
-		s.mu.Unlock()
-
-		if fail {
-			// The error body stays valid for its endpoint, so the specs
-			// below fail only when the status-code check in get is gone:
-			// a body that also fails to decode would mask a missing
-			// check.
-			w.WriteHeader(code)
-
-			switch r.URL.Path {
-			case "/ready":
-				_, _ = w.Write([]byte(`{"error":""}`))
-			case "/version":
-				_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
-			case "/metrics":
-				_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
-			default: // /ping: a body that answers pong, so only the status tells the failure
-				_, _ = w.Write([]byte("pong"))
-			}
-
-			return
-		}
-
-		switch r.URL.Path {
-		case "/ping":
-			_, _ = w.Write([]byte("pong"))
-		case "/ready":
-			_, _ = w.Write([]byte(`{"error":""}`))
-		case "/version":
-			_, _ = w.Write([]byte(`{"version":"1.2.3"}`))
-		case "/metrics":
-			_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
-			_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} %d\n", output)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
+// newServer starts a fake Benthos whose /metrics serves input and output.
+func newServer(input, output int64) *benthosmetricstest.Server {
+	s := benthosmetricstest.NewServer()
+	s.SetCounters(input, output, 0)
 
 	return s
 }
 
-func (s *benthosServer) port() int {
-	return s.server.Listener.Addr().(*net.TCPAddr).Port
-}
-
-func (s *benthosServer) setCounters(input, output int64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.input, s.output = input, output
-}
-
-func (s *benthosServer) requests() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return append([]string(nil), s.request...)
-}
-
-func (s *benthosServer) close() {
-	s.server.Close()
-}
-
 var _ = Describe("Scrape", func() {
 	It("fetches all endpoints", func() {
-		s := newBenthosServer(10, 5, nil, nil)
-		defer s.close()
+		s := newServer(10, 5)
+		defer s.Close()
 
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
 
-		probes, sample, err := tr.Scrape(context.Background(), s.port())
+		probes, sample, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(s.requests()).To(ConsistOf("/ping", "/ready", "/version", "/metrics"))
+		Expect(s.Requests()).To(ConsistOf("/ping", "/ready", "/version", "/metrics"))
 		Expect(probes.PingAlive).To(BeTrue())
 		Expect(probes.Ready).To(BeTrue())
-		Expect(probes.Version).To(Equal("1.2.3"))
+		Expect(probes.Version).To(Equal(benthosmetricstest.Version))
 		Expect(probes.At).To(Equal(t0), "Probes.At is when the scrape began")
 		Expect(sample.At).To(Equal(t0), "Sample.At is when /metrics was read")
 		Expect(sample.Metrics.Inputs).To(HaveKey("root.input"))
 		Expect(sample.Metrics.Inputs["root.input"].Received).To(Equal(int64(10)))
-		Expect(sample.Metrics.Outputs).To(HaveKey("root.output"))
-		Expect(sample.Metrics.Outputs["root.output"].Sent).To(Equal(int64(5)))
+		Expect(sample.Metrics.Outputs["root.output.broker.0"].Sent).To(Equal(int64(2)))
+		Expect(sample.Metrics.Outputs["root.output.broker.1"].Sent).To(Equal(int64(3)))
 	})
 
 	It("rejects a 500 /version whose body is valid JSON", func() {
-		s := newBenthosServer(10, 5, map[string]int{
-			"/version": http.StatusInternalServerError,
-		}, nil)
-		defer s.close()
+		s := newServer(10, 5)
+		defer s.Close()
+
+		s.SetFailing("/version", http.StatusInternalServerError)
 
 		tr := NewTracker(time.Now)
-		probes, sample, err := tr.Scrape(context.Background(), s.port())
+		probes, sample, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).To(HaveOccurred(),
 			"a Benthos answering 500 is not healthy; the body decodes, so only the status check fails it")
 		Expect(strings.Count(err.Error(), "/version")).To(Equal(1),
@@ -168,13 +83,13 @@ var _ = Describe("Scrape", func() {
 	})
 
 	It("clears only PingAlive when /ping answers 500", func() {
-		s := newBenthosServer(10, 5, map[string]int{
-			"/ping": http.StatusInternalServerError,
-		}, nil)
-		defer s.close()
+		s := newServer(10, 5)
+		defer s.Close()
+
+		s.SetFailing("/ping", http.StatusInternalServerError)
 
 		tr := NewTracker(time.Now)
-		probes, _, err := tr.Scrape(context.Background(), s.port())
+		probes, _, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(probes.PingAlive).To(BeFalse(),
 			"the /ping body answers pong, so only the status check clears PingAlive")
@@ -182,22 +97,22 @@ var _ = Describe("Scrape", func() {
 	})
 
 	It("computes the throughput", func() {
-		s := newBenthosServer(10, 5, nil, nil)
-		defer s.close()
+		s := newServer(10, 5)
+		defer s.Close()
 
 		now := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return now })
 
-		_, sample, err := tr.Scrape(context.Background(), s.port())
+		_, sample, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sample.InputMessagesPerSecond).To(Equal(unmeasured),
 			"the first scrape holds one sample")
 		Expect(sample.IsActive).To(BeFalse())
 
-		s.setCounters(12, 6)
+		s.SetCounters(12, 6, 0)
 
 		now = now.Add(time.Second)
-		_, sample, err = tr.Scrape(context.Background(), s.port())
+		_, sample, err = tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(perSecond(sample.InputMessagesPerSecond)).To(BeNumerically("~", 2, 0.5),
 			"10 -> 12 over 1s, so the scrape feeds the window")
@@ -205,23 +120,23 @@ var _ = Describe("Scrape", func() {
 	})
 
 	It("reads a counter reset as the post-restart rate", func() {
-		s := newBenthosServer(100, 100, nil, nil)
-		defer s.close()
+		s := newServer(100, 100)
+		defer s.Close()
 
 		now := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return now })
 
-		_, _, err := tr.Scrape(context.Background(), s.port())
+		_, _, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 
 		// A restart drops both counters. The drop is folded into the
 		// offsets, so the series the engine sees never goes down and the
 		// tick reads the messages the restart itself processed, never a
 		// negative rate.
-		s.setCounters(5, 5)
+		s.SetCounters(5, 5, 0)
 
 		now = now.Add(time.Second)
-		_, sample, err := tr.Scrape(context.Background(), s.port())
+		_, sample, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sample.IsActive).To(BeTrue())
 		Expect(perSecond(sample.InputMessagesPerSecond)).To(BeNumerically("~", 5, 0.5),
@@ -245,7 +160,10 @@ var _ = Describe("Scrape", func() {
 			return vt
 		}
 
-		s := newBenthosServer(0, 0, nil, func(w http.ResponseWriter, r *http.Request) bool {
+		s := newServer(0, 0)
+		defer s.Close()
+
+		s.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -266,23 +184,25 @@ var _ = Describe("Scrape", func() {
 
 			return true
 		})
-		defer s.close()
 
 		tr := NewTracker(clock)
-		_, _, err := tr.Scrape(context.Background(), s.port())
+		_, _, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		mu.Lock()
 		vt = vt.Add(100 * time.Millisecond)
 		mu.Unlock()
 
-		_, sample, err := tr.Scrape(context.Background(), s.port())
+		_, sample, err := tr.Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(perSecond(sample.InputMessagesPerSecond)).To(BeNumerically("~", 1000, 10),
 			"the three probes before /metrics take a varying time")
 	})
 
 	It("counts the instance live only when /ping answers pong", func() {
-		s := newBenthosServer(1, 1, nil, func(w http.ResponseWriter, r *http.Request) bool {
+		s := newServer(1, 1)
+		defer s.Close()
+
+		s.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path == "/ping" {
 				_, _ = w.Write([]byte("<html>not benthos</html>"))
 
@@ -291,26 +211,30 @@ var _ = Describe("Scrape", func() {
 
 			return false
 		})
-		defer s.close()
 
-		probes, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		probes, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(probes.PingAlive).To(BeFalse(),
 			"/ping answered, but not with pong")
 	})
 
 	It("reads Ready false on a 503 /ready whose body is valid JSON", func() {
-		s := newBenthosServer(1, 1, map[string]int{"/ready": http.StatusServiceUnavailable}, nil)
-		defer s.close()
+		s := newServer(1, 1)
+		defer s.Close()
 
-		probes, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		s.SetFailing("/ready", http.StatusServiceUnavailable)
+
+		probes, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(probes.Ready).To(BeFalse(),
 			"the body reports no error, so only the status check clears Ready")
 	})
 
 	It("reads Ready false when /ready names an error", func() {
-		s := newBenthosServer(1, 1, nil, func(w http.ResponseWriter, r *http.Request) bool {
+		s := newServer(1, 1)
+		defer s.Close()
+
+		s.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path == "/ready" {
 				_, _ = w.Write([]byte(`{"error":"output not connected"}`))
 
@@ -319,45 +243,49 @@ var _ = Describe("Scrape", func() {
 
 			return false
 		})
-		defer s.close()
 
-		probes, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		probes, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(probes.Ready).To(BeFalse())
 	})
 
 	It("treats a new port as a new counter series", func() {
-		a := newBenthosServer(100, 100, nil, nil)
-		defer a.close()
+		a := newServer(100, 100)
+		defer a.Close()
 
-		b := newBenthosServer(150, 150, nil, nil)
-		defer b.close()
+		b := newServer(150, 150)
+		defer b.Close()
 
 		now := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return now })
 
-		_, _, err := tr.Scrape(context.Background(), a.port())
+		_, _, err := tr.Scrape(context.Background(), int(a.Port()))
 		Expect(err).NotTo(HaveOccurred())
 
 		now = now.Add(time.Second)
-		_, sample, err := tr.Scrape(context.Background(), b.port())
+		_, sample, err := tr.Scrape(context.Background(), int(b.Port()))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sample.InputMessagesPerSecond).To(Equal(unmeasured),
 			"a new port is a new counter series, so the window rebuilds")
 	})
 
 	It("rejects a 3xx /metrics", func() {
-		s := newBenthosServer(1, 1, map[string]int{"/metrics": http.StatusFound}, nil)
-		defer s.close()
+		s := newServer(1, 1)
+		defer s.Close()
 
-		_, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		s.SetFailing("/metrics", http.StatusFound)
+
+		_, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("does not follow a redirect away from /metrics", func() {
 		// The redirect target answers with a valid metrics body, so this
 		// spec fails only when the client follows the Location header.
-		s := newBenthosServer(1, 1, nil, func(w http.ResponseWriter, r *http.Request) bool {
+		s := newServer(1, 1)
+		defer s.Close()
+
+		s.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			switch r.URL.Path {
 			case "/metrics":
 				http.Redirect(w, r, "/elsewhere", http.StatusFound)
@@ -371,15 +299,17 @@ var _ = Describe("Scrape", func() {
 
 			return false
 		})
-		defer s.close()
 
-		_, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		_, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).To(HaveOccurred(),
 			"a 3xx answer is an error, not a hop: the scrape never leaves this Benthos' endpoints")
 	})
 
 	It("fails the scrape when /metrics does not parse", func() {
-		s := newBenthosServer(1, 1, nil, func(w http.ResponseWriter, r *http.Request) bool {
+		s := newServer(1, 1)
+		defer s.Close()
+
+		s.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path == "/metrics" {
 				_, _ = w.Write([]byte("input_received{label=\"\",path=\"root.input\"}\n"))
 
@@ -388,14 +318,16 @@ var _ = Describe("Scrape", func() {
 
 			return false
 		})
-		defer s.close()
 
-		_, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		_, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).To(MatchError(ContainSubstring("parse /metrics")))
 	})
 
 	It("fails the scrape when /version is not JSON", func() {
-		s := newBenthosServer(1, 1, nil, func(w http.ResponseWriter, r *http.Request) bool {
+		s := newServer(1, 1)
+		defer s.Close()
+
+		s.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path == "/version" {
 				_, _ = w.Write([]byte("<html>not benthos</html>"))
 
@@ -404,9 +336,8 @@ var _ = Describe("Scrape", func() {
 
 			return false
 		})
-		defer s.close()
 
-		_, _, err := NewTracker(time.Now).Scrape(context.Background(), s.port())
+		_, _, err := NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 		Expect(err).To(MatchError(ContainSubstring("decode /version")))
 	})
 })

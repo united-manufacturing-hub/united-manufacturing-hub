@@ -78,24 +78,34 @@ type AdaptedInstance[TConfig, TStatus any] struct {
 	ref          dynamicchildren.Ref
 	desiredState string
 
-	// lastState caches the most recently resolved state so a single read hiccup
-	// (Unknown) holds the last known state instead of flapping a healthy worker.
-	// Guarded by mu because the fsmv1 control loop may call GetCurrentFSMState
-	// concurrently with other reads.
-	lastState string
-
 	minRequiredTime time.Duration
 	// staleAfter is the observation-age threshold for Stale classification:
 	// 3 × the worker type's registered observation interval, or the 1s fallback
 	// when unregistered. Framework-owned, not a developer knob.
 	staleAfter time.Duration
 
-	mu sync.Mutex
+	// holdLastStatusOnUnknown turns on the hold-and-re-map rule of
+	// GetLastObservedState; see WorkerManagerSpec.HoldLastStatusOnUnknown.
+	holdLastStatusOnUnknown bool
 
 	// isDisabled is set when the worker is deliberately disabled (not running).
 	// GetCurrentFSMState returns desiredState directly so the fsmv1 control loop
 	// sees current==desired and does not wait for a state transition.
 	isDisabled bool
+
+	// mu guards the fields below it. The fsmv1 control loop may call
+	// GetCurrentFSMState and GetLastObservedState concurrently.
+	mu sync.Mutex
+
+	// lastState is the most recently resolved state, held on an Unknown read
+	// so a single read hiccup does not flap a healthy worker.
+	lastState string
+
+	// lastStatus is the status of the last read that was not Unknown, held on
+	// an Unknown read when holdLastStatusOnUnknown is set. haveLastStatus
+	// reports whether such a read has happened.
+	lastStatus     TStatus
+	haveLastStatus bool
 }
 
 // newAdaptedInstance builds an AdaptedInstance. ref must match the Ref used in
@@ -113,22 +123,24 @@ func newAdaptedInstance[TConfig, TStatus any](
 	isDisabled bool,
 	log deps.FSMLogger,
 	states StateVocabulary,
+	holdLastStatusOnUnknown bool,
 ) *AdaptedInstance[TConfig, TStatus] {
 	if log == nil {
 		log = deps.NewNopFSMLogger()
 	}
 
 	return &AdaptedInstance[TConfig, TStatus]{
-		ref:             ref,
-		cfg:             cfg,
-		desiredState:    desiredState,
-		minRequiredTime: minRequiredTime,
-		staleAfter:      staleAfterFor(ref.WorkerType),
-		mapFresh:        mapFresh,
-		mapObserved:     mapObserved,
-		isDisabled:      isDisabled,
-		log:             log,
-		states:          states,
+		ref:                     ref,
+		cfg:                     cfg,
+		desiredState:            desiredState,
+		minRequiredTime:         minRequiredTime,
+		staleAfter:              staleAfterFor(ref.WorkerType),
+		mapFresh:                mapFresh,
+		mapObserved:             mapObserved,
+		isDisabled:              isDisabled,
+		log:                     log,
+		states:                  states,
+		holdLastStatusOnUnknown: holdLastStatusOnUnknown,
 	}
 }
 
@@ -267,10 +279,37 @@ func (i *AdaptedInstance[TConfig, TStatus]) Remove(_ context.Context) error {
 // mapObserved receives a zero status and produces the developer's type with
 // empty content rather than a foreign framework type a consumer's type
 // assertion would trip on. mapObserved must tolerate a zero status.
+//
+// With HoldLastStatusOnUnknown on, an Unknown read instead re-maps the
+// cached last status; see WorkerManagerSpec.HoldLastStatusOnUnknown.
 func (i *AdaptedInstance[TConfig, TStatus]) GetLastObservedState() publicfsm.ObservedState {
-	status, _ := i.getFreshStatus()
+	status, freshness := i.getFreshStatus()
+	if i.holdLastStatusOnUnknown {
+		status = i.holdLastStatus(status, freshness)
+	}
 
+	// mapObserved is developer code and may read this instance, so it runs
+	// without mu.
 	return i.mapObserved(i.cfg, status)
+}
+
+// holdLastStatus keeps status unless freshness is Unknown, and returns the
+// kept status for an Unknown read.
+func (i *AdaptedInstance[TConfig, TStatus]) holdLastStatus(status TStatus, freshness fsmv2client.Freshness) TStatus {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if freshness != fsmv2client.Unknown {
+		i.lastStatus, i.haveLastStatus = status, true
+
+		return status
+	}
+
+	if !i.haveLastStatus {
+		return status
+	}
+
+	return i.lastStatus
 }
 
 // GetMinimumRequiredTime returns the configured minimum required time.

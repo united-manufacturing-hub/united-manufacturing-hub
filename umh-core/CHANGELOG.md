@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
 - Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
 
 ### Fixes
