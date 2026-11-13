@@ -267,8 +267,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				nil,
 			)
 
-			// A config error or a degraded resource is the user's to fix, not a bug.
-			if !isRefusalErrorCode(errCode) && errCode != models.ErrConfigFileInvalid {
+			// A terminal failure is the user's to fix, not a bug.
+			if !isTerminalFailureCode(errCode) {
 				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
 					deps.String("pcConfig", pcConfig.String()),
 					deps.String("desiredState", pcConfig.DesiredFSMState))
@@ -560,19 +560,8 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 
-						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
-						if hasConfigError {
-							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError.message)
-
-							return models.ErrConfigFileInvalid, lastSnapshot, configError.flows, errors.New(errorMsg)
-						}
-
-						// A bridge refused for a degraded resource fails now
-						// instead of waiting for the timeout.
-						if code, refused := refusalErrorCode(pcSnapshot.ServiceInfo.Admission); refused {
-							errorMsg := fmt.Sprintf("Bridge '%s' was not started: %s", a.payload.Name, pcSnapshot.ServiceInfo.Admission.Message())
-
-							return code, lastSnapshot, DFCTypeEmpty, errors.New(errorMsg)
+						if failure, failed := terminalFailure(a.payload.Name, pcSnapshot.ServiceInfo.Admission, readLogs, writeLogs, startTime); failed {
+							return failure.code, lastSnapshot, failure.flows, errors.New(failure.message)
 						}
 					}
 
@@ -604,16 +593,46 @@ var refusalCodes = map[bridgeadmission.Cause]string{
 	bridgeadmission.Disk:   models.ErrBridgeRefusedDisk,
 }
 
-// refusalErrorCode returns the error code for a bridge that bridge admission
-// refuses for a degraded resource, and false for any other refusal or none.
-func refusalErrorCode(admission bridgeadmission.Decision) (string, bool) {
-	code, ok := refusalCodes[admission.Cause]
-
-	return code, ok
+// deployFailure is a deploy that cannot succeed by waiting longer.
+type deployFailure struct {
+	// code is the error code sent to the frontend.
+	code    string
+	message string
+	// flows are the flows to stop. DFCTypeEmpty lets flowsToStop decide.
+	flows DFCType
 }
 
-// isRefusalErrorCode reports whether errCode is one of refusalCodes.
-func isRefusalErrorCode(errCode string) bool {
+// terminalFailure reports a deploy that cannot succeed: a flow logged a
+// config error, or bridge admission refused the bridge for a degraded
+// resource. An unproven resource or the bridge limit is not terminal, so the
+// deploy keeps waiting for those.
+func terminalFailure(bridgeName string, admission bridgeadmission.Decision, readLogs, writeLogs []s6.LogEntry, startTime time.Time) (deployFailure, bool) {
+	if configError, found := findFlowConfigError(readLogs, writeLogs, startTime); found {
+		return deployFailure{
+			code:    models.ErrConfigFileInvalid,
+			message: fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", bridgeName, configError.message),
+			flows:   configError.flows,
+		}, true
+	}
+
+	if code, refused := refusalCodes[admission.Cause]; refused {
+		return deployFailure{
+			code:    code,
+			message: fmt.Sprintf("Bridge '%s' was not started: %s", bridgeName, admission.Message()),
+			flows:   DFCTypeEmpty,
+		}, true
+	}
+
+	return deployFailure{}, false
+}
+
+// isTerminalFailureCode reports whether errCode is one that terminalFailure
+// returns.
+func isTerminalFailureCode(errCode string) bool {
+	if errCode == models.ErrConfigFileInvalid {
+		return true
+	}
+
 	for _, code := range refusalCodes {
 		if code == errCode {
 			return true
