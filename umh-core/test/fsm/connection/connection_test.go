@@ -20,7 +20,7 @@ import (
 
 	pkgfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 
@@ -202,7 +202,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			5, tick,
 		)
 		// creating -> stopped
-		mockService.ConnectionStates[serviceName] = &connectionsvc.ServiceInfo{NmapFSMState: nmap.OperationalStateStopped}
+		mockService.ConnectionStates[serviceName] = &connectionsvc.ServiceInfo{NmapFSMState: fsmv2nmap.OperationalStateStopped}
 		mockService.ExistingConnections[serviceName] = true
 		tick, _ = fsmtest.TestConnectionStateTransition(
 			ctx, instance, mockService, mockSvcRegistry, serviceName,
@@ -224,7 +224,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 		mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: true,
 			IsFlaky:       false,
-			NmapFSMState:  nmap.OperationalStateOpen,
+			NmapFSMState:  fsmv2nmap.OperationalStateOpen,
 		})
 		tick, _ = fsmtest.TestConnectionStateTransition(
 			ctx, instance, mockService, mockSvcRegistry, serviceName,
@@ -239,7 +239,7 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 
 		mockService.SetConnectionState(serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: false,
-			NmapFSMState:  nmap.OperationalStateStopped,
+			NmapFSMState:  fsmv2nmap.OperationalStateStopped,
 		})
 
 		current := instance.GetCurrentFSMState()
@@ -322,8 +322,8 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			"up -> down (nmap closed)",
 			connection.OperationalStateUp,
 			connection.OperationalStateDown,
-			nmap.OperationalStateOpen,
-			nmap.OperationalStateClosed,
+			fsmv2nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateClosed,
 			false,
 			false,
 		),
@@ -331,8 +331,8 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			"up -> degraded (w flaky)",
 			connection.OperationalStateUp,
 			connection.OperationalStateDegraded,
-			nmap.OperationalStateOpen,
-			nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateOpen,
 			false,
 			true,
 		),
@@ -340,8 +340,8 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			"down -> up (from closed)",
 			connection.OperationalStateDown,
 			connection.OperationalStateUp,
-			nmap.OperationalStateClosed,
-			nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateClosed,
+			fsmv2nmap.OperationalStateOpen,
 			false,
 			false,
 		),
@@ -349,8 +349,8 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			"down -> degraded (w flaky)",
 			connection.OperationalStateDown,
 			connection.OperationalStateDegraded,
-			nmap.OperationalStateClosed,
-			nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateClosed,
+			fsmv2nmap.OperationalStateOpen,
 			false,
 			true,
 		),
@@ -358,8 +358,8 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			"degraded -> up",
 			connection.OperationalStateDegraded,
 			connection.OperationalStateUp,
-			nmap.OperationalStateOpen,
-			nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateOpen,
 			true,
 			false,
 		),
@@ -367,8 +367,8 @@ var _ = Describe("ConnectionInstance state transitions", func() {
 			"degraded -> down",
 			connection.OperationalStateDegraded,
 			connection.OperationalStateDown,
-			nmap.OperationalStateOpen,
-			nmap.OperationalStateClosed,
+			fsmv2nmap.OperationalStateOpen,
+			fsmv2nmap.OperationalStateClosed,
 			true,
 			false,
 		),
