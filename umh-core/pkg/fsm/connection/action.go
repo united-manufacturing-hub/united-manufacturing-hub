@@ -25,7 +25,7 @@ import (
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
@@ -236,38 +236,38 @@ func (c *ConnectionInstance) UpdateObservedStateOfInstance(ctx context.Context, 
 //
 // Note: This function requires the NmapFSMState to be updated in the ObservedState.
 func (c *ConnectionInstance) IsConnectionNmapRunning() bool {
-	return nmap.IsRunningState(c.ObservedState.ServiceInfo.NmapFSMState)
+	return fsmv2nmap.IsRunningState(c.ObservedState.ServiceInfo.NmapFSMState)
 }
 
 // IsConnectionNmapStopped determines if the Connection's Nmap FSM is in the stopped state.
 // Note: This function requires the NmapFSMState to be updated in the ObservedState.
 func (c *ConnectionInstance) IsConnectionNmapStopped() bool {
-	return c.ObservedState.ServiceInfo.NmapFSMState == nmap.OperationalStateStopped
+	return c.ObservedState.ServiceInfo.NmapFSMState == fsmv2nmap.OperationalStateStopped
 }
 
 // IsConnectionDegraded determines if the Connection service is degraded.
 // These check everything that is checked during the starting phase
 // But it means that it once worked, and then degraded.
 func (c *ConnectionInstance) IsConnectionNmapDegraded() bool {
-	return c.ObservedState.ServiceInfo.NmapFSMState == nmap.OperationalStateDegraded
+	return c.ObservedState.ServiceInfo.NmapFSMState == fsmv2nmap.OperationalStateDegraded
 }
 
 // IsConnectionUp returns the value of IsConnectionFlaky and the OperationalStateOpen
 // of the Nmap FSM, which then is considered as a healthy connection.
 func (c *ConnectionInstance) IsConnectionNmapUp() bool {
 	return !c.IsConnectionFlaky() &&
-		c.ObservedState.ServiceInfo.NmapFSMState == nmap.OperationalStateOpen
+		c.ObservedState.ServiceInfo.NmapFSMState == fsmv2nmap.OperationalStateOpen
 }
 
 // IsConnectionDown determines based on the state of the Nmap FSM if the connection
 // can be considered as down due to the port scan.
 func (c *ConnectionInstance) IsConnectionNmapDown() bool {
 	switch c.ObservedState.ServiceInfo.NmapFSMState {
-	case nmap.OperationalStateOpenFiltered,
-		nmap.OperationalStateClosedFiltered,
-		nmap.OperationalStateClosed,
-		nmap.OperationalStateFiltered,
-		nmap.OperationalStateUnfiltered:
+	case fsmv2nmap.OperationalStateOpenFiltered,
+		fsmv2nmap.OperationalStateClosedFiltered,
+		fsmv2nmap.OperationalStateClosed,
+		fsmv2nmap.OperationalStateFiltered,
+		fsmv2nmap.OperationalStateUnfiltered:
 		return true
 	default:
 		return false

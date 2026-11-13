@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 )
 
 var _ = Describe("Delegation Approach", func() {
@@ -36,7 +36,7 @@ var _ = Describe("Delegation Approach", func() {
 				DfcFSMReadState:    dataflowcomponent.OperationalStateActive,
 				DfcFSMWriteState:   dataflowcomponent.OperationalStateActive,
 				ConnectionFSMState: connection.OperationalStateUp,
-				PortState:          nmapservice.PortStateOpen,
+				PortState:          fsmv2nmap.PortStateOpen,
 			}
 
 			// Call SetConverterState
