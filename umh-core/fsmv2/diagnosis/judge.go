@@ -118,14 +118,13 @@ type Fired struct {
 // An episode is one fired span: from the tick the signal crosses its fire mark
 // to the tick it releases.
 type Latch struct {
-	since       time.Time
-	lastUpdate  time.Time
-	lastRelease time.Time
-	instrument  string
-	identity    Identity
-	marks       Marks
-	value       float64
-	fired       bool
+	since      time.Time
+	lastUpdate time.Time
+	instrument string
+	identity   Identity
+	marks      Marks
+	value      float64
+	fired      bool
 }
 
 // NewLatch builds an unfired latch for one signal.
@@ -164,7 +163,7 @@ func crossedClear(v float64, m Marks) bool {
 // the fired state. An untrusted or absent reduction is ignored. Three arms:
 //
 //	clear: fired, on the firing mark pair, past its Clear, Coverage.Full() -> release.
-//	fire:  unfired, past Fire, no release yet or a whole Coverage span since one -> fire.
+//	fire:  unfired, past Fire -> fire, also on the first reading after a release.
 //	hold:  anything else -> state unchanged.
 //
 // The clear arm acts only on a reduction measured against the SAME mark pair the
@@ -206,7 +205,7 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 	// leaves the episode exactly as it was, marks and blame included.
 	if l.fired && m != l.marks {
 		if crossedClear(r.v, m) && c.Full() {
-			l.release(now)
+			l.fired = false
 
 			return
 		}
@@ -221,13 +220,13 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 	}
 
 	if l.fired && m == l.marks && crossedClear(r.v, l.marks) && c.Full() {
-		l.release(now)
+		l.fired = false
 
 		return
 	}
 
 	if crossedFire(r.v, m) {
-		if !l.fired && (l.lastRelease.IsZero() || !now.Before(l.lastRelease.Add(c.span))) {
+		if !l.fired {
 			l.fired = true
 			l.value = r.v
 			l.marks = m
@@ -239,26 +238,18 @@ func (l *Latch) Update(instrument string, r Reduced, c Coverage, m Marks, now ti
 	}
 }
 
-// Reset releases the latch immediately whatever the coverage, stamping the last
-// trusted Update as the release time. Used for a signal declaring ReleaseOnAbsent.
+// Reset releases the latch immediately whatever the coverage. Used for a signal
+// declaring ReleaseOnAbsent.
 func (l *Latch) Reset() {
-	if l.fired {
-		l.fired = false
-		l.lastRelease = l.lastUpdate
-	}
+	l.fired = false
 }
 
 // ReleaseAfter releases the latch span after the last trusted Update, so a
 // verdict cannot be held forever on stale evidence.
 func (l *Latch) ReleaseAfter(span time.Duration, now time.Time) {
 	if l.fired && !now.Before(l.lastUpdate.Add(span)) {
-		l.release(now)
+		l.fired = false
 	}
-}
-
-func (l *Latch) release(now time.Time) {
-	l.fired = false
-	l.lastRelease = now
 }
 
 // Fired reports the latch's verdict; it is the zero value unless ok.

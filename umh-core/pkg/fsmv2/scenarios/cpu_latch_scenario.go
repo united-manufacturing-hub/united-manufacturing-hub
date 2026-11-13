@@ -40,8 +40,7 @@ const (
 	cpuLatchCalm   = 0.05
 
 	// cpuLatchWindow is the pressure window's span. The latch releases only
-	// once the window has collected this long, and a released signal cannot
-	// fire again for this long (Latch.Update in fsmv2/diagnosis).
+	// once the window has collected this long (Latch.Update in fsmv2/diagnosis).
 	cpuLatchWindow = 60 * time.Second
 )
 
@@ -52,12 +51,11 @@ const (
 // The story is what the two marks buy and what they cost. A degraded machine
 // stays degraded while its pressure wanders below the mark that fired it. It
 // is released when the pressure drops under the clear mark. When the pressure
-// comes back, the report is late: a released signal cannot fire again for 60
-// machine seconds, so the machine sits over its fire mark while reported
-// healthy.
+// comes back, it is reported again on the next reading, with no wait after the
+// release.
 var CPULatchScenario = scenariorunner.Scenario{
 	Name:        "cpu-latch",
-	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and shows the bar on re-firing",
+	Description: "Holds a fake machine's CPU verdict through noise, releases it on recovery, and fires it again at once when pressure returns",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		box := newTickingBox(constants.CgroupMountPath, cpuPressureMachine(cpuLatchFiring))
@@ -124,7 +122,7 @@ var CPULatchScenario = scenariorunner.Scenario{
 			return err
 		}
 
-		env.Step("raise CPU pressure back to 25%; the verdict may fire again only 60 machine seconds after the release")
+		env.Step("raise CPU pressure back to 25%; the verdict must fire again well before 60 machine seconds after the release")
 
 		fireAt := machine.box.MachineNow()
 		machine.box.Set(cpuPressureMachine(cpuLatchFiring))
@@ -133,20 +131,21 @@ var CPULatchScenario = scenariorunner.Scenario{
 		// on it could miss it. The check below waits instead for the degraded
 		// reading that follows, which lasts.
 		//
-		// Without the bar the signal fires on the first reading after fireAt,
-		// at most one advance later. The check tells that apart from the bar
-		// only if that reading is still inside the bar. A slower machine makes
-		// this guard trip, never pass wrongly.
+		// The signal fires on the first reading after fireAt, at most one advance
+		// later. A wait of one window span after the release would delay it to
+		// 60 machine seconds after calmAt, and the check tells the two apart only
+		// if that first reading comes earlier. A slower machine makes this guard
+		// trip, never pass wrongly.
 		if gap := fireAt.Sub(calmAt); gap+cpuMachineReadAdvance >= cpuLatchWindow {
-			return fmt.Errorf("pressure went back to 25%% %s after the 5%% step; with one %s reading more that reaches the %s re-fire bar, so the re-fire check would pass on any code",
+			return fmt.Errorf("pressure went back to 25%% %s after the 5%% step; one %s reading later is %s or more after it, so the check could not tell an immediate re-fire from one that waited a window span",
 				gap, cpuMachineReadAdvance, cpuLatchWindow)
 		}
 
-		barEnd := calmAt.Add(cpuLatchWindow)
+		windowAfterRelease := calmAt.Add(cpuLatchWindow)
 
 		// One observation carries both the verdict and its sample's machine
 		// time, so a later observation cannot lend this one a later time.
-		return env.WaitFor(ctx, "degraded again at 25%, no earlier than 60 machine seconds after the release", func(ctx context.Context) (bool, string, error) {
+		return env.WaitFor(ctx, "degraded again at 25%, sooner than 60 machine seconds after the release", func(ctx context.Context) (bool, string, error) {
 			obs, err := fsmv2client.Get[simple.Status[fsmv2cpu.CPUStatus]](ctx, env.Client, fsmv2cpu.Ref)
 			if err != nil {
 				if errors.Is(err, fsmv2client.ErrNotFound) {
@@ -166,9 +165,9 @@ var CPULatchScenario = scenariorunner.Scenario{
 			}
 
 			sampledAt := obs.Metrics.Worker.Gauges[string(deps.GaugeCPULastSampleUnix)]
-			if sampledAt < float64(barEnd.Unix()) {
-				return false, "", fmt.Errorf("the verdict fired again on the reading sampled at machine second %.0f, before the re-fire bar ends at %d",
-					sampledAt, barEnd.Unix())
+			if sampledAt >= float64(windowAfterRelease.Unix()) {
+				return false, "", fmt.Errorf("the verdict fired again only on the reading sampled at machine second %.0f, not before %d, one window span after the release",
+					sampledAt, windowAfterRelease.Unix())
 			}
 
 			return true, seen, nil

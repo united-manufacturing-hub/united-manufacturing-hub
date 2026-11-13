@@ -123,6 +123,7 @@ type Reduction struct {
 
 var (
 	// Last is the newest stored reading. Min is 1: one reading is the whole answer.
+	// Use it only for values already averaged at their source, such as PSI avg60.
 	Last = Reduction{Name: "last", Min: 1, fold: foldLast}
 	// Mean is the arithmetic mean of the stored values. Min is 2; over one it is Last.
 	Mean = Reduction{Name: "mean", Min: 2, fold: foldMean}
