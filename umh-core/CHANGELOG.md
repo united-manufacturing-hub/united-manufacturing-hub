@@ -5,6 +5,7 @@
 ### Improvements
 
 - Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+- Deploying a bridge while CPU, memory or disk is degraded now fails within a second instead of after 30 seconds. The error says which resource is degraded and how to start bridges anyway, and its error code names the resource: `ERR_BRIDGE_REFUSED_CPU`, `ERR_BRIDGE_REFUSED_MEMORY` or `ERR_BRIDGE_REFUSED_DISK`. As with any failed deploy, the bridge is kept
 
 ### Fixes
 
