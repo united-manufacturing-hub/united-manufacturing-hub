@@ -134,6 +134,30 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
 | **Stand-alone Flows** | Custom processing | Any source | Any destination |
 
+## Metrics
+
+The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts. It carries the stream processor's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stream processors and what the labels and the state values mean.
+
+Stream processors run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a stream processor named `oee-rollup`, the series carry these labels:
+
+| Part | `component` | `instance` |
+|---|---|---|
+| The stream processor | `stream_processor_instance` | `oee-rollup` |
+| The internal flow that runs it | `dataflow_component_instance` | `dfc-streamprocessor-oee-rollup` |
+| The Benthos process of that flow | `benthos_instance` | `dataflow-dfc-streamprocessor-oee-rollup` |
+
+To alert when a stream processor has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
+
+```promql
+umh_core_service_current_state{component="stream_processor_instance"} != 3 != 4 != 0
+```
+
+The rule does not fire for a stream processor that is stopped (0) or idle (4). A stopped one is one you stopped on purpose, and an idle one has no data to process.
+
+When you delete a stream processor, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name, for example by adding `exported_instance!="<deleted stream processor>"` to the selector, or restart the container.
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+
 ## Learn More
 
 For comprehensive stream processor configuration and examples, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling documentation.

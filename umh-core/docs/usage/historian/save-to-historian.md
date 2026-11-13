@@ -102,7 +102,8 @@ the contract in your topics and the configured name is the usual cause.
 
 **Rows are being dropped.** Two cases can never be written and are dropped rather than retried: a
 tag whose datatype flips between numeric and text, and two different values at the same millisecond.
-Both are logged with the tag name and counted on the `historian_rows_poisoned` metric. The
+Both are logged with the tag name and counted on `historian_rows_poisoned`. This counter belongs to the
+Historian output in the bridge's Benthos process. It is not on umh-core's port 8080. The
 [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) has a runbook for
 resolving them.
 

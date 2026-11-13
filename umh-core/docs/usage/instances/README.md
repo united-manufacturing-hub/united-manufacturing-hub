@@ -48,25 +48,17 @@ The instance overview shows all your UMH instances at a glance:
 
 The instance details page provides comprehensive monitoring and management:
 
-### Agent Panel
-The Agent panel shows the instance's identity and its connection to the Management Console:
-- **Name**: Instance identifier (e.g., `sk-core-hetzner`)
-- **Location path**: Your organizational structure
-  - Level 0: Enterprise (required)
-  - Level 1-4: Site, Area, Line, etc. (optional)
-- **Latency**: Connection health indicator (N/A when healthy)
-- **Logs button**: Opens the instance's system logs for diagnostics
+### Agent Card
+The Agent card shows the identity and the version of the instance: its name, location path, UMH Core version and release channel. See [Agent](agent/README.md).
 
-### Container Panel
-The Container panel shows the resources the container uses:
-- **CPU**: the CPU status and usage. See [CPU Health](cpu-health/README.md).
-- **Memory**: Usage of available RAM (GiB)
-- **Disk**: Storage usage (GiB)
-- **Architecture**: System architecture (e.g., `amd64`)
-- **Hardware ID**: Unique container identifier
+### Container Card
+The Container card shows the CPU, memory and disk of the container, its architecture and its Hardware ID. See [Container](container/README.md).
 
-### Data Flows Panel
-The Data Flows panel groups bridges and stand-alone flows by their state. The states come from the [state machines](../../reference/state-machines.md) reference:
+### Communicator Card
+The Communicator card shows the connection to the Management Console: its health, how full the outbound queue is, and how many Management Console sessions watch the instance. See [Communicator](communicator/README.md).
+
+### Data Flows Card
+The Data Flows card groups bridges and stand-alone flows by their state. The states come from the [state machines](../../reference/state-machines.md) reference:
 - **Active**: Currently processing data (messages flowing)
 - **Neutral**: Includes:
   - `idle`: Healthy but no data for 30+ seconds
@@ -80,22 +72,16 @@ Example states:
 
 **Bridges count**: Total configured with active/neutral breakdown
 
-### Redpanda Panel
-The Redpanda panel shows the message broker that stores your [Unified Namespace](../unified-namespace/README.md):
-- **Incoming Throughput**: Data rate into the broker (KiB/s)
-- **Outgoing Throughput**: Data rate from the broker (KiB/s)
+### Redpanda Card
+The Redpanda card shows the message broker that stores your [Unified Namespace](../unified-namespace/README.md):
+- **Incoming Throughput**: Data rate into the broker, per second, in B, KiB, MiB or a larger binary unit, depending on the value
+- **Outgoing Throughput**: Data rate from the broker, per second, in B, KiB, MiB or a larger binary unit, depending on the value
 - **Logs/Metrics buttons**: Direct access to Redpanda diagnostics
 
-### Topic Browser Panel
-The Topic Browser panel summarizes the data in the instance's Unified Namespace:
+### Topic Browser Card
+The Topic Browser card summarizes the data in the instance's Unified Namespace:
 - **Topics count**: Total number of data topics
 - Quick access to the [Topic Browser](../unified-namespace/topic-browser.md) for data exploration
-
-### Release Panel
-The Release panel lists the version information for support requests and updates:
-- **Version**: Full semantic version (e.g., `v0.43.4`), not the short container version identifier shown on the overview page
-- **Channel**: Release channel (`stable`, `beta`, etc.)
-- **Software versions**: Individual component versions (S6 Overlay, Benthos, Redpanda)
 
 ## Next Steps
 
