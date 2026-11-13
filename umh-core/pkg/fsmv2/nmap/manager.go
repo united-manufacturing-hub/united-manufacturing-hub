@@ -25,15 +25,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // NewFsmv2NmapManager builds the fsmv1-compatible manager that drives the
 // fsmv2 nmap workers. It extracts NmapConfig entries from the snapshot, upserts
 // enabled workers into the fsmv2 runtime, and maps their stored status back to
-// the fsmv1 nmap operational states and NmapObservedState.
+// the nmap operational states and NmapObservedState.
 func NewFsmv2NmapManager(managerName string) *adapter.WorkerManager[config.NmapConfig, simple.Status[NmapStatus]] {
 	return adapter.NewWorkerManager(adapter.WorkerManagerSpec[config.NmapConfig, simple.Status[NmapStatus]]{
 		WorkerType: WorkerType,
@@ -46,13 +44,13 @@ func NewFsmv2NmapManager(managerName string) *adapter.WorkerManager[config.NmapC
 		MapFresh:    mapFresh,
 		MapObserved: mapObserved,
 		// DesiredRunning is the state reported when a config leaves desiredState
-		// empty. It is nmap's "open", not "running": nmap's own FSM accepts only
-		// open/stopped as a desired state (fsm/nmap/machine.go).
+		// empty. It is nmap's "open", not "running": the connection service sets
+		// only open/stopped as a nmap desired state.
 		States: adapter.StateVocabulary{
-			Starting:       nmapfsm.OperationalStateStarting,
-			Degraded:       nmapfsm.OperationalStateDegraded,
-			Stopped:        nmapfsm.OperationalStateStopped,
-			DesiredRunning: nmapfsm.OperationalStateOpen,
+			Starting:       OperationalStateStarting,
+			Degraded:       OperationalStateDegraded,
+			Stopped:        OperationalStateStopped,
+			DesiredRunning: OperationalStateOpen,
 		},
 	})
 }
@@ -77,31 +75,31 @@ func cfgFor(cfg config.NmapConfig) (map[string]any, error) {
 	return out, nil
 }
 
-// mapFresh maps a Fresh, healthy nmap observation to its fsmv1 operational
+// mapFresh maps a Fresh, healthy nmap observation to its operational
 // state. It translates the polled port state to the matching operational-state
 // constant; an empty or unknown port state maps to the starting state.
 // Degraded, stale, and bootstrap verdicts are framework-owned and handled by
 // the adapter, so this only classifies the healthy leaf.
 func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 	switch s.Result.PortState {
-	case string(nmapservice.PortStateOpen):
-		return nmapfsm.OperationalStateOpen
-	case string(nmapservice.PortStateClosed):
-		return nmapfsm.OperationalStateClosed
-	case string(nmapservice.PortStateFiltered):
-		return nmapfsm.OperationalStateFiltered
-	case string(nmapservice.PortStateUnfiltered):
-		return nmapfsm.OperationalStateUnfiltered
-	case string(nmapservice.PortStateOpenFiltered):
-		return nmapfsm.OperationalStateOpenFiltered
-	case string(nmapservice.PortStateClosedFiltered):
-		return nmapfsm.OperationalStateClosedFiltered
+	case string(PortStateOpen):
+		return OperationalStateOpen
+	case string(PortStateClosed):
+		return OperationalStateClosed
+	case string(PortStateFiltered):
+		return OperationalStateFiltered
+	case string(PortStateUnfiltered):
+		return OperationalStateUnfiltered
+	case string(PortStateOpenFiltered):
+		return OperationalStateOpenFiltered
+	case string(PortStateClosedFiltered):
+		return OperationalStateClosedFiltered
 	default:
-		return nmapfsm.OperationalStateStarting
+		return OperationalStateStarting
 	}
 }
 
-// mapObserved builds a nmapfsm.NmapObservedState from the stored status. Target
+// mapObserved builds a NmapObservedState from the stored status. Target
 // and Port come from the status, so they name the endpoint the most recent poll
 // dialed rather than the one the config asked for. Until a poll of an edited
 // endpoint completes, the observed values are the previous endpoint's, which is
@@ -109,18 +107,18 @@ func mapFresh(_ config.NmapConfig, s simple.Status[NmapStatus]) string {
 // carries that endpoint and its own start time, so an old poll cannot read as
 // fresh or as evidence about a different endpoint.
 func mapObserved(_ config.NmapConfig, s simple.Status[NmapStatus]) publicfsm.ObservedState {
-	return nmapfsm.NmapObservedState{
+	return NmapObservedState{
 		ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 			Target: s.Result.Target,
 			Port:   s.Result.Port,
 		},
-		ServiceInfo: nmapservice.ServiceInfo{
-			NmapStatus: nmapservice.NmapServiceInfo{
+		ServiceInfo: ServiceInfo{
+			NmapStatus: NmapServiceInfo{
 				IsRunning: s.Result.IsRunning,
-				LastScan: &nmapservice.NmapScanResult{
+				LastScan: &NmapScanResult{
 					Timestamp: s.Result.ScannedAt,
 					Target:    s.Result.Target,
-					PortResult: nmapservice.PortResult{
+					PortResult: PortResult{
 						State:     s.Result.PortState,
 						LatencyMs: s.Result.LatencyMs,
 						Port:      s.Result.Port,

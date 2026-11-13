@@ -147,7 +147,8 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
+	// The connection service upserts the nmap workers and benthos_monitor is
+	// fsmv1, so neither is reconciled here.
 	w.reconcileHistorian(ctx)
 	w.reconcileMonitorChild(fsmv2cpu.Ref, w.cpuEnabled, deps.FeatureSupportCPU)
 	w.reconcileMonitorChild(fsmv2memory.Ref, w.memoryMonitorEnabled, deps.FeatureSupportMemory)

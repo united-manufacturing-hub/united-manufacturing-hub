@@ -16,20 +16,19 @@ package connection
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
-	s6svc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -41,7 +40,6 @@ const (
 var _ = Describe("ConnectionService", func() {
 	var (
 		service        *ConnectionService
-		mockNmap       *nmapservice.MockNmapService
 		ctx            context.Context
 		tick           uint64
 		connectionName string
@@ -54,17 +52,16 @@ var _ = Describe("ConnectionService", func() {
 		tick = 1
 		connectionName = "test-connection"
 
-		// Set up a real service with a mocked nmap manager
-		var manager *nmapfsm.NmapManager
-		manager, mockNmap = nmapfsm.NewNmapManagerWithMockedService("test")
-		service = NewDefaultConnectionService(connectionName,
-			WithNmapManager(manager))
+		// The service drives the real fsmv2 nmap manager. The manager reads scan
+		// results through the global fsmv2 client, which each test stages with a
+		// stubbed state reader.
+		service = NewDefaultConnectionService(connectionName)
 		mockServices = serviceregistry.NewMockRegistry()
 	})
 
 	AfterEach(func() {
-		// Clean up if necessary
 		cancelFunc()
+		fsmv2client.SetClient(nil)
 	})
 
 	Describe("AddConnection", func() {
@@ -80,9 +77,6 @@ var _ = Describe("ConnectionService", func() {
 					Port:   targetPort,
 				},
 			}
-
-			// Set up mock to return a valid NmapServiceConfig when generating config
-			mockNmap.ServiceExistsResult = false
 		})
 
 		It("should add a new connection to the nmap manager", func() {
@@ -97,7 +91,7 @@ var _ = Describe("ConnectionService", func() {
 			Expect(service.nmapConfigs[0].Name).To(Equal(nmapName))
 
 			// Verify the desired state is set correctly
-			Expect(service.nmapConfigs[0].DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
+			Expect(service.nmapConfigs[0].DesiredFSMState).To(Equal(fsmv2nmap.OperationalStateStopped))
 		})
 
 		It("should return error when connection already exists", func() {
@@ -115,8 +109,9 @@ var _ = Describe("ConnectionService", func() {
 			err := service.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
+			stageFsmv2Client(nil)
+
 			// Reconcile to ensure the component is passed to nmap manager
-			mockNmap.ReconcileManagerReconciled = true
 			_, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
 			// Assert
@@ -127,11 +122,8 @@ var _ = Describe("ConnectionService", func() {
 
 	Describe("Status", func() {
 		var (
-			cfg             *connectionserviceconfig.ConnectionServiceConfig
-			manager         *nmapfsm.NmapManager
-			mockNmapService *nmapservice.MockNmapService
-			statusService   *ConnectionService
-			nmapName        string
+			cfg    *connectionserviceconfig.ConnectionServiceConfig
+			reader *stubStateReader
 		)
 
 		BeforeEach(func() {
@@ -142,112 +134,60 @@ var _ = Describe("ConnectionService", func() {
 				},
 			}
 
-			// Use the official mock manager from the FSM package
-			manager, mockNmapService = nmapfsm.NewNmapManagerWithMockedService("test")
+			reader = stageFsmv2Client(nil)
 
-			// Create service with our official mock nmap manager
-			statusService = NewDefaultConnectionService(connectionName,
-				WithNmapManager(manager))
-
-			// Add the component to the service
-			err := statusService.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
+			err := service.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
-
-			nmapName = statusService.getNmapName(connectionName)
-
-			// Set up the mock to say the component exists
-			mockNmapService.ServiceExistsResult = true
-			if mockNmapService.ExistingServices == nil {
-				mockNmapService.ExistingServices = make(map[string]bool)
-			}
-
-			mockNmapService.ExistingServices[nmapName] = true
 		})
 
 		It("should report status correctly for an existing component", func() {
-			fullCfg := config.FullConfig{
-				Internal: config.InternalConfig{
-					Nmap: statusService.nmapConfigs,
-				},
-			}
+			// A stopped connection reports the stopped nmap state.
+			_, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
+			Expect(reconciled).To(BeTrue())
 
-			// Configure nmap service for proper transitions
-			// First configure for creating -> created -> stopped
-			ConfigureNmapManagerForState(mockNmapService, nmapName, nmapfsm.OperationalStateStopped)
+			status, err := service.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status.NmapFSMState).To(Equal(fsmv2nmap.OperationalStateStopped))
 
-			// Wait for the instance to be created and reach stopped state
-			newTick, err := WaitForNmapManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
-				manager,
-				mockServices,
-				nmapName,
-				nmapfsm.OperationalStateStopped,
-				10,
-			)
+			// Start it and let the worker report an open port.
+			reader.obs = freshNmapObservation(fsmv2nmap.NmapStatus{
+				Target:    targetHost,
+				PortState: string(fsmv2nmap.PortStateOpen),
+				Port:      targetPort,
+				IsRunning: true,
+				ScannedAt: time.Now(),
+			})
+
+			err = service.StartConnection(ctx, mockServices.GetFileSystem(), connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
-			tick = newTick
+			tick++
+			_, reconciled = service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
+			Expect(reconciled).To(BeTrue())
 
-			// Now configure for transition to starting -> running
-			ConfigureNmapManagerForState(mockNmapService, nmapName, nmapfsm.OperationalStateOpen)
+			status, err = service.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
 
-			// Start it
-			err = statusService.StartConnection(ctx, mockServices.GetFileSystem(), connectionName)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Wait for the instance to reach running state
-			By("before WaitForNmapManagerInstanceState 2")
-
-			newTick, err = WaitForNmapManagerInstanceState(
-				ctx,
-				fsm.SystemSnapshot{CurrentConfig: fullCfg, Tick: tick},
-				manager,
-				mockServices,
-				nmapName,
-				nmapfsm.OperationalStateOpen,
-				15,
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			tick = newTick
-
-			mockNmapService.ServiceStates[nmapName].NmapStatus.IsRunning = true
-			mockNmapService.ServiceStates[nmapName].NmapStatus.LastScan.PortResult.State = "open"
-			mockNmapService.ServiceStates[nmapName].NmapStatus.LastScan.Timestamp = time.Now() // Set recent timestamp to prevent degraded state
-
-			// Reconcile once to ensure that serviceInfo is used to update the observed state
-			_, reconciled := statusService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
-			Expect(reconciled).To(BeFalse())
-
-			// Call Status
-			status, err := statusService.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
-
-			// Assert
-			Expect(err).NotTo(HaveOccurred())
-			Expect(status.NmapFSMState).To(Equal(nmapfsm.OperationalStateOpen))
-			Expect(status.NmapObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Status).To(Equal(s6svc.ServiceUp))
+			Expect(status.NmapFSMState).To(Equal(fsmv2nmap.OperationalStateOpen))
 			Expect(status.NmapObservedState.ServiceInfo.NmapStatus.IsRunning).To(BeTrue())
 			Expect(status.NmapObservedState.ServiceInfo.NmapStatus.LastScan.PortResult.State).To(Equal("open"))
+			Expect(status.LastChange).To(Equal(tick))
 
-			statusService.recentNmapStates[connectionName] = []string{"open", "closed", "open"}
+			service.recentNmapStates[connectionName] = []string{"open", "closed", "open"}
 
-			status, err = statusService.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
+			status, err = service.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.IsFlaky).To(BeTrue())
 		})
 
 		It("should return error for non-existent component", func() {
-			// Set up the mock to say the service doesn't exist
-			mockNmapService.ServiceExistsResult = false
-			mockNmapService.ExistingServices = make(map[string]bool)
+			// The connection is configured but never reconciled, so the nmap
+			// manager holds no instance for it.
+			Expect(service.ServiceExists(ctx, mockServices.GetFileSystem(), connectionName)).To(BeFalse())
 
-			// Call Status for a non-existent component
-			_, err := statusService.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
+			_, err := service.Status(ctx, mockServices.GetFileSystem(), connectionName, tick)
 
-			// Assert - check for "not found" in the error message
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring(ErrServiceNotExist.Error()))
+			Expect(err).To(MatchError(ErrServiceNotExist))
 		})
 	})
 
@@ -295,7 +235,7 @@ var _ = Describe("ConnectionService", func() {
 				if config.Name == nmapName {
 					found = true
 
-					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
+					Expect(config.DesiredFSMState).To(Equal(fsmv2nmap.OperationalStateStopped))
 					// In a real test, we'd verify the ConnectionServiceConfig was updated as expected
 					break
 				}
@@ -346,7 +286,7 @@ var _ = Describe("ConnectionService", func() {
 				if config.Name == nmapName {
 					foundStopped = true
 
-					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateStopped))
+					Expect(config.DesiredFSMState).To(Equal(fsmv2nmap.OperationalStateStopped))
 
 					break
 				}
@@ -365,7 +305,7 @@ var _ = Describe("ConnectionService", func() {
 				if config.Name == nmapName {
 					foundStarted = true
 
-					Expect(config.DesiredFSMState).To(Equal(nmapfsm.OperationalStateOpen))
+					Expect(config.DesiredFSMState).To(Equal(fsmv2nmap.OperationalStateOpen))
 
 					break
 				}
@@ -427,264 +367,73 @@ var _ = Describe("ConnectionService", func() {
 	})
 
 	Describe("ReconcileManager", func() {
-		It("should pass configs to the nmap manager for reconciliation", func() {
-			// Add a test component to have something to reconcile
-			cfg := &connectionserviceconfig.ConnectionServiceConfig{
+		var cfg *connectionserviceconfig.ConnectionServiceConfig
+
+		BeforeEach(func() {
+			cfg = &connectionserviceconfig.ConnectionServiceConfig{
 				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 					Target: targetHost,
 					Port:   targetPort,
 				},
 			}
+		})
+
+		It("should pass configs to the nmap manager for reconciliation", func() {
+			stageFsmv2Client(nil)
+
 			err := service.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Use the real mock from the FSM package
-			manager, _ := nmapfsm.NewNmapManagerWithMockedService("test")
-			service.nmapManager = manager
-
-			// Configure the mock to return true for reconciled
-			mockNmap.ReconcileManagerReconciled = true
-
-			// Act
 			err, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
 
-			// Assert
 			Expect(err).NotTo(HaveOccurred())
-			// Change expectation to match the actual behavior
-			Expect(reconciled).To(BeTrue()) // The mock is configured to return true
+			Expect(reconciled).To(BeTrue())
+			Expect(service.ServiceExists(ctx, mockServices.GetFileSystem(), connectionName)).To(BeTrue())
 		})
 
-		It("should handle errors from the nmap manager", func() {
-			// Create a custom mock that returns an error
-			mockError := errors.New("test reconcile error")
-
-			// Create a real manager with mocked services
-			mockManager, mockNmapService := nmapfsm.NewNmapManagerWithMockedService("test-error")
-
-			// Create a service with our mocked manager
-			testService := NewDefaultConnectionService("test-error-service",
-				WithNmapManager(mockManager))
-
-			// Add a test component to have something to reconcile (just like in the other test)
-			testComponentName := "test-error-component"
-			cfg := &connectionserviceconfig.ConnectionServiceConfig{
-				NmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
-					Target: targetHost,
-					Port:   targetPort,
-				},
-			}
-			err := testService.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, testComponentName)
+		It("should retry a started connection until the fsmv2 runtime is ready", func() {
+			// No global fsmv2 client: the runtime is not up yet.
+			err := service.AddConnectionToNmapManager(ctx, mockServices.GetFileSystem(), cfg, connectionName)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(service.StartConnection(ctx, mockServices.GetFileSystem(), connectionName)).To(Succeed())
 
-			// First reconcile - this will just create the instance in the manager
-			firstErr, reconciled := testService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
-			Expect(firstErr).NotTo(HaveOccurred())
-			Expect(reconciled).To(BeTrue()) // Should be true because we created a new instance
+			err, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeFalse())
+			Expect(service.ServiceExists(ctx, mockServices.GetFileSystem(), connectionName)).To(BeFalse())
 
-			// Now set up the mock service to fail during the actual instance reconciliation
-			mockNmapService.ReconcileManagerError = mockError
+			stageFsmv2Client(nil)
 
-			// Second reconcile - now that the instance exists, it will try to reconcile it
-			err, reconciled = testService.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick + 1, SnapshotTime: time.Now()})
+			err, reconciled = service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick + 1, SnapshotTime: time.Now()})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reconciled).To(BeTrue())
+			Expect(service.ServiceExists(ctx, mockServices.GetFileSystem(), connectionName)).To(BeTrue())
+		})
 
-			// Assert
-			Expect(err).ToNot(HaveOccurred()) // it should not return an error
-			Expect(reconciled).To(BeFalse())  // it should not be reconciled
-			// it should throw the "error reconciling s6Manager: test reconcile error" error through the logs
+		It("should return the context error when the context is cancelled", func() {
+			cancelFunc()
 
-			// Skip the error checking part as it's not accessible directly
-			// The test has already verified that the error is handled properly
-			// by checking that reconciled is false
-
-			// Alternatively, we could check for side effects of the error
-			// but for a unit test, verifying that reconciled is false is sufficient
+			err, reconciled := service.ReconcileManager(ctx, mockServices, fsm.SystemSnapshot{Tick: tick, SnapshotTime: time.Now()})
+			Expect(err).To(MatchError(context.Canceled))
+			Expect(reconciled).To(BeFalse())
 		})
 	})
 })
 
-// TransitionToNmapState is a helper to configure a service for a given high-level state.
-func TransitionToNmapState(mockService *nmapservice.MockNmapService, serviceName string, state string) {
-	switch state {
-	case nmapfsm.OperationalStateStopped,
-		nmapfsm.OperationalStateStarting:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: false,
-			S6FSMState:  s6fsm.OperationalStateStopped,
-		})
-	case nmapfsm.OperationalStateDegraded:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   false,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			IsDegraded:  true,
-			PortState:   "",
-		})
-	case nmapfsm.OperationalStateOpen:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   true,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapservice.PortStateOpen),
-		})
-	case nmapfsm.OperationalStateOpenFiltered:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   true,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapservice.PortStateOpenFiltered),
-		})
-	case nmapfsm.OperationalStateFiltered:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   true,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapservice.PortStateFiltered),
-		})
-	case nmapfsm.OperationalStateUnfiltered:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   true,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapservice.PortStateUnfiltered),
-		})
-	case nmapfsm.OperationalStateClosed:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   true,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapservice.PortStateClosed),
-		})
-	case nmapfsm.OperationalStateClosedFiltered:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: true,
-			IsRunning:   true,
-			S6FSMState:  s6fsm.OperationalStateRunning,
-			PortState:   string(nmapservice.PortStateClosedFiltered),
-		})
-	case nmapfsm.OperationalStateStopping:
-		SetupNmapServiceState(mockService, serviceName, nmapservice.ServiceStateFlags{
-			IsS6Running: false,
-			IsRunning:   false,
-			S6FSMState:  s6fsm.OperationalStateStopping,
-		})
-	}
+// stageFsmv2Client publishes a global fsmv2 client whose state reader returns
+// obs for every worker. Tests change the returned reader's obs to simulate new
+// scan results.
+func stageFsmv2Client(obs *fsmv2.Observation[simple.Status[fsmv2nmap.NmapStatus]]) *stubStateReader {
+	reader := &stubStateReader{obs: obs}
+	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader))
+
+	return reader
 }
 
-// SetupNmapServiceState configures the mock service state for Nmap instance tests.
-func SetupNmapServiceState(
-	mockService *nmapservice.MockNmapService,
-	serviceName string,
-	flags nmapservice.ServiceStateFlags,
-) {
-	// Ensure service exists in mock
-	mockService.ExistingServices[serviceName] = true
-
-	// Create service info if it doesn't exist
-	if mockService.ServiceStates[serviceName] == nil {
-		mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{}
+// freshNmapObservation wraps st in a fresh, healthy observation.
+func freshNmapObservation(st fsmv2nmap.NmapStatus) *fsmv2.Observation[simple.Status[fsmv2nmap.NmapStatus]] {
+	return &fsmv2.Observation[simple.Status[fsmv2nmap.NmapStatus]]{
+		CollectedAt: time.Now().Add(-100 * time.Millisecond),
+		Status:      simple.Status[fsmv2nmap.NmapStatus]{Result: st},
 	}
-
-	// Set S6 FSM state
-	if flags.S6FSMState != "" {
-		mockService.ServiceStates[serviceName].S6FSMState = flags.S6FSMState
-	}
-
-	// Update S6 observed state
-	if flags.IsS6Running {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceUp,
-			Uptime: 10, // Set uptime to 10s to simulate config loaded
-			Pid:    1234,
-		}
-	} else {
-		mockService.ServiceStates[serviceName].S6ObservedState.ServiceInfo = s6svc.ServiceInfo{
-			Status: s6svc.ServiceDown,
-		}
-	}
-
-	// Update health check status
-	if flags.IsRunning {
-		mockService.ServiceStates[serviceName].NmapStatus.IsRunning = true
-	} else {
-		mockService.ServiceStates[serviceName].NmapStatus.IsRunning = false
-	}
-
-	if flags.PortState != "" {
-		mockService.ServiceStates[serviceName].NmapStatus.LastScan = &nmapservice.NmapScanResult{
-			PortResult: nmapservice.PortResult{
-				State: flags.PortState,
-			},
-		}
-	}
-
-	// Store the service state flags directly
-	mockService.SetServiceState(serviceName, flags)
-}
-
-// ConfigureNmapManagerForState sets up the mock service in a BenthosManager to facilitate
-// a state transition for a specific instance. This should be called before starting
-// reconciliation if you want to ensure state transitions happen correctly.
-//
-// Parameters:
-//   - mockService: The mock service from the manager
-//   - serviceName: The name of the service to configure
-//   - targetState: The desired state to configure the service for
-func ConfigureNmapManagerForState(
-	mockService *nmapservice.MockNmapService,
-	serviceName string,
-	targetState string,
-) {
-	// Make sure the service exists in the mock
-	if mockService.ExistingServices == nil {
-		mockService.ExistingServices = make(map[string]bool)
-	}
-
-	mockService.ExistingServices[serviceName] = true
-
-	// Make sure service state is initialized
-	if mockService.ServiceStates == nil {
-		mockService.ServiceStates = make(map[string]*nmapservice.ServiceInfo)
-	}
-
-	if mockService.ServiceStates[serviceName] == nil {
-		mockService.ServiceStates[serviceName] = &nmapservice.ServiceInfo{}
-	}
-
-	// Configure the service for the target state
-	TransitionToNmapState(mockService, serviceName, targetState)
-}
-
-// WaitForNmapManagerInstanceState repeatedly calls manager.Reconcile until
-// we see the specified 'desiredState' or we hit maxAttempts.
-func WaitForNmapManagerInstanceState(
-	ctx context.Context,
-	snapshot fsm.SystemSnapshot,
-	manager *nmapfsm.NmapManager,
-	services serviceregistry.Provider,
-	instanceName string,
-	desiredState string,
-	maxAttempts int,
-) (uint64, error) {
-	tick := snapshot.Tick
-	for range maxAttempts {
-		err, _ := manager.Reconcile(ctx, snapshot, services)
-		if err != nil {
-			return tick, err
-		}
-
-		tick++
-
-		inst, found := manager.GetInstance(instanceName)
-		if found && inst.GetCurrentFSMState() == desiredState {
-			return tick, nil
-		}
-
-		if found {
-			fmt.Printf("currentState: %s\n", inst.GetCurrentFSMState())
-			fmt.Printf(" found instance: %s\n", instanceName)
-		}
-	}
-
-	return tick, fmt.Errorf("instance %s did not reach state %s after %d attempts",
-		instanceName, desiredState, maxAttempts)
 }

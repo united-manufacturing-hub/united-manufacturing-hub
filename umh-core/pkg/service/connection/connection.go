@@ -41,7 +41,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
@@ -149,7 +148,7 @@ type ServiceInfo struct {
 	// NmapFSMState contains the current state of the Nmap FSM
 	NmapFSMState string
 	// NmapObservedState contains information about the Nmap service
-	NmapObservedState nmapfsm.NmapObservedState
+	NmapObservedState fsmv2nmap.NmapObservedState
 	// LastChange stores the tick when the status last changed.
 	// This timestamp uses the FSM tick counter rather than wall clock time
 	// to ensure consistency with the FSM reconciliation system.
@@ -295,7 +294,7 @@ func (c *ConnectionService) Status(
 		return ServiceInfo{}, fmt.Errorf("failed to get nmap observed state: %w", err)
 	}
 
-	nmapStatusObservedState, ok := nmapStatus.(nmapfsm.NmapObservedState)
+	nmapStatusObservedState, ok := nmapStatus.(fsmv2nmap.NmapObservedState)
 	if !ok {
 		return ServiceInfo{}, fmt.Errorf("nmap status for connection %s is not a NmapObservedState", connName)
 	}
@@ -362,7 +361,7 @@ func (c *ConnectionService) AddConnectionToNmapManager(
 	nmapConfig := config.NmapConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            nmapName,
-			DesiredFSMState: nmapfsm.OperationalStateStopped,
+			DesiredFSMState: fsmv2nmap.OperationalStateStopped,
 		},
 		NmapServiceConfig: nmapServiceConfig,
 	}
@@ -511,7 +510,7 @@ func (c *ConnectionService) StartConnection(
 
 	for i, config := range c.nmapConfigs {
 		if config.Name == nmapName {
-			c.nmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateOpen
+			c.nmapConfigs[i].DesiredFSMState = fsmv2nmap.OperationalStateOpen
 			found = true
 
 			break
@@ -547,7 +546,7 @@ func (c *ConnectionService) StopConnection(
 
 	for i, config := range c.nmapConfigs {
 		if config.Name == nmapName {
-			c.nmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateStopped
+			c.nmapConfigs[i].DesiredFSMState = fsmv2nmap.OperationalStateStopped
 			found = true
 
 			break

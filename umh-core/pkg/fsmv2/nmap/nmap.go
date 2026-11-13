@@ -32,7 +32,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 const (
@@ -47,7 +46,7 @@ const (
 type NmapStatus struct {
 	// Target is the hostname or IP address the scan dialed.
 	Target string `json:"target"`
-	// PortState is one of nmapservice.PortStateOpen or nmapservice.PortStateClosed.
+	// PortState is one of PortStateOpen or PortStateClosed.
 	PortState string `json:"port_state"`
 	// LatencyMs is the dial round-trip time in milliseconds. Zero unless the
 	// port is open.
@@ -59,9 +58,9 @@ type NmapStatus struct {
 	// ScannedAt is when the dial started. A consumer comparing it against the
 	// time a config edit was persisted can tell a scan of the new target from a
 	// leftover scan of the previous one, which no other field distinguishes.
-	ScannedAt   time.Time                `json:"scanned_at"`
-	DialFailure *nmapservice.DialFailure `json:"dial_failure,omitempty"`
-	DialError   string                   `json:"dial_error,omitempty"`
+	ScannedAt   time.Time    `json:"scanned_at"`
+	DialFailure *DialFailure `json:"dial_failure,omitempty"`
+	DialError   string       `json:"dial_error,omitempty"`
 }
 
 // Dialer is what Poll dials the target through.
@@ -120,7 +119,7 @@ func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error
 		}
 
 		failure := classifyDialError(err)
-		if failure == nmapservice.DialFailureUnknown {
+		if failure == DialFailureUnknown {
 			d.GetLogger().SentryWarn(deps.FeatureForWorker(WorkerType), d.GetHierarchyPath(), "nmap::dial_failure_unknown",
 				deps.String("target", target),
 				deps.Err(err))
@@ -128,7 +127,7 @@ func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error
 
 		return NmapStatus{
 			Target:      cfg.NmapServiceConfig.Target,
-			PortState:   string(nmapservice.PortStateClosed),
+			PortState:   string(PortStateClosed),
 			Port:        cfg.NmapServiceConfig.Port,
 			ScannedAt:   start,
 			DialFailure: &failure,
@@ -141,7 +140,7 @@ func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error
 
 	return NmapStatus{
 		Target:    cfg.NmapServiceConfig.Target,
-		PortState: string(nmapservice.PortStateOpen),
+		PortState: string(PortStateOpen),
 		LatencyMs: elapsedMs,
 		Port:      cfg.NmapServiceConfig.Port,
 		IsRunning: true,
@@ -149,30 +148,30 @@ func Poll(ctx context.Context, d Deps, cfg config.NmapConfig) (NmapStatus, error
 	}, nil
 }
 
-func classifyDialError(err error) nmapservice.DialFailure {
+func classifyDialError(err error) DialFailure {
 	var dnsError *net.DNSError
 	if errors.As(err, &dnsError) {
 		if dnsError.IsTimeout {
-			return nmapservice.DialFailureDNSTimeout
+			return DialFailureDNSTimeout
 		}
 
-		return nmapservice.DialFailureDNSError
+		return DialFailureDNSError
 	}
 
 	if errors.Is(err, syscall.ECONNREFUSED) {
-		return nmapservice.DialFailureRefused
+		return DialFailureRefused
 	}
 
 	if errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH) {
-		return nmapservice.DialFailureUnreachable
+		return DialFailureUnreachable
 	}
 
 	var netError net.Error
 	if errors.As(err, &netError) && netError.Timeout() {
-		return nmapservice.DialFailureConnectTimeout
+		return DialFailureConnectTimeout
 	}
 
-	return nmapservice.DialFailureUnknown
+	return DialFailureUnknown
 }
 
 func init() {

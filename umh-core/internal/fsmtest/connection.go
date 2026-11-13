@@ -23,7 +23,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	connectionfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	connectionsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
@@ -83,35 +83,35 @@ func TransitionToConnectionState(mockService *connectionsvc.MockConnectionServic
 	case connectionfsm.OperationalStateStopped:
 		SetupConnectionServiceState(mockService, serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: false,
-			NmapFSMState:  nmapfsm.OperationalStateStopped,
+			NmapFSMState:  fsmv2nmap.OperationalStateStopped,
 		})
 	case connectionfsm.OperationalStateStarting:
 		SetupConnectionServiceState(mockService, serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: false,
-			NmapFSMState:  nmapfsm.OperationalStateStarting,
+			NmapFSMState:  fsmv2nmap.OperationalStateStarting,
 		})
 	case connectionfsm.OperationalStateUp:
 		SetupConnectionServiceState(mockService, serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: true,
-			NmapFSMState:  nmapfsm.OperationalStateOpen,
+			NmapFSMState:  fsmv2nmap.OperationalStateOpen,
 			IsFlaky:       false,
 		})
 	case connectionfsm.OperationalStateDegraded:
 		SetupConnectionServiceState(mockService, serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: true,
-			NmapFSMState:  nmapfsm.OperationalStateOpen,
+			NmapFSMState:  fsmv2nmap.OperationalStateOpen,
 			IsFlaky:       true,
 		})
 	case connectionfsm.OperationalStateDown:
 		SetupConnectionServiceState(mockService, serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: true,
-			NmapFSMState:  nmapfsm.OperationalStateClosed,
+			NmapFSMState:  fsmv2nmap.OperationalStateClosed,
 			IsFlaky:       false,
 		})
 	case connectionfsm.OperationalStateStopping:
 		SetupConnectionServiceState(mockService, serviceName, connectionsvc.ConnectionStateFlags{
 			IsNmapRunning: false,
-			NmapFSMState:  nmapfsm.OperationalStateStopping,
+			NmapFSMState:  fsmv2nmap.OperationalStateStopped,
 			IsFlaky:       false,
 		})
 	}
