@@ -12,6 +12,7 @@
   - zlib, now 1.4-r0 (CVE-2026-4738)
   - MongoDB Go driver, now 2.9.3 (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
   - go-jose, now 4.1.9 (CVE-2026-116587, CVE-2026-116585, CVE-2026-116586)
+  - Go in the umh-core binary, now 1.27.4 — reachable only through the opt-in Topic Browser GraphQL API (CVE-2026-97054)
 
   Update to reduce your attack surface.
 
