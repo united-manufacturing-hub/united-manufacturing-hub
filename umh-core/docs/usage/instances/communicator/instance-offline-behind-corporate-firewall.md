@@ -29,10 +29,10 @@ Run this command on the Docker host. It connects to `management.umh.app` and pri
 echo | openssl s_client -connect management.umh.app:443 -servername management.umh.app 2>/dev/null | grep '^issuer='
 ```
 
-`openssl s_client -proxy` talks plain HTTP to the proxy, so it cannot reach a proxy whose address starts with `https://`. For such a proxy, run this instead. It prints the issuer of the proxy's own certificate first and, as the last line, the issuer of the certificate for `management.umh.app`:
+`openssl s_client -proxy` talks plain HTTP to the proxy, so it cannot reach a proxy whose address starts with `https://`. For such a proxy, run this instead. It prints the issuer of the proxy's own certificate first and, as the last line, the issuer of the certificate for `management.umh.app`. The flags `-k --proxy-insecure` make `curl` accept certificates that the host does not trust. Without them, the check gives a wrong answer when the host does not trust the certificate of the proxy: `curl` 8.23 prints only the issuer of the proxy, and the `curl` in Ubuntu 24.04 and Debian 12 prints nothing. The command sends no credentials and you only read the issuer lines, so skipping the validation does no harm here:
 
 ```bash
-curl -sv -o /dev/null --proxy https://<proxy host>:<port> https://management.umh.app 2>&1 | grep -i 'issuer:'
+curl -sv -k --proxy-insecure -o /dev/null --proxy https://<proxy host>:<port> https://management.umh.app 2>&1 | grep -i 'issuer:'
 ```
 
 | What you see | Cause | What to do |

@@ -43,6 +43,8 @@ or
 sum without (hierarchy_path) (umh_fsmv2_worker_network_errors_total unless umh_fsmv2_worker_network_errors_total offset 5m) > 0
 ```
 
+The `offset 5m` part also fires without a new error after a failed scrape, a short scrape outage, or the first scrape of an instance whose counters are already above zero.
+
 | Name | Type | Reports |
 |---|---|---|
 | `umh_fsmv2_worker_network_errors_total` | counter | Requests without an answer that umh-core can classify. This includes a refused connection, a timeout and a rejected certificate. It also counts answers with a status no other counter takes, such as 400 or a proxy's 407 Proxy Authentication Required. |
