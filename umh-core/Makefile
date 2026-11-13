@@ -36,6 +36,11 @@ help: ## Display available make targets and usage information
 	@echo "   make test-connection   # Connection services"
 	@echo "   make test-debug        # Debug configuration"
 	@echo ""
+	@echo "📝 CHANGELOG COMMANDS:"
+	@echo "   make changelog                          # Add a changelog fragment for your PR"
+	@echo "   make release-changelog VERSION=X.Y.Z    # Batch the fragments into a release (release PRs only)"
+	@echo "   make rebuild-changelog                  # Regenerate CHANGELOG.md after editing .changelog/X.Y.Z.md"
+	@echo ""
 	@echo "🛠️  UTILITY COMMANDS:"
 	@echo "   make pod-shell      # Shell into running container"
 	@echo "   make stop-all-pods  # Stop all UMH Core containers"
@@ -63,13 +68,14 @@ LEFTHOOK_VERSION = v1.13.2
 GOLANGCI_LINT_VERSION = v2.5.0
 GOTESTSUM_VERSION = v1.13.0
 DLV_VERSION = v1.25.1
+CHANGIE_VERSION = v1.26.0
 
 # Default values for build arguments
 NMAP_VERSION = 7.99-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
-## Each benthos-umh release opens a PR (author umh-cross-repo-automation) that bumps this value and adds the CHANGELOG entry. Review that PR instead of bumping by hand.
+## Each benthos-umh release opens a PR (author umh-cross-repo-automation) that bumps this value. Review that PR instead of bumping by hand, and add a changelog fragment to it.
 BENTHOS_UMH_VERSION = 0.16.2
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
@@ -92,6 +98,33 @@ install:
 	go install github.com/evilmartians/lefthook@$(LEFTHOOK_VERSION)
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
+
+# Changelog tooling. changie is pinned and installed into .tools/ on first use.
+TOOLS_BIN_DIR := $(CURDIR)/.tools
+CHANGIE := $(TOOLS_BIN_DIR)/changie
+
+$(CHANGIE):
+	@GOBIN=$(TOOLS_BIN_DIR) go install github.com/miniscruff/changie@$(CHANGIE_VERSION)
+
+.PHONY: changelog release-changelog rebuild-changelog
+
+# Prompts for kind and body and writes a fragment to .changelog/unreleased/.
+changelog: $(CHANGIE)
+	@$(CHANGIE) new
+
+# Moves the fragments into .changelog/<version>.md and regenerates CHANGELOG.md.
+# Fails if that version file already exists. The heading has no "v", so VERSION=v0.45.1 becomes 0.45.1.
+# VERSION must be passed explicitly: the git-describe default above is not a release version.
+release-changelog: $(CHANGIE)
+ifeq ($(origin VERSION),file)
+	$(error VERSION is required. Usage: make release-changelog VERSION=0.45.1)
+endif
+	@$(CHANGIE) batch $(patsubst v%,%,$(VERSION))
+	@$(CHANGIE) merge
+
+# Regenerates CHANGELOG.md from .changelog/ after a released .changelog/<version>.md was edited.
+rebuild-changelog: $(CHANGIE)
+	@$(CHANGIE) merge
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda

@@ -1,0 +1,43 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Changelog fragments. Add one per PR with `make changelog`; `make release-changelog` merges them at release.
+# CHANGELOG.md is generated from header.tpl.md and one .changelog/<version>.md per release.
+# release workflows and changelog.umh.app parse the "## [X.Y.Z]" headings and the kind labels below,
+# so both must keep their exact form. Kinds render in this order, which is the order the validator expects.
+---
+changesDir: .changelog
+unreleasedDir: unreleased
+headerPath: header.tpl.md
+changelogPath: CHANGELOG.md
+versionExt: md
+# Sub-second time so two fragments added in quick succession never share a file.
+fragmentFileFormat: '{{.Kind}}-{{.Time.Format "20060102-150405.000000"}}'
+versionFormat: '## [{{.Version}}]'
+kindFormat: '### {{.Kind}}'
+changeFormat: '- {{.Body}}'
+body:
+  block: true
+kinds:
+  - key: new
+    label: New Features
+  - key: improvements
+    label: Improvements
+  - key: fixes
+    label: Fixes
+newlines:
+  afterChangelogHeader: 1
+  beforeKind: 1
+  afterKind: 1
+  endOfVersion: 2

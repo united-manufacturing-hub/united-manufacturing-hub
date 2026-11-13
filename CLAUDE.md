@@ -46,9 +46,14 @@ Run these from `umh-core/` (targets are in `umh-core/Makefile`).
 
 ## Changelog
 
-Every PR with user-visible changes adds an entry to `umh-core/CHANGELOG.md` under `## Unreleased` at the top. Never create a version section: `umh-core/RELEASING.md` describes the rename at release time. For format and voice, follow the `changelog-writing` skill (`/changelog-entry` drafts an entry).
+Every PR with user-visible changes adds a changelog fragment with `make changelog`, run from `umh-core/`. It asks for the kind and the entry text and writes a file to `umh-core/.changelog/unreleased/`. Without prompts: `./.tools/changie new --kind fixes --body "..."` (run `make changelog` once first to install changie). For format and voice, follow the `changelog-writing` skill (`/changelog-entry` drafts an entry).
 
-PRs that change files under `umh-core/` must modify `CHANGELOG.md`, or CI fails. The `skip-changelog-guard` label bypasses the check (for CI/CD, refactoring, or test-only changes). The check reads labels from the event that started the run, so after adding the label, push a commit to re-run it.
+- **Kinds**: `new`, `improvements`, `fixes`. They render as `### New Features`, `### Improvements` and `### Fixes`. No Linear IDs in the entry text.
+- **Do not edit `umh-core/CHANGELOG.md`**: changie generates it from one `.changelog/<version>.md` per release, and CI fails if they differ. `umh-core/RELEASING.md` describes the release cut.
+- **Fixing a released entry**: edit `umh-core/.changelog/<version>.md`, run `make rebuild-changelog`, commit both files and add the `skip-changelog-guard` label.
+- **Images and multi-line entries**: indent continuation lines by two spaces, e.g. `--body $'Text\n  ![alt](./changelog-images/name.png)'`.
+
+PRs that change code under `umh-core/` must add a fragment or edit a `.changelog/<version>.md`, or CI fails. The `skip-changelog-guard` label bypasses the check (for CI/CD, refactoring, or test-only changes). The check reads labels from the event that started the run, so after adding the label, push a commit to re-run it.
 
 ## Reading logs in a running instance
 

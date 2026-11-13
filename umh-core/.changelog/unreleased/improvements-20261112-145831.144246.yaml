@@ -1,0 +1,3 @@
+kind: improvements
+body: Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+time: 2026-11-12T14:58:31.144246+01:00
