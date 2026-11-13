@@ -1168,7 +1168,7 @@ func (p *ProtocolConverterService) BridgeAdmission(snapshot fsm.SystemSnapshot, 
 	d := bridgeadmission.Decide(in)
 	if d.MaxBridges != nil {
 		p.logger.Debugf("BridgeAdmission: bridge limit=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
-			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admit)
+			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admitted())
 	}
 
 	return d

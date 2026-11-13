@@ -248,5 +248,5 @@ func addWaitingBridge(s *pkgfsm.SystemSnapshot, name string) {
 // mustWaitAndReason splits an admission decision into whether the bridge must
 // wait and the message that says why.
 func mustWaitAndReason(d bridgeadmission.Decision) (bool, string) {
-	return !d.Admit, d.Message()
+	return !d.Admitted(), d.Message()
 }

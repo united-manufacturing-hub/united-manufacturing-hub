@@ -251,7 +251,7 @@ func (p *ProtocolConverterInstance) reconcileStateTransition(ctx context.Context
 			// This is acceptable as it requires deliberate action and the resource limits
 			// will still protect against accidental overload. The system will degrade
 			// appropriately if actually overloaded.
-		} else if decision := p.service.BridgeAdmission(snapshot, p.baseFSMInstance.GetID()); !decision.Admit {
+		} else if decision := p.service.BridgeAdmission(snapshot, p.baseFSMInstance.GetID()); !decision.Admitted() {
 			reason := decision.Message()
 			// Block creation due to resource limits. This runs on every tick, so
 			// the warning is throttled per bridge.

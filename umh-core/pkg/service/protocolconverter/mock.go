@@ -757,7 +757,7 @@ func (m *MockProtocolConverterService) EvaluateDFCDesiredStates(protConvName str
 // and admits every bridge otherwise.
 func (m *MockProtocolConverterService) BridgeAdmission(snapshot fsm.SystemSnapshot, bridgeName string) bridgeadmission.Decision {
 	if m.BridgeMustWaitReason == "" {
-		return bridgeadmission.Decision{Admit: true}
+		return bridgeadmission.Decision{}
 	}
 
 	cause := m.BridgeMustWaitCause
