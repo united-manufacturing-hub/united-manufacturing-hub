@@ -180,9 +180,13 @@ whichever names another contract. Write `data_contract_name` without the version
 until then is lost. Don't use the source topic the error suggests: umh-core rejects it. Write one as
 in [Which topics the bridge reads](#which-topics-the-bridge-reads) instead.
 
-If the output logs nothing at all, no data of the versions in the source topics is published beneath
-the bridge location. Check the Topic Browser: devices may publish a newer version, such as
-`_pump_v3`, that the source topics don't list yet.
+If the output logs nothing at all, first check whether the bridge shows degraded. A bridge whose
+source topics are rejected stays connected, but its write flow doesn't start, so the output logs
+nothing. Its status names the rejected topics; correct them as in
+[Which topics the bridge reads](#which-topics-the-bridge-reads). If the bridge isn't degraded, no
+data of the versions in the source topics is published beneath the bridge location. Check the
+Topic Browser: devices may publish a newer version, such as `_pump_v3`, that the source topics
+don't list yet.
 
 **Rows are being dropped.** Two cases can never be written and are dropped rather than retried: a
 tag whose datatype flips between numeric and text, and two different values at the same millisecond.
