@@ -16,7 +16,6 @@ package container_monitor_test
 
 import (
 	"context"
-	"os"
 	"sync"
 	"time"
 
@@ -73,16 +72,6 @@ func (t *capturingSentryTransport) supervisorNotRunningEvents() int {
 
 var _ = Describe("an fsmv2 supervisor that is not running", func() {
 	It("is reported to Sentry once per process, however many services call GetStatus", func() {
-		previousFlag, hadFlag := os.LookupEnv(usefsmv2CPUEnv)
-		Expect(os.Setenv(usefsmv2CPUEnv, "true")).To(Succeed())
-		DeferCleanup(func() {
-			if hadFlag {
-				_ = os.Setenv(usefsmv2CPUEnv, previousFlag)
-			} else {
-				_ = os.Unsetenv(usefsmv2CPUEnv)
-			}
-		})
-
 		previousClient := fsmv2client.GetClient()
 
 		fsmv2client.SetClient(nil)

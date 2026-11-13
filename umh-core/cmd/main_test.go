@@ -183,19 +183,18 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 			nil,
 		)
 
-		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(applicationSupervisor).NotTo(BeNil())
 	})
 
-	// Without credentials and with USE_FSMV2_CPU on, the CPU worker must run.
-	// Before this PR no FSMv2 runtime existed on such an instance, so the
-	// container monitor saw no CPU reading and refused every new bridge.
-	// Fresh proves the worker was started and is being observed; it says
-	// nothing about whether the cgroup read succeeded, so this passes on
-	// macOS too.
+	// Without credentials the CPU worker must run. Before this PR no FSMv2 runtime
+	// existed on such an instance, so the container monitor saw no CPU reading and
+	// refused every new bridge. Fresh proves the worker was started and is being
+	// observed; it says nothing about whether the cgroup read succeeded, so this
+	// passes on macOS too.
 	It("runs the CPU worker to a fresh reading with empty credentials", func() {
 		cfg := &config.FullConfig{
 			Agent: config.AgentConfig{
@@ -203,7 +202,6 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 					APIURL:    "",
 					AuthToken: "",
 				},
-				UseFSMv2CPU: true,
 			},
 		}
 
@@ -224,7 +222,7 @@ var _ = Describe("buildFSMv2Supervisor", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2CPU, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
+		applicationSupervisor, cleanup, err := buildFSMv2Supervisor(commState.ConfigManager, cfg.Agent.UseFSMv2MemoryMonitor, logger.For(logger.ComponentCore), nil, nil)
 		DeferCleanup(cleanup)
 		Expect(err).NotTo(HaveOccurred())
 

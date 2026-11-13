@@ -48,7 +48,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/version"
 )
 
@@ -144,21 +143,11 @@ func main() {
 	// to the default on parse failure); see ENG-4809 for the signature fix.
 	protocolConverterEnabled, _ := env.GetAsBool("USE_FSMV2_PROTOCOL_CONVERTER", false, false)
 
-	cpuMonitorEnabled := container_monitor.FSMv2CPUEnabledFromEnv()
-	configData.Agent.UseFSMv2CPU = cpuMonitorEnabled
-
-	if cpuMonitorEnabled {
-		log.Info("CPU status uses the CPU health check; set USE_FSMV2_CPU=false to use the 70% CPU usage rule instead")
-	} else {
-		log.Info("CPU status uses the 70% CPU usage rule because USE_FSMV2_CPU turns the CPU health check off")
-	}
-
 	memoryMonitorEnabled, _ := env.GetAsBool("USE_FSMV2_MEMORY_MONITOR", false, false)
 	configData.Agent.UseFSMv2MemoryMonitor = memoryMonitorEnabled
 
 	featureUsage := &models.FeatureUsage{
 		ConfigBackupEnabled:           configBackupEnabled,
-		FSMv2CPUEnabled:               models.FSMv2CPUEnabled(cpuMonitorEnabled),
 		FSMv2MemoryMonitorEnabled:     models.FSMv2MonitorEnabled(memoryMonitorEnabled),
 		FSMv2TransportEnabled:         true, // FSMv2 is the only bring-up path
 		FSMv2MemoryCleanupEnabled:     true, // persistence runs unconditionally

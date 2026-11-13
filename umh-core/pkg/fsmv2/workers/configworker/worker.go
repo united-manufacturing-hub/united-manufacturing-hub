@@ -18,11 +18,12 @@
 // Today the worker anchors the application's children union: once the shared
 // registry is published, every application state emits this kernel child
 // (renderUnion in workers/application/state), so the children list can never
-// become empty. On every tick it also reconciles two standalone children: the
-// historian, so live config edits apply without restarting umh-core, and the
-// CPU monitor, following USE_FSMV2_CPU. This worker owns the decision to create
-// or remove those two, where every other spec exists because whoever called the
-// client wrote it.
+// become empty. On every tick it also reconciles three standalone children:
+// the historian, so live config edits apply without restarting umh-core, the
+// CPU monitor, and the memory monitor behind USE_FSMV2_MEMORY_MONITOR. This
+// worker owns the historian's and the memory monitor's create-or-remove
+// decisions and only ever creates the CPU monitor; every other spec in the
+// registry exists because whoever called the client wrote it.
 //
 // TODO(ENG-4400): this worker becomes the config.yaml authority. It reads
 // config.yaml, validates and serializes changes to it, and materializes the
@@ -70,10 +71,6 @@ const WorkerTypeName = "configworker"
 // cmd/main.go go away.
 const ConfigManagerDepsKey = WorkerTypeName + ".configmanager"
 
-// CPUEnabledDepsKey is the register.SetGlobalDeps key for the bool that says
-// whether the fsmv2 CPU monitor child runs (USE_FSMV2_CPU).
-const CPUEnabledDepsKey = WorkerTypeName + ".cpuenabled"
-
 // MemoryMonitorEnabledDepsKey is the register.SetGlobalDeps key for the bool
 // that says whether the fsmv2 memory monitor child runs (USE_FSMV2_MEMORY_MONITOR).
 const MemoryMonitorEnabledDepsKey = WorkerTypeName + ".memorymonitorenabled"
@@ -89,11 +86,6 @@ type ConfigworkerWorker struct {
 	configManager config.ConfigManager
 
 	fsmv2.WorkerBase[snapshot.ConfigworkerConfig, snapshot.ConfigworkerStatus, register.NoDeps]
-
-	// cpuEnabled gates whether the fsmv2 CPU monitor child is upserted. It is
-	// set once at construction from CPUEnabledDepsKey (the USE_FSMV2_CPU env
-	// flag, read in cmd/main.go and never persisted).
-	cpuEnabled bool
 
 	memoryMonitorEnabled bool
 }
@@ -115,13 +107,11 @@ func NewConfigworkerWorker(
 	// one, and the historian reconcile in CollectObservedState no-ops when it is
 	// nil (mirroring the fsmv2client.GetClient nil guard).
 	configManager := register.GlobalDeps[config.ConfigManager](ConfigManagerDepsKey)
-	cpuEnabled := register.GlobalDeps[bool](CPUEnabledDepsKey)
 	memoryMonitorEnabled := register.GlobalDeps[bool](MemoryMonitorEnabledDepsKey)
 
 	w := &ConfigworkerWorker{
 		registry:             shared,
 		configManager:        configManager,
-		cpuEnabled:           cpuEnabled,
 		memoryMonitorEnabled: memoryMonitorEnabled,
 	}
 	w.InitBase(identity, logger, stateReader)
@@ -134,12 +124,10 @@ func (w *ConfigworkerWorker) Registry() *dynamicchildren.Registry {
 	return w.registry
 }
 
-// CollectObservedState reconciles the historian monitor child from the live
-// config, then returns the observed state. It reads config through the config
-// manager and upserts or deletes the historian child in the shared registry so
-// live edits apply without a restart. Reconcile failures are logged, not
-// returned: a transient config read or upsert error must not fail the tick and
-// stall the worker.
+// CollectObservedState reconciles the children listed in the package comment
+// and returns the observed state. Reconcile failures are logged, not
+// returned: a transient config read or upsert error must not fail the tick
+// and stall the worker.
 func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired fsmv2.DesiredState) (fsmv2.ObservedState, error) {
 	select {
 	case <-ctx.Done():
@@ -147,9 +135,10 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	default:
 	}
 
-	// nmap and benthos_monitor are fsmv1, so they are not reconciled here.
+	// benthos_monitor is fsmv1 and the connection service's manager drives
+	// the fsmv2 nmap workers, so neither is reconciled here.
 	w.reconcileHistorian(ctx)
-	w.reconcileMonitorChild(fsmv2cpu.Ref, w.cpuEnabled, deps.FeatureSupportCPU)
+	w.reconcileMonitorChild(fsmv2cpu.Ref, true, deps.FeatureSupportCPU)
 	w.reconcileMonitorChild(fsmv2memory.Ref, w.memoryMonitorEnabled, deps.FeatureSupportMemory)
 
 	return fsmv2.NewObservation(snapshot.ConfigworkerStatus{}), nil

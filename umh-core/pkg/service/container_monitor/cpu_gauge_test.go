@@ -23,22 +23,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/container_monitor"
 )
 
-// The three CPU Prometheus series are read from whichever of the two filled the
-// record -- the worker's evidence or the legacy fields -- and USE_FSMV2_CPU says
-// which. Only one of them is ever populated, so a
-// gate that read the wrong one publishes nothing rather than a wrong number —
-// which is why these specs assert the ok flag as well as the values.
+// The three CPU Prometheus series are read from the CPU health check's
+// evidence. A tick that measured nothing publishes nothing rather than a wrong
+// number — which is why these specs assert the ok flag as well as the values.
 var _ = Describe("the CPU gauge source", func() {
-	// Both sources staged on one record, disagreeing on purpose. The legacy
-	// fields say 1000 mCPU over 4 cores; the evidence says 3.5 cores over 8.
-	// Production never produces this record: the point is that each spec below
-	// names which half it read.
-	bothSourcesRecord := func() *models.CPU {
-		usage, cores := 1000.0, 4
-
-		return &models.CPU{
-			TotalUsageMCpu: &usage,
-			CoreCount:      &cores,
+	It("reads the CPU health check's evidence", func() {
+		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(&models.CPU{
 			CPUHealth: &models.CPUHealth{
 				Details: cpuhealth.Details{
 					AvgUsageCores:   3.5,
@@ -46,33 +36,15 @@ var _ = Describe("the CPU gauge source", func() {
 					UsageRingActive: true,
 				},
 			},
-		}
-	}
-
-	It("reads the fsmv2 evidence when the flag is on", func() {
-		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesRecord(), true)
+		})
 
 		Expect(ok).To(BeTrue())
 		Expect(usageMCores).To(Equal(3500.0))
 		Expect(cores).To(Equal(8.0))
 	})
 
-	It("reads the legacy fields when the flag is off", func() {
-		usageMCores, cores, ok := container_monitor.CPUGaugeInputs(bothSourcesRecord(), false)
-
-		Expect(ok).To(BeTrue())
-		Expect(usageMCores).To(Equal(1000.0))
-		Expect(cores).To(Equal(4.0))
-	})
-
-	It("reports nothing measured when the flag is on and no evidence arrived", func() {
-		// The legacy fields are populated and must NOT be read: under the flag
-		// they are not the measurement in use.
-		usage, cores := 1000.0, 4
-		_, _, ok := container_monitor.CPUGaugeInputs(&models.CPU{
-			TotalUsageMCpu: &usage,
-			CoreCount:      &cores,
-		}, true)
+	It("reports nothing measured when no evidence arrived", func() {
+		_, _, ok := container_monitor.CPUGaugeInputs(&models.CPU{})
 
 		Expect(ok).To(BeFalse())
 	})
@@ -85,7 +57,7 @@ var _ = Describe("the CPU gauge source", func() {
 			CPUHealth: &models.CPUHealth{
 				Details: cpuhealth.Details{LogicalCpus: 8, UsageRingActive: false},
 			},
-		}, true)
+		})
 
 		Expect(ok).To(BeFalse())
 	})
@@ -97,14 +69,7 @@ var _ = Describe("the CPU gauge source", func() {
 			CPUHealth: &models.CPUHealth{
 				Details: cpuhealth.Details{AvgUsageCores: 3.5, LogicalCpus: 0, UsageRingActive: true},
 			},
-		}, true)
-
-		Expect(ok).To(BeFalse())
-	})
-
-	It("reports nothing measured when a legacy tick measured no usage", func() {
-		cores := 4
-		_, _, ok := container_monitor.CPUGaugeInputs(&models.CPU{CoreCount: &cores}, false)
+		})
 
 		Expect(ok).To(BeFalse())
 	})

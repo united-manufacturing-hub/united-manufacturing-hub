@@ -54,7 +54,7 @@ Shorten retention (either during install with `internal.redpanda.redpandaService
 **Dynamic Resource Protection:**
 Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
 
-- **CPU Utilization**: With the [CPU health check](../usage/instances/cpu-health/README.md), which is on by default, usage alone does not make a new bridge wait. The check uses 70% usage only as a last-resort fallback, when no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured. If UMH Core cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits. Under the 70% CPU usage rule (`USE_FSMV2_CPU=false`), a new bridge waits while the whole machine's CPU usage is at 70% or more
+- **CPU Utilization**: With the [CPU health check](../usage/instances/cpu-health/README.md), which is the only CPU status, usage alone does not make a new bridge wait. The check uses 70% usage only as a last-resort fallback, when no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured. If UMH Core cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits
 - **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
 - **Memory Usage**: A new bridge waits while memory use is above 80%
 - **Disk Usage**: A new bridge waits while disk use is above 85%

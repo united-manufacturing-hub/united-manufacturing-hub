@@ -37,18 +37,18 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).NotTo(HaveKey("featureUsage"))
 	})
 
-	It("serializes the FSMv2 CPU flag under the JSON key fsmv2CpuEnabled", func() {
+	It("ships no fsmv2CpuEnabled key", func() {
 		usage := models.FeatureUsage{
-			FSMv2CPUEnabled: true,
+			ConfigBackupEnabled: true,
 		}
 
 		data, err := json.Marshal(usage)
 		Expect(err).NotTo(HaveOccurred())
 
-		var raw map[string]interface{}
+		var raw map[string]json.RawMessage
 		Expect(json.Unmarshal(data, &raw)).To(Succeed())
 
-		Expect(raw).To(HaveKeyWithValue("fsmv2CpuEnabled", true))
+		Expect(raw).NotTo(HaveKey("fsmv2CpuEnabled"))
 	})
 
 	It("serializes the FSMv2 memory monitor flag under the JSON key fsmv2MemoryMonitorEnabled", func() {
@@ -76,18 +76,6 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("historianConfigured", true))
 		Expect(raw).To(HaveKeyWithValue("historianBridgeCount", float64(3)))
 	})
-})
-
-// The fsmv2 CPU path runs whenever USE_FSMV2_CPU is on. Management Console
-// credentials are not a prerequisite: the fsmv2 supervisor runs without them.
-var _ = Describe("FSMv2CPUEnabled, the fsmv2 CPU adoption flag", func() {
-	DescribeTable("reports the effective state of the fsmv2 CPU path",
-		func(flag, expected bool) {
-			Expect(models.FSMv2CPUEnabled(flag)).To(Equal(expected))
-		},
-		Entry("flag on", true, true),
-		Entry("flag off", false, false),
-	)
 })
 
 var _ = Describe("FSMv2MonitorEnabled, the adoption flag for an env-gated fsmv2 monitor", func() {
