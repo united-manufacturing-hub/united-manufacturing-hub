@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics/benthosmetricstest"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthosmonitorfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
@@ -42,12 +43,12 @@ func testConfig() config.BenthosMonitorConfig {
 // parseThroughLibrary returns the library's parse of body, read the way the
 // worker reads it: one scrape of a fake Benthos that serves body on /metrics.
 func parseThroughLibrary(body string) benthosmetrics.Metrics {
-	s := newFakeBenthos()
-	defer s.close()
+	s := benthosmetricstest.NewServer()
+	defer s.Close()
 
-	s.metricsBody = body
+	s.SetMetricsBody(body)
 
-	_, sample, err := benthosmetrics.NewTracker(time.Now).Scrape(context.Background(), int(s.port()))
+	_, sample, err := benthosmetrics.NewTracker(time.Now).Scrape(context.Background(), int(s.Port()))
 	Expect(err).NotTo(HaveOccurred(), "the library's scrape of the body")
 
 	return sample.Metrics

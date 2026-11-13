@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"testing"
@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestBenthos(t *testing.T) {
+func TestBenthosMetrics(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "fsmv2benthos Suite")
+	RunSpecs(t, "fsmv2benthosmetrics Suite")
 }

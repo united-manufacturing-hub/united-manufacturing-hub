@@ -67,41 +67,45 @@ func GetAsBool(key string, required bool, defaultValue bool) (bool, error) {
 		return false, err
 	}
 
-	// Convert to lowercase for easier comparison
-	valueLower := strings.ToLower(value)
-
-	// Check for various true/false representations
-	switch valueLower {
-	case "true", "1", "yes", "y", "on":
-		return true, nil
-	case "false", "0", "no", "n", "off":
-		return false, nil
-	default:
-		if required {
-			return false, fmt.Errorf("environment variable %s must be a boolean value", key)
-		}
-
-		return defaultValue, nil
+	parsed, ok := parseBool(value)
+	if ok {
+		return parsed, nil
 	}
+
+	if required {
+		return false, fmt.Errorf("environment variable %s must be a boolean value", key)
+	}
+
+	return defaultValue, nil
 }
 
-// GetAsBoolStrict is GetAsBool with required=false, except that a set value
-// it cannot read as a boolean returns defaultValue and an error naming the
-// variable and the value. An unset variable is not an error.
-func GetAsBoolStrict(key string, defaultValue bool) (bool, error) {
-	raw := os.Getenv(key)
-	if raw == "" {
+// LookupBool reads key as a boolean. Unset returns defaultValue. A value that
+// is not a boolean returns defaultValue and an error naming key and the value.
+func LookupBool(key string, defaultValue bool) (bool, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
 		return defaultValue, nil
 	}
 
-	// required=true makes GetAsBool return an error for an unrecognised value.
-	// Its not-set error cannot occur here, because the empty case returned above.
-	value, err := GetAsBool(key, true, defaultValue)
-	if err != nil {
-		return defaultValue, fmt.Errorf("%w (got %q)", err, raw)
+	value, ok := parseBool(raw)
+	if !ok {
+		return defaultValue, fmt.Errorf("environment variable %s must be a boolean value (got %q)", key, raw)
 	}
 
 	return value, nil
+}
+
+// parseBool reads raw as a boolean in any case: true, 1, yes, y and on are
+// true; false, 0, no, n and off are false. ok is false for anything else.
+func parseBool(raw string) (value bool, ok bool) {
+	switch strings.ToLower(raw) {
+	case "true", "1", "yes", "y", "on":
+		return true, true
+	case "false", "0", "no", "n", "off":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // GetAsFloat retrieves an environment variable as a float64.

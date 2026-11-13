@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"context"
@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics/benthosmetricstest"
 )
 
 var _ = Describe("Poll", func() {
@@ -29,11 +30,10 @@ var _ = Describe("Poll", func() {
 	// Tracker, which only happens when the worker was registered without
 	// NewDeps.
 	It("refuses to scrape with unbound deps", func() {
-		s := newFakeBenthos()
-		defer s.close()
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
 
-		cfg := testConfig()
-		cfg.MetricsPort = s.port()
+		cfg := Config{MetricsPort: s.Port()}
 
 		By("nil deps")
 		sample, err := Poll(context.Background(), nil, cfg)
@@ -47,7 +47,7 @@ var _ = Describe("Poll", func() {
 
 		// No request may have left for the healthy Benthos above; only the
 		// deps check can have failed those two calls.
-		Expect(s.requests()).To(BeEmpty(), "the refused scrapes must not send any request")
+		Expect(s.Requests()).To(BeEmpty(), "the refused scrapes must not send any request")
 
 		// The control: the guard must not fire on deps with a Tracker.
 		sample, err = Poll(context.Background(), &benthosDeps{tracker: benthosmetrics.NewTracker(time.Now)}, cfg)
@@ -59,16 +59,15 @@ var _ = Describe("Poll", func() {
 	// A failed scrape returns the last good sample with the error, so the
 	// worker's stored sample keeps vouching for liveness until it ages out.
 	It("returns the last good sample when a scrape fails", func() {
-		s := newFakeBenthos()
-		cfg := testConfig()
-		cfg.MetricsPort = s.port()
+		s := benthosmetricstest.NewServer()
+		cfg := Config{MetricsPort: s.Port()}
 		d := &benthosDeps{tracker: benthosmetrics.NewTracker(time.Now)}
 
 		good, err := Poll(context.Background(), d, cfg)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(good.Probes.PingAlive).To(BeTrue())
 
-		s.close()
+		s.Close()
 
 		failed, err := Poll(context.Background(), d, cfg)
 		Expect(err).To(HaveOccurred(), "the closed Benthos must fail the scrape")
@@ -78,11 +77,10 @@ var _ = Describe("Poll", func() {
 	// Poll threads ctx into every request, so a cancelled context fails the
 	// scrape instead of silently scraping in the background.
 	It("fails a cancelled context", func() {
-		s := newFakeBenthos()
-		defer s.close()
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
 
-		cfg := testConfig()
-		cfg.MetricsPort = s.port()
+		cfg := Config{MetricsPort: s.Port()}
 		deps := &benthosDeps{tracker: benthosmetrics.NewTracker(time.Now)}
 
 		ctx, cancel := context.WithCancel(context.Background())

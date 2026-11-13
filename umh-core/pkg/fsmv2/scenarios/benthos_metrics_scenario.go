@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"gopkg.in/yaml.v3"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
@@ -31,8 +30,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
-	pkgconfig "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
-	fsmv2benthos "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics/benthosmetricstest"
+	fsmv2benthosmetrics "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthosmetrics"
 )
 
 // benthosStaleAfter is the observation age the framework calls stale for this
@@ -48,29 +47,30 @@ var fakeBenthosKey = config.NewDependencyKey[*benthosFakes]("benthos-metrics.fak
 // benthosFakes is the pair of fake Benthos instances the scenario runs: the
 // first monitor's target and the second's.
 type benthosFakes struct {
-	first, second *fakeBenthos
+	first, second *benthosmetricstest.Server
 }
 
-type benthosObservation = fsmv2.Observation[simple.Status[fsmv2benthos.Scrape]]
+type benthosObservation = fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]]
 
-// benthosChildSpec renders the child-spec map the adapter's cfgFor produces:
-// the config as YAML with the yaml-tag keys, which is what the worker
-// unmarshals back into a config.BenthosMonitorConfig.
-func benthosChildSpec(name string, port uint16) (map[string]any, error) {
-	raw, err := yaml.Marshal(pkgconfig.BenthosMonitorConfig{
-		FSMInstanceConfig: pkgconfig.FSMInstanceConfig{Name: name, DesiredFSMState: "active"},
-		MetricsPort:       port,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal benthos monitor config: %w", err)
-	}
+// benthosReadAdvance is how much scrape time one /metrics read advances, so
+// a monitor fills the 60 s rate window in seconds of real time at its 1 s poll.
+// The clock is shared, so a monitor's rate is exact only while no other fake
+// is scraped.
+const benthosReadAdvance = 10 * time.Second
 
-	spec := map[string]any{}
-	if err := yaml.Unmarshal(raw, &spec); err != nil {
-		return nil, fmt.Errorf("unmarshal benthos monitor config to map: %w", err)
-	}
+// newBenthosFake starts a fake Benthos whose every /metrics read advances clk
+// by benthosReadAdvance.
+func newBenthosFake(clk *clock.Mock) *benthosmetricstest.Server {
+	s := benthosmetricstest.NewServer()
+	s.OnMetricsRead(func() { clk.Add(benthosReadAdvance) })
 
-	return spec, nil
+	return s
+}
+
+// benthosChildSpec is the child config the manager's cfgFor Upserts for a
+// Benthos on port.
+func benthosChildSpec(port uint16) map[string]any {
+	return map[string]any{"metricsPort": port}
 }
 
 // benthosSeen renders the parts of an observation a wait names.
@@ -92,21 +92,21 @@ func benthosSeen(obs benthosObservation) string {
 // rates the counters carry, not on real time.
 var BenthosMetricsScenario = scenariorunner.Scenario{
 	Name:        "benthos-metrics",
-	Description: "Benthos metrics monitor against two fakes: traffic gives each instance its own rate, a restart folds its counters, a dead endpoint degrades the store",
+	Description: "Benthos metrics monitor against two fakes: traffic gives each instance its own rate, a restart folds its counters, a dead endpoint degrades the store until it answers again, a port change starts a new counter series",
 
 	Dependencies: func() (map[string]any, func(), error) {
 		clk := clock.NewMock()
-		fakes := &benthosFakes{first: newFakeBenthos(clk), second: newFakeBenthos(clk)}
+		fakes := &benthosFakes{first: newBenthosFake(clk), second: newBenthosFake(clk)}
 
 		m := map[string]any{}
 
 		var c clock.Clock = clk
-		config.SetDependency(m, fsmv2benthos.ClockKey, c)
+		config.SetDependency(m, fsmv2benthosmetrics.ClockKey, c)
 		config.SetDependency(m, fakeBenthosKey, fakes)
 
 		return m, func() {
-			fakes.first.close()
-			fakes.second.close()
+			fakes.first.Close()
+			fakes.second.Close()
 		}, nil
 	},
 
@@ -118,21 +118,16 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 
 		first, second := fakes.first, fakes.second
 
-		refFirst := dynamicchildren.Ref{WorkerType: fsmv2benthos.WorkerType, Name: "benthos-first"}
-		refSecond := dynamicchildren.Ref{WorkerType: fsmv2benthos.WorkerType, Name: "benthos-second"}
+		refFirst := dynamicchildren.Ref{WorkerType: fsmv2benthosmetrics.WorkerType, Name: "benthos-first"}
+		refSecond := dynamicchildren.Ref{WorkerType: fsmv2benthosmetrics.WorkerType, Name: "benthos-second"}
 
-		upsert := func(ref dynamicchildren.Ref, target *fakeBenthos) error {
-			spec, err := benthosChildSpec(ref.Name, target.port())
-			if err != nil {
-				return err
-			}
-
-			return env.Client.Upsert(ref, spec)
+		upsert := func(ref dynamicchildren.Ref, target *benthosmetricstest.Server) error {
+			return env.Client.Upsert(ref, benthosChildSpec(target.Port()))
 		}
 
 		waitForSample := func(ref dynamicchildren.Ref, check string, pass func(obs benthosObservation) (bool, string, error)) error {
 			return env.WaitFor(ctx, check, func(ctx context.Context) (bool, string, error) {
-				obs, err := fsmv2client.Get[simple.Status[fsmv2benthos.Scrape]](ctx, env.Client, ref)
+				obs, err := fsmv2client.Get[simple.Status[fsmv2benthosmetrics.Scrape]](ctx, env.Client, ref)
 				if err != nil {
 					if errors.Is(err, fsmv2client.ErrNotFound) {
 						return false, "the monitor has not published an observation yet", nil
@@ -155,7 +150,7 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 		}
 
 		env.Step("create the first monitor on a Benthos that receives 40 messages per scrape")
-		first.setTraffic(40, 20, 0)
+		first.SetTraffic(40, 20, 0)
 
 		if err := upsert(refFirst, first); err != nil {
 			return err
@@ -169,7 +164,7 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 				// the shared clock.
 				done := obs.State == "running" && !s.Degraded &&
 					inputRate(s) == 4 && s.Result.Sample.IsActive &&
-					s.Result.Probes.PingAlive && s.Result.Probes.Ready && s.Result.Probes.Version == fakeBenthosVersion
+					s.Result.Probes.PingAlive && s.Result.Probes.Ready && s.Result.Probes.Version == benthosmetricstest.Version
 
 				return done, benthosSeen(obs), nil
 			}); err != nil {
@@ -177,8 +172,8 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 		}
 
 		env.Step("stop the first Benthos's input traffic while its output keeps draining; start a second Benthos on its own fake, with lighter traffic and output errors")
-		first.setTraffic(0, 20, 0)
-		second.setTraffic(10, 5, 1)
+		first.SetTraffic(0, 20, 0)
+		second.SetTraffic(10, 5, 1)
 
 		if err := upsert(refSecond, second); err != nil {
 			return err
@@ -206,11 +201,61 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 			return err
 		}
 
+		// The running worker keeps its Tracker, whose window holds the first
+		// Benthos's recent counters. Only the new port in the updated config
+		// tells it that the second Benthos's counters are a new series: read as
+		// the same series, they would give a rate on the first sample.
+		env.Step("the first monitor's config moves to the second Benthos's port")
+
+		if err := upsert(refFirst, second); err != nil {
+			return err
+		}
+
+		if err := waitForSample(refFirst, "the first sample after the move carries no rate",
+			func(obs benthosObservation) (bool, string, error) {
+				s := obs.Status
+				_, known := s.Result.Sample.InputMessagesPerSecond.Get()
+
+				return !known && s.Result.Probes.PingAlive, benthosSeen(obs), nil
+			}); err != nil {
+			return err
+		}
+
+		if err := waitForSample(refFirst, "the moved monitor reads the second Benthos's rate of 1 msg/s",
+			func(obs benthosObservation) (bool, string, error) {
+				s := obs.Status
+				// 1 = 10 messages per read ÷ benthosReadAdvance, exact because
+				// no monitor reads the first fake now.
+				done := obs.State == "running" && !s.Degraded &&
+					inputRate(s) == 1 && s.Result.Sample.IsActive
+
+				return done, benthosSeen(obs), nil
+			}); err != nil {
+			return err
+		}
+
+		env.Step("the first monitor's config moves back to the first Benthos's port")
+
+		if err := upsert(refFirst, first); err != nil {
+			return err
+		}
+
+		if err := waitForSample(refFirst, "the first monitor reads its own Benthos again: input idle, output draining",
+			func(obs benthosObservation) (bool, string, error) {
+				s := obs.Status
+				_, known := s.Result.Sample.InputMessagesPerSecond.Get()
+				done := known && inputRate(s) == 0 && outputRate(s) > 0
+
+				return done, benthosSeen(obs), nil
+			}); err != nil {
+			return err
+		}
+
 		env.Step("the second Benthos restarts: its counters drop to zero and its traffic stops")
 		// Traffic stops before the counters drop, so a scrape between the two
 		// cannot raise the reset counters again.
-		second.setTraffic(0, 0, 0)
-		second.setCounters(0, 0, 0)
+		second.SetTraffic(0, 0, 0)
+		second.SetCounters(0, 0, 0)
 
 		if err := waitForSample(refSecond, "the restarted Benthos reads 0 msg/s and inactive, its counters at zero and its rate never negative",
 			func(obs benthosObservation) (bool, string, error) {
@@ -229,7 +274,7 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 		}
 
 		env.Step("traffic returns on the restarted Benthos")
-		second.setTraffic(10, 5, 1)
+		second.SetTraffic(10, 5, 1)
 
 		if err := waitForSample(refSecond, "the rate recovers to the restarted Benthos's own traffic",
 			func(obs benthosObservation) (bool, string, error) {
@@ -247,12 +292,12 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 		}
 
 		env.Step("the first Benthos dies: its server closes")
-		first.close()
+		first.Close()
 
 		if err := waitForSample(refFirst, "the first monitor reads degraded and keeps its last good sample",
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
-				input, _, _ := first.counters()
+				input, _, _ := first.Counters()
 				done := obs.State == "degraded" && s.Degraded &&
 					strings.Contains(s.Reason, "poll error") &&
 					s.Result.Sample.Metrics.InputReceivedTotal() == input && s.Result.Probes.PingAlive
@@ -263,7 +308,7 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 		}
 
 		env.Step("the second Benthos's /metrics stops answering; its probes still do")
-		second.setFailing("/metrics", 500)
+		second.SetFailing("/metrics", 500)
 
 		// A failed scrape degrades the monitor on the first missed scrape; the
 		// store read stays fresh while the collector runs, because the
@@ -271,13 +316,13 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 		// which the kernel-only supervisor does not run.
 		if err := env.WaitFor(ctx, "the second monitor reads degraded on the stopped metrics, holds its last good sample, and its observation stays fresh",
 			func(ctx context.Context) (bool, string, error) {
-				obs, fresh, err := fsmv2client.GetFresh[simple.Status[fsmv2benthos.Scrape]](ctx, env.Client, refSecond, benthosStaleAfter)
+				obs, fresh, err := fsmv2client.GetFresh[simple.Status[fsmv2benthosmetrics.Scrape]](ctx, env.Client, refSecond, benthosStaleAfter)
 				if err != nil {
 					return false, "", err
 				}
 
 				s := obs.Status
-				input, _, _ := second.counters()
+				input, _, _ := second.Counters()
 				done := fresh == fsmv2client.Fresh &&
 					s.Degraded && strings.Contains(s.Reason, "/metrics: unexpected status 500") &&
 					s.Result.Sample.Metrics.InputReceivedTotal() == input && s.Result.Probes.PingAlive
@@ -287,13 +332,26 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 			return err
 		}
 
-		env.Step("delete the second monitor; its Benthos answers again")
+		env.Step("the second Benthos's /metrics answers again")
+		second.SetFailing("/metrics", 0)
+
+		if err := waitForSample(refSecond, "the second monitor leaves degraded: running, its probes alive and its rate known",
+			func(obs benthosObservation) (bool, string, error) {
+				s := obs.Status
+				_, known := s.Result.Sample.InputMessagesPerSecond.Get()
+				done := obs.State == "running" && !s.Degraded && s.Result.Probes.PingAlive && known
+
+				return done, benthosSeen(obs), nil
+			}); err != nil {
+			return err
+		}
+
+		env.Step("delete the second monitor")
 		env.Client.Delete(refSecond)
-		second.setFailing("/metrics", 0)
 
 		if err := env.WaitFor(ctx, "the store reads the deleted monitor as deleted",
 			func(ctx context.Context) (bool, string, error) {
-				_, fresh, err := fsmv2client.GetFresh[simple.Status[fsmv2benthos.Scrape]](ctx, env.Client, refSecond, benthosStaleAfter)
+				_, fresh, err := fsmv2client.GetFresh[simple.Status[fsmv2benthosmetrics.Scrape]](ctx, env.Client, refSecond, benthosStaleAfter)
 
 				return fresh == fsmv2client.Deleted, fresh.String(), err
 			}); err != nil {
@@ -308,7 +366,7 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 
 		if err := env.WaitFor(ctx, "two scrapes of the surviving monitor have passed since the delete",
 			func(ctx context.Context) (bool, string, error) {
-				obs, err := fsmv2client.Get[simple.Status[fsmv2benthos.Scrape]](ctx, env.Client, refFirst)
+				obs, err := fsmv2client.Get[simple.Status[fsmv2benthosmetrics.Scrape]](ctx, env.Client, refFirst)
 				if err != nil {
 					return false, "", err
 				}
@@ -354,14 +412,14 @@ var BenthosMetricsScenario = scenariorunner.Scenario{
 }
 
 // inputRate reads the stored input rate, 0 while the window cannot answer.
-func inputRate(s simple.Status[fsmv2benthos.Scrape]) float64 {
+func inputRate(s simple.Status[fsmv2benthosmetrics.Scrape]) float64 {
 	v, _ := s.Result.Sample.InputMessagesPerSecond.Get()
 
 	return v
 }
 
 // outputRate reads the stored output rate, 0 while the window cannot answer.
-func outputRate(s simple.Status[fsmv2benthos.Scrape]) float64 {
+func outputRate(s simple.Status[fsmv2benthosmetrics.Scrape]) float64 {
 	v, _ := s.Result.Sample.OutputMessagesPerSecond.Get()
 
 	return v

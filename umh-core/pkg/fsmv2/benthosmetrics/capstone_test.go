@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"context"
@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics/benthosmetricstest"
 	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
 )
 
@@ -56,11 +57,10 @@ var _ = Describe("IsActive equivalence", func() {
 	// (Phase 0) and the window-length boundary (Phase 2) are excluded, each
 	// stated where it occurs.
 	It("holds across the idle crossing", func() {
-		s := newFakeBenthos()
-		defer s.close()
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
 
-		cfg := testConfig()
-		cfg.MetricsPort = s.port()
+		cfg := Config{MetricsPort: s.Port()}
 
 		// A fake clock steps the scrape timestamps, so the run needs no sleeps
 		// and its window arithmetic is exact.
@@ -99,13 +99,13 @@ var _ = Describe("IsActive equivalence", func() {
 		// MessagesPerTick, so it reads active; the worker holds one sample, and
 		// one sample has no rate, so it reads inactive.
 		in++
-		s.setCounters(in, in/2)
+		s.SetCounters(in, in/2, 0)
 		step(in)
 
 		// Phase 1 — sustained arrivals. Both must read active, and must agree.
 		for i := 0; i < 30; i++ {
 			in++
-			s.setCounters(in, in/2)
+			s.SetCounters(in, in/2, 0)
 
 			workerActive, fsmActive := step(in)
 			Expect(workerActive).To(Equal(fsmActive),
@@ -133,7 +133,7 @@ var _ = Describe("IsActive equivalence", func() {
 		// tick. Together with the idle assertion above, this is what a
 		// stuck-true or stuck-false derivation cannot satisfy.
 		in++
-		s.setCounters(in, in/2)
+		s.SetCounters(in, in/2, 0)
 
 		workerActive, fsmActive := step(in)
 		Expect(workerActive).To(Equal(fsmActive),

@@ -42,7 +42,7 @@ import (
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
-	fsmv2benthos "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos"
+	fsmv2benthosmetrics "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthosmetrics"
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -74,7 +74,7 @@ const envUseFsmv2BenthosMetrics = "USE_FSMV2_BENTHOS_METRICS"
 // FSMv2BenthosMetricsEnabled reads USE_FSMV2_BENTHOS_METRICS. A value that is
 // not a boolean returns an error naming the variable, together with false.
 func FSMv2BenthosMetricsEnabled() (bool, error) {
-	return env.GetAsBoolStrict(envUseFsmv2BenthosMetrics, false)
+	return env.LookupBool(envUseFsmv2BenthosMetrics, false)
 }
 
 // IBenthosService is the interface for managing Benthos services.
@@ -323,7 +323,7 @@ func selectBenthosMonitorBackend(benthosName string) monitorManager {
 	useFsmv2, _ := FSMv2BenthosMetricsEnabled()
 
 	if useFsmv2 {
-		return fsmv2benthos.NewFsmv2BenthosMetricsManager(
+		return fsmv2benthosmetrics.NewManager(
 			fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
 		)
 	}

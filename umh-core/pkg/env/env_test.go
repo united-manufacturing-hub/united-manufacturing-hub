@@ -22,8 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("GetAsBoolStrict", func() {
-	const key = "UMH_TEST_GET_AS_BOOL_STRICT"
+var _ = Describe("LookupBool", func() {
+	const key = "UMH_TEST_LOOKUP_BOOL"
 
 	var envPrior string
 	var envPresent bool
@@ -41,19 +41,19 @@ var _ = Describe("GetAsBoolStrict", func() {
 		}
 	})
 
-	// GetAsBoolStrict returns an error naming the variable for every value
+	// LookupBool returns an error naming the variable for every value
 	// outside the recognised true/false spellings, while unset is not an
 	// error.
 	It("reports unrecognised values", func() {
 		// Unset is not an error: callers use unset as their normal default.
-		parsed, err := GetAsBoolStrict(key, false)
+		parsed, err := LookupBool(key, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(parsed).To(BeFalse())
 
 		for _, value := range []string{"true", "on", "ON", "false", "off"} {
 			_ = os.Setenv(key, value)
 
-			parsed, err := GetAsBoolStrict(key, false)
+			parsed, err := LookupBool(key, false)
 			Expect(err).NotTo(HaveOccurred(), "value %q", value)
 			Expect(parsed).To(Equal(value == "true" || value == "on" || value == "ON"), "value %q", value)
 		}
@@ -61,7 +61,7 @@ var _ = Describe("GetAsBoolStrict", func() {
 		for _, value := range []string{"maybe", "ture"} {
 			_ = os.Setenv(key, value)
 
-			parsed, err := GetAsBoolStrict(key, false)
+			parsed, err := LookupBool(key, false)
 			Expect(err).To(HaveOccurred(), "an unrecognised value must be reported, not swallowed (value %q)", value)
 			Expect(err.Error()).To(ContainSubstring(key), "the error must name the variable (value %q)", value)
 			Expect(err.Error()).To(ContainSubstring(value), "the error must quote the offending value (value %q)", value)
@@ -70,13 +70,13 @@ var _ = Describe("GetAsBoolStrict", func() {
 		}
 	})
 
-	// GetAsBoolStrict returns defaultValue alongside the error, so a caller
+	// LookupBool returns defaultValue alongside the error, so a caller
 	// that only logs the error still ends up where GetAsBool would have put
 	// it.
 	It("honours the default on an unrecognised value", func() {
 		_ = os.Setenv(key, "maybe")
 
-		parsed, err := GetAsBoolStrict(key, true)
+		parsed, err := LookupBool(key, true)
 		Expect(err).To(HaveOccurred())
 		Expect(parsed).To(BeTrue(), "the parsed value alongside the error must be defaultValue, so an error-ignoring caller matches GetAsBool")
 	})

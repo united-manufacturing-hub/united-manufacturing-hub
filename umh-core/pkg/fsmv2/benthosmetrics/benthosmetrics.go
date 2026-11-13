@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package fsmv2benthos is the FSMv2 simple monitor that scrapes each Benthos
+// Package fsmv2benthosmetrics is the FSMv2 simple monitor that scrapes each Benthos
 // instance's metrics through pkg/benthosmetrics. Importing it registers the
-// "benthos_metrics" worker; NewFsmv2BenthosMetricsManager runs one worker per
+// "benthos_metrics" worker; NewManager runs one worker per
 // enabled BenthosMonitorConfig.
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"context"
@@ -29,7 +29,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 )
 
 // WorkerType is the worker-type name this monitor registers under in config
@@ -55,6 +54,13 @@ type Scrape struct {
 	Sample benthosmetrics.Sample
 }
 
+// Config is what the worker needs to scrape one Benthos instance. The
+// framework reads it from the child spec with yaml.Unmarshal, so the key is
+// the yaml tag.
+type Config struct {
+	MetricsPort uint16 `yaml:"metricsPort"`
+}
+
 // scrapeClock is the clock NewDeps hands each worker's Tracker when the
 // dependency map holds nothing under ClockKey, and the clock mapObserved
 // judges freshness by.
@@ -67,7 +73,7 @@ var ClockKey = fsmv2config.NewDependencyKey[clock.Clock]("benthos_metrics.clock"
 // Poll scrapes the configured Benthos instance once and returns the Scrape.
 // A failed scrape returns the last good Scrape with the error, so one failed
 // scrape does not read as a dead Benthos.
-func Poll(ctx context.Context, d *benthosDeps, cfg config.BenthosMonitorConfig) (Scrape, error) {
+func Poll(ctx context.Context, d *benthosDeps, cfg Config) (Scrape, error) {
 	if d == nil || d.tracker == nil {
 		return Scrape{}, fmt.Errorf("benthos worker has no Tracker; register the worker with NewDeps")
 	}
@@ -83,7 +89,7 @@ func Poll(ctx context.Context, d *benthosDeps, cfg config.BenthosMonitorConfig) 
 }
 
 func init() {
-	simple.Register(simple.MonitorSpec[config.BenthosMonitorConfig, Scrape, *benthosDeps]{
+	simple.Register(simple.MonitorSpec[Config, Scrape, *benthosDeps]{
 		WorkerType: WorkerType,
 		// The library owns the cadence its windows are sized for; the shell
 		// polls at it.

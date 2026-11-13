@@ -19,7 +19,7 @@
 // worker the registry cannot build, a child-spec config that does not
 // round-trip through YAML, or a Poll the framework never reaches.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"context"
@@ -28,6 +28,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics/benthosmetricstest"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
@@ -40,15 +42,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// userSpecFor renders the child spec cfgFor would produce: the config as YAML
-// with the yaml-tag keys, which is what the worker unmarshals back into a
-// config.BenthosMonitorConfig.
+// userSpecFor renders the child spec the manager Upserts for a Benthos on
+// port: cfgFor's map as YAML, which the framework unmarshals into Config. The
+// name is not part of the child config; it only names the spec in a failure.
 func userSpecFor(name string, port uint16) fsmv2config.UserSpec {
-	raw, err := yaml.Marshal(config.BenthosMonitorConfig{
+	cfg, err := cfgFor(config.BenthosMonitorConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{Name: name, DesiredFSMState: "active"},
 		MetricsPort:       port,
 	})
-	Expect(err).NotTo(HaveOccurred(), "marshal child config")
+	Expect(err).NotTo(HaveOccurred(), "build child config for %s", name)
+
+	raw, err := yaml.Marshal(cfg)
+	Expect(err).NotTo(HaveOccurred(), "marshal child config for %s", name)
 
 	return fsmv2config.UserSpec{Config: string(raw)}
 }
@@ -102,12 +107,13 @@ var _ = Describe("The framework cycle", func() {
 	// poll, snapshot — and the observed state that reaches FSMv1 is the
 	// sample the library produced.
 	It("observes the worker through the framework", func() {
-		s := newFakeBenthos()
-		defer s.close()
-		s.version = "4.95.0"
-		s.setCounters(100, 80)
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
 
-		spec := userSpecFor("scenario-benthos", s.port())
+		s.SetVersion("4.95.0")
+		s.SetCounters(100, 80, 0)
+
+		spec := userSpecFor("scenario-benthos", s.Port())
 
 		// The worker's Tracker stamps scrapes with scrapeClock, captured when
 		// the factory builds the worker. A stepping fake clock makes the rate
@@ -151,7 +157,7 @@ var _ = Describe("The framework cycle", func() {
 		// The window lives in the worker's deps and must survive across
 		// observations. Raising the counters and stepping the clock by one
 		// second must produce a rate and flip IsActive on.
-		s.setCounters(140, 120)
+		s.SetCounters(140, 120, 0)
 		clockNow = t0.Add(time.Second)
 
 		second := observeOneCycle(worker, spec)
@@ -169,9 +175,9 @@ var _ = Describe("The framework cycle", func() {
 	// A Benthos whose endpoints answer nothing drives its worker degraded,
 	// and the degraded verdict reaches FSMv1's observed state.
 	It("reports an unreachable Benthos degraded", func() {
-		s := newFakeBenthos()
-		port := s.port()
-		s.close() // nothing is listening now
+		s := benthosmetricstest.NewServer()
+		port := s.Port()
+		s.Close() // nothing is listening now
 
 		spec := userSpecFor("scenario-dead", port)
 
@@ -197,11 +203,12 @@ var _ = Describe("The framework cycle", func() {
 	// tick: each worker keeps its own rate window, so a scrape of one does
 	// not reset the other's.
 	It("keeps a separate rate window per Benthos instance", func() {
-		a, b := newFakeBenthos(), newFakeBenthos()
-		defer a.close()
-		defer b.close()
-		a.setCounters(100, 0)
-		b.setCounters(500, 0)
+		a, b := benthosmetricstest.NewServer(), benthosmetricstest.NewServer()
+		defer a.Close()
+		defer b.Close()
+
+		a.SetCounters(100, 0, 0)
+		b.SetCounters(500, 0, 0)
 
 		t0 := time.Now().Truncate(time.Second)
 		clockNow := t0
@@ -215,12 +222,13 @@ var _ = Describe("The framework cycle", func() {
 			return w
 		}
 		workerA, workerB := newWorker("scenario-a"), newWorker("scenario-b")
-		specA, specB := userSpecFor("scenario-a", a.port()), userSpecFor("scenario-b", b.port())
+		specA, specB := userSpecFor("scenario-a", a.Port()), userSpecFor("scenario-b", b.Port())
 
 		_ = observeOneCycle(workerA, specA) // A at t0: 100
 		clockNow = t0.Add(time.Second)
 		_ = observeOneCycle(workerB, specB) // B in between
-		a.setCounters(120, 0)
+
+		a.SetCounters(120, 0, 0)
 		clockNow = t0.Add(2 * time.Second)
 		second := observeOneCycle(workerA, specA)
 

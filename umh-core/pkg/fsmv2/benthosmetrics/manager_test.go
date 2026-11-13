@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
 	"context"
@@ -125,7 +125,7 @@ var _ = Describe("The manager", func() {
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
 
-		mgr := NewFsmv2BenthosMetricsManager("test")
+		mgr := NewManager("test")
 		err, _ := mgr.Reconcile(context.Background(), snapshotWith(benthosConfig("active")), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -157,7 +157,7 @@ var _ = Describe("The manager", func() {
 		// EMPTY desired state on a config => the declared DesiredRunning
 		// state ("active"), because benthos_monitor's SetDesiredFSMState
 		// accepts only active or stopped.
-		mgr2 := NewFsmv2BenthosMetricsManager("test")
+		mgr2 := NewManager("test")
 		err, _ = mgr2.Reconcile(context.Background(), snapshotWith(benthosConfig("")), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -166,14 +166,14 @@ var _ = Describe("The manager", func() {
 		Expect(inst.GetDesiredFSMState()).To(Equal(benthosmonitorfsm.OperationalStateActive))
 	})
 
-	// cfgFor's YAML rendering survives the adapter's Upsert and the worker's
-	// unmarshal without losing Name, DesiredFSMState or MetricsPort.
-	It("round-trips name, desired state and metrics port through ChildSpec YAML", func() {
+	// The framework reads the child config with yaml.Unmarshal, so a key that
+	// does not match Config's yaml tag would reach Poll as port 0.
+	It("hands the worker the metrics port through the Upserted child spec", func() {
 		reader := &stubManagerReader{err: persistence.ErrNotFound}
 		writer := dynamicchildren.NewWriter()
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(writer, reader))
 
-		mgr := NewFsmv2BenthosMetricsManager("test")
+		mgr := NewManager("test")
 		err, _ := mgr.Reconcile(context.Background(), snapshotWith(benthosConfig("active")), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -183,11 +183,9 @@ var _ = Describe("The manager", func() {
 		})
 		Expect(ok).To(BeTrue(), "the enabled worker ref should be Upserted")
 
-		var back config.BenthosMonitorConfig
+		var back Config
 		Expect(yaml.Unmarshal([]byte(spec.UserSpec.Config), &back)).To(Succeed())
-		Expect(back.Name).To(Equal(name))
-		Expect(back.DesiredFSMState).To(Equal("active"))
-		Expect(back.MetricsPort).To(Equal(uint16(4195)))
+		Expect(back).To(Equal(Config{MetricsPort: 4195}))
 	})
 
 	// The framework degrades a worker after three missed scrapes: with one
@@ -197,7 +195,7 @@ var _ = Describe("The manager", func() {
 		reader := &stubManagerReader{}
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader))
 
-		mgr := NewFsmv2BenthosMetricsManager("test")
+		mgr := NewManager("test")
 		err, _ := mgr.Reconcile(context.Background(), snapshotWith(benthosConfig("active")), nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -248,7 +246,7 @@ var _ = Describe("GetLastObservedState across a failing store read", func() {
 		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader))
 		DeferCleanup(func() { fsmv2client.SetClient(nil) })
 
-		mgr := NewFsmv2BenthosMetricsManager("test")
+		mgr := NewManager("test")
 		err, _ := mgr.Reconcile(context.Background(), snapshot, nil)
 		Expect(err).NotTo(HaveOccurred())
 

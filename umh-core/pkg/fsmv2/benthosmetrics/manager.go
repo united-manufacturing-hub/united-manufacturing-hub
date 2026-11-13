@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fsmv2benthos
+package fsmv2benthosmetrics
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
@@ -28,15 +27,13 @@ import (
 	benthosmonitorfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/adapter"
 	benthosmonitorservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
-
-	"gopkg.in/yaml.v3"
 )
 
-// NewFsmv2BenthosMetricsManager returns the manager that runs one FSMv2
+// NewManager returns the manager that runs one FSMv2
 // worker per enabled BenthosMonitorConfig and reports their states as FSMv1
 // benthos_monitor states. Pass the FSMv1 monitor's log prefix as managerName,
 // so log labels stay the same when the flag flips.
-func NewFsmv2BenthosMetricsManager(managerName string) *adapter.WorkerManager[config.BenthosMonitorConfig, simple.Status[Scrape]] {
+func NewManager(managerName string) *adapter.WorkerManager[config.BenthosMonitorConfig, simple.Status[Scrape]] {
 	return adapter.NewWorkerManager(adapter.WorkerManagerSpec[config.BenthosMonitorConfig, simple.Status[Scrape]]{
 		WorkerType: WorkerType,
 		Log:        deps.NewFSMLogger(logger.For(managerName)),
@@ -60,21 +57,9 @@ func NewFsmv2BenthosMetricsManager(managerName string) *adapter.WorkerManager[co
 	})
 }
 
-// cfgFor converts cfg to the child-spec map via YAML: BenthosMonitorConfig
-// has only yaml tags, so the adapter's default JSON round-trip would drop
-// Name, DesiredFSMState and MetricsPort.
+// cfgFor builds the worker's Config from cfg: the worker needs only the port.
 func cfgFor(cfg config.BenthosMonitorConfig) (map[string]any, error) {
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("marshal benthos monitor config: %w", err)
-	}
-
-	out := map[string]any{}
-	if err := yaml.Unmarshal(data, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal benthos monitor config to map: %w", err)
-	}
-
-	return out, nil
+	return map[string]any{"metricsPort": cfg.MetricsPort}, nil
 }
 
 // mapFresh returns benthos_monitor's "active" state word for a fresh, healthy

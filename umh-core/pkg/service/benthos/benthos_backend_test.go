@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Which monitor backend NewDefaultBenthosService stores for a given value of
-// USE_FSMV2_BENTHOS_METRICS. Every spelling GetAsBoolStrict accepts must
+// USE_FSMV2_BENTHOS_METRICS. Every spelling LookupBool accepts must
 // select a backend, so the table below pins them next to pkg/env's own specs.
 
 package benthos
@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
-	fsmv2benthos "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthos"
+	fsmv2benthosmetrics "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthosmetrics"
 )
 
 var _ = Describe("Backend selection", func() {
@@ -60,13 +60,13 @@ var _ = Describe("Backend selection", func() {
 				Expect(err).To(HaveOccurred(), "value %q is not a boolean", value)
 			} else {
 				Expect(err).NotTo(HaveOccurred(),
-					"value %q is a spelling GetAsBoolStrict accepts", value)
+					"value %q is a spelling LookupBool accepts", value)
 			}
 
 			svc := NewDefaultBenthosService("flag-" + value)
 
 			if wantFSMv2 {
-				Expect(svc.benthosMonitorManager).To(BeAssignableToTypeOf(fsmv2benthos.NewFsmv2BenthosMetricsManager("x")),
+				Expect(svc.benthosMonitorManager).To(BeAssignableToTypeOf(fsmv2benthosmetrics.NewManager("x")),
 					"value %q must select the FSMv2 Benthos metrics manager", value)
 				_, ok := svc.benthosMonitorManager.(*benthos_monitor_fsm.BenthosMonitorManager)
 				Expect(ok).To(BeFalse(), "value %q must not select the FSMv1 manager", value)
@@ -77,7 +77,7 @@ var _ = Describe("Backend selection", func() {
 		},
 		Entry("unset", "", false, false),
 		Entry("true", "true", true, false),
-		// The remaining spellings are the ones GetAsBoolStrict accepts that
+		// The remaining spellings are the ones LookupBool accepts that
 		// pkg/env's own specs do not already pin (env_test.go covers true, on,
 		// ON, false and off): every one of them must select a backend too, so a
 		// reader that silently drops a spelling fails here.
@@ -111,7 +111,7 @@ var _ = Describe("Backend selection", func() {
 	It("falls back to the flag-selected backend on WithMonitorManager(nil)", func() {
 		_ = os.Setenv(envUseFsmv2BenthosMetrics, "true")
 		svcOn := NewDefaultBenthosService("nil-manager-flag-on", WithMonitorManager(nil))
-		Expect(svcOn.benthosMonitorManager).To(BeAssignableToTypeOf(fsmv2benthos.NewFsmv2BenthosMetricsManager("x")),
+		Expect(svcOn.benthosMonitorManager).To(BeAssignableToTypeOf(fsmv2benthosmetrics.NewManager("x")),
 			"nil must fall back to the flag-selected FSMv2 backend")
 
 		_ = os.Unsetenv(envUseFsmv2BenthosMetrics)
