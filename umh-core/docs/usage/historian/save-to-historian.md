@@ -103,7 +103,8 @@ data from several sites in one bridge, place the bridge at a location above them
 enterprise itself, such as `acme`.
 
 When you create a bridge in the Management Console, its source topics list the latest declared
-version of the contract. They don't follow later versions on their own. The bridge's tooltip in the
+version of the contract. They don't follow later versions on their own, so data of a version you
+declare later isn't stored (see [Troubleshooting](#troubleshooting)). The bridge's tooltip in the
 data model view shows which versions it saves. To also save another version, add it to the source
 topics.
 
