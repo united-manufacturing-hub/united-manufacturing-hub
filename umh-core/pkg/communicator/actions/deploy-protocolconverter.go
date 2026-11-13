@@ -45,7 +45,6 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/dataflowcomponentserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
@@ -582,64 +581,6 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 			}
 		}
 	}
-}
-
-// refusalCodes maps each resource that bridge admission can refuse a bridge
-// for to the error code that names it. The bridge limit and unproven health
-// have no code: a deploy waits for them until the timeout.
-var refusalCodes = map[bridgeadmission.Cause]string{
-	bridgeadmission.CPU:    models.ErrBridgeRefusedCPU,
-	bridgeadmission.Memory: models.ErrBridgeRefusedMemory,
-	bridgeadmission.Disk:   models.ErrBridgeRefusedDisk,
-}
-
-// deployFailure is a deploy that cannot succeed by waiting longer.
-type deployFailure struct {
-	// code is the error code sent to the frontend.
-	code    string
-	message string
-	// flows are the flows to stop. DFCTypeEmpty lets flowsToStop decide.
-	flows DFCType
-}
-
-// terminalFailure reports a deploy that cannot succeed: a flow logged a
-// config error, or bridge admission refused the bridge for a degraded
-// resource. An unproven resource or the bridge limit is not terminal, so the
-// deploy keeps waiting for those.
-func terminalFailure(bridgeName string, admission bridgeadmission.Decision, readLogs, writeLogs []s6.LogEntry, startTime time.Time) (deployFailure, bool) {
-	if configError, found := findFlowConfigError(readLogs, writeLogs, startTime); found {
-		return deployFailure{
-			code:    models.ErrConfigFileInvalid,
-			message: fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", bridgeName, configError.message),
-			flows:   configError.flows,
-		}, true
-	}
-
-	if code, refused := refusalCodes[admission.Cause]; refused {
-		return deployFailure{
-			code:    code,
-			message: fmt.Sprintf("Bridge '%s' was not started: %s", bridgeName, admission.Message()),
-			flows:   DFCTypeEmpty,
-		}, true
-	}
-
-	return deployFailure{}, false
-}
-
-// isTerminalFailureCode reports whether errCode is one that terminalFailure
-// returns.
-func isTerminalFailureCode(errCode string) bool {
-	if errCode == models.ErrConfigFileInvalid {
-		return true
-	}
-
-	for _, code := range refusalCodes {
-		if code == errCode {
-			return true
-		}
-	}
-
-	return false
 }
 
 // flowsToStop decides which dataflow components to flip to stopped after a failed deploy.
