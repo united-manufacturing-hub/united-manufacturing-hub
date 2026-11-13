@@ -95,23 +95,23 @@ var _ = Describe("BridgeAdmission refusal reasons", func() {
 							CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 						}
 
-						mustWait, reason := mustWaitAndReason(protocolconverter.NewDefaultProtocolConverterService("test").BridgeAdmission(snapshot, "new-bridge"))
+						decision := protocolconverter.NewDefaultProtocolConverterService("test").BridgeAdmission(snapshot, "new-bridge")
 
-						Expect(mustWait).To(Equal(refusedWhenDegradedOrAnyResource(stateDegraded, cpu, mem, disk)),
+						Expect(decision.Admitted()).To(Equal(!refusedWhenDegradedOrAnyResource(stateDegraded, cpu, mem, disk)),
 							"a bridge must be refused when the container or any resource is degraded")
 
 						switch {
 						case cpu:
-							Expect(reason).To(HavePrefix("CPU degraded: cpu is full"))
+							Expect(decision.Message()).To(HavePrefix("CPU degraded: cpu is full"))
 						case mem:
-							Expect(reason).To(HavePrefix("Memory degraded: memory is full"))
+							Expect(decision.Message()).To(HavePrefix("Memory degraded: memory is full"))
 						case disk:
-							Expect(reason).To(HavePrefix("Disk degraded: disk is full"))
+							Expect(decision.Message()).To(HavePrefix("Disk degraded: disk is full"))
 						case stateDegraded:
-							Expect(reason).To(HavePrefix("Resource health not proven yet"),
+							Expect(decision.Message()).To(HavePrefix("Resource health not proven yet"),
 								"with no resource degraded the unproven health is the only cause left to name")
 						default:
-							Expect(reason).To(BeEmpty())
+							Expect(decision.Message()).To(BeEmpty())
 						}
 					})
 				}
@@ -139,10 +139,10 @@ var _ = Describe("BridgeAdmission refusal reasons", func() {
 				CurrentConfig: config.FullConfig{Agent: config.AgentConfig{EnableResourceLimitBlocking: true}},
 			}
 
-			mustWait, got := mustWaitAndReason(protocolconverter.NewDefaultProtocolConverterService("test").BridgeAdmission(snapshot, "new-bridge"))
+			decision := protocolconverter.NewDefaultProtocolConverterService("test").BridgeAdmission(snapshot, "new-bridge")
 
-			Expect(mustWait).To(BeTrue(), "a degraded container state must refuse")
-			Expect(got).To(HavePrefix(reason))
+			Expect(decision.Admitted()).To(BeFalse(), "a degraded container state must refuse")
+			Expect(decision.Message()).To(HavePrefix(reason))
 		},
 		Entry("CPU degraded with an empty message",
 			container_monitor.ServiceInfo{
