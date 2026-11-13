@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # --- Build Stage ---
-ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 # Global, so that FROM managementconsole-${MANAGEMENTCONSOLE} resolves. false builds
 # the open-source image, true the official image, local a development image.
 ARG MANAGEMENTCONSOLE=false
@@ -33,7 +32,6 @@ RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
-ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG TARGETARCH
 
@@ -68,9 +66,6 @@ RUN case "${TARGETARCH}" in \
 # Redpanda installation
 COPY --from=cache /redpanda/${TARGETARCH}/ /opt/
 RUN chmod +x /opt/redpanda/bin/redpanda
-
-# Install nmap
-RUN apk add --no-cache nmap=${NMAP_VERSION}
 
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
