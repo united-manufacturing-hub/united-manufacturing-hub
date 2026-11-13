@@ -656,7 +656,7 @@ github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap
 github.com/united-manufacturing-hub/umh-utils/env
 github.com/united-manufacturing-hub/umh-utils/logger
 # github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0 => ./fsmv2
-## explicit; go 1.27.3
+## explicit; go 1.27.4
 # github.com/vektah/gqlparser/v2 v2.5.64
 ## explicit; go 1.25
 github.com/vektah/gqlparser/v2
