@@ -513,7 +513,7 @@ func (p *ProtocolConverterInstance) IsDFCHealthy() (bool, string) {
 	// A rejected write flow is kept out of the runtime, so it reads as stopped rather than
 	// failed. Without this the bridge would recover to idle and degrade again every tick.
 	// With BYPASS_WRITE_FLOW_VALIDATION the write flow runs, but the bridge stays degraded
-	// while its topics break the data contract rules.
+	// while its topics break the write flow topic rules.
 	if p.writeFlowConfigErr != nil && !writeIntentionallyStopped {
 		writeHealthy = false
 	}

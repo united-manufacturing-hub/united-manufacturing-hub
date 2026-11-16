@@ -5,6 +5,7 @@
 ### Improvements
 
 - Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+- `BYPASS_WRITE_FLOW_VALIDATION=true` now also lets write flows subscribe to topics outside the location of their own bridge, such as a historian bridge that stores data from other sites. These write flows keep running, and the bridge reports degraded with the offending topics in its status. Each topic must still start with `umh.v1.` and name exactly one data contract
 
 ### Fixes
 
