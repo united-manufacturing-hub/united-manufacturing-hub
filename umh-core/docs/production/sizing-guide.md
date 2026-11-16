@@ -31,12 +31,12 @@ A flow's own work depends on what it does. An OPC UA bridge polling 10,000 tags 
 Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that.
 
 ```text
-disk = messages per second × bytes per message × retention in seconds ÷ 0.85
+disk = (messages per second × bytes per message × retention in seconds + what the partition already holds) ÷ 0.75
 ```
 
-Seven days are 604,800 seconds. The 0.85 keeps the disk below the level where it shows as degraded. Bytes per message is an estimate of about 100–130 bytes. Example: 3,000 messages per second × 115 bytes × 604,800 seconds ÷ 0.85 ≈ 245 GB.
+Seven days are 604,800 seconds. "What the partition already holds" is the operating system and any other files on the same partition. The 0.75 keeps the disk within the [headroom](#headroom). Bytes per message is an estimate of about 100–130 bytes. Example: 3,000 messages per second × 115 bytes × 604,800 seconds ÷ 0.75 ≈ 280 GB, plus what the partition already holds ÷ 0.75.
 
-To get your own figure, run this twice, 24 hours apart, within the first days after install or after a retention change. Multiply the growth by the retention in days and divide by 0.85:
+To get your own figure, run this twice, 24 hours apart, while the buffer is still younger than the retention, for example in the first days after install. Once UMH Core deletes messages older than the retention, the growth no longer shows what it writes. Multiply the growth by the retention in days, add what the partition already holds and divide by 0.75:
 
 ```bash
 docker exec umh-core du -sh /data/redpanda

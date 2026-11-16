@@ -36,6 +36,6 @@ By default the Historian deletes nothing, so its disk grows until it is full. Se
 
 ## Reduce the volume
 
-The [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) stores fewer values by dropping samples that carry no new information, using deadband or swinging-door compression.
+The [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) stores fewer values by dropping samples, using deadband or swinging-door compression. With a nonzero `threshold` this loses detail: it drops changes up to the threshold. Choose a threshold your analysis can accept.
 
 [^1]: Measured with the Historian output's own tables on TimescaleDB 2.24 and PostgreSQL 17, 17.3 million values per data shape. Compressed, a value took 3 bytes for counters, states and short text, 6 bytes for smooth analog signals and 11 bytes for noisy ones, against about 100 bytes before compression.

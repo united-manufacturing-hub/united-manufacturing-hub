@@ -125,7 +125,7 @@ To start the stack, see [Starting the Stack](../setup.md#starting-the-stack).
 
 ## VM Sizing
 
-The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 vCPU, 8 GB RAM and 250 GB of free disk. This stack also runs TimescaleDB, PgBouncer and Grafana on the same machine, so add the Historian's needs from [Historian Sizing](../../../../usage/historian/sizing.md): about 4 more vCPU, 8 GB more RAM, and disk for the retention you choose. Both CPU figures assume vCPUs as fast as those of the Sizing Guide's example instances, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](../../../sizing-guide.md#overcommitting-slow-cpus-and-other-software).
+The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 vCPU, 8 GB RAM and 250 GB of free disk. This stack also runs TimescaleDB, PgBouncer and Grafana on the same machine, so add the Historian's needs from [Historian Sizing](../../../../usage/historian/sizing.md): about 4 more vCPU, 8 GB more RAM, and disk for the retention you choose. These Historian figures apply to the [Historian output](../../../../usage/historian/save-to-historian.md), not to the `kafka_to_postgresql_historian_bridge` template below, which writes to its own tables and has no retention setting. Both CPU figures assume vCPUs as fast as those of the Sizing Guide's example instances, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](../../../sizing-guide.md#overcommitting-slow-cpus-and-other-software).
 
 ## What's next
 
