@@ -241,6 +241,17 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	p.ObservedState.ConfigDivergence = ""
 
+	currentState := p.baseFSMInstance.GetCurrentFSMState()
+	desiredState := p.baseFSMInstance.GetDesiredFSMState()
+
+	// Observe admission before the context check. reconcileStateTransition
+	// creates the bridge in this tick unless the decision refuses it, and the
+	// zero decision admits, so a context that ends here must not skip it.
+	// Admission reads only the snapshot and takes no context.
+	if currentState == internalfsm.LifecycleStateToBeCreated {
+		p.observeAdmission(snapshot, desiredState)
+	}
+
 	if ctx.Err() != nil {
 		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
@@ -281,16 +292,9 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	p.ObservedState.ObservedProtocolConverterSpecConfig = p.specConfig
 	p.ObservedState.ObservedProtocolConverterSpecConfig.Location = mergedLocation
 
-	currentState := p.baseFSMInstance.GetCurrentFSMState()
-	desiredState := p.baseFSMInstance.GetDesiredFSMState()
-
 	// The service does not exist before creation, so there is no status to read.
 	switch currentState {
-	case internalfsm.LifecycleStateToBeCreated:
-		p.observeAdmission(snapshot, desiredState)
-
-		return nil
-	case internalfsm.LifecycleStateCreating:
+	case internalfsm.LifecycleStateToBeCreated, internalfsm.LifecycleStateCreating:
 		return nil
 	}
 

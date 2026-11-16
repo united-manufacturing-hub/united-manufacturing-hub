@@ -111,6 +111,33 @@ var _ = Describe("a bridge that waits", func() {
 		Expect(admission().Admitted()).To(BeTrue())
 	})
 
+	It("records its admission refusal even when the observation's deadline has passed", func() {
+		// Reconcile checks the deadline on entry, but it can expire before the
+		// observation step. The zero decision admits, so a skipped observation
+		// would let a refused bridge be created in the same tick.
+		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-deadline", protocolconverterfsm.OperationalStateActive)
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
+		registry := serviceregistry.NewMockRegistry()
+
+		expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		defer cancel()
+
+		snapshot := fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{Location: map[int]string{0: "test-location"}},
+			},
+		}
+
+		Expect(instance.UpdateObservedStateOfInstance(expired, registry, snapshot)).To(Succeed())
+
+		observed, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
+		Expect(ok).To(BeTrue())
+		Expect(observed.ServiceInfo.Admission.Cause).To(Equal(bridgeadmission.Memory))
+	})
+
 	It("leaves to_be_created despite a refusal when it is going to be stopped", func() {
 		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-stopped", protocolconverterfsm.OperationalStateStopped)
 		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateStopped)).To(Succeed())
