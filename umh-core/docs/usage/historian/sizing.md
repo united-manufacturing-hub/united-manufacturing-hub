@@ -10,11 +10,11 @@ This page tells you what to add to a machine for the Historian and how much disk
 
 The Historian's database can run on the same machine as UMH Core. As a starting point, add this to the machine in the [Sizing Guide](../../production/sizing-guide.md):
 
-* about **4 more CPU cores**
+* about **4 more vCPU**
 * about **8 GB more RAM**
 * disk for your retention, from the table below
 
-Actual usage depends on the applications you build on top of the Historian, such as dashboards, and on the queries your users run. The CPU figures assume a modern CPU, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](../../production/sizing-guide.md#overcommitting-slow-cpus-and-other-software).
+Actual usage depends on the applications you build on top of the Historian, such as dashboards, and on the queries your users run. The CPU figures assume vCPUs as fast as those of the Sizing Guide's example instances, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](../../production/sizing-guide.md#overcommitting-slow-cpus-and-other-software).
 
 ## Disk per year
 

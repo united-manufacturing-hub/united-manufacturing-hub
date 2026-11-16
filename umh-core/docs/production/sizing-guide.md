@@ -1,62 +1,75 @@
 # Sizing Guide
 
-This page says what machine to set up for UMH Core and how its needs grow.
-
 ## Recommended machine
 
 | | UMH Core | UMH Core + [Historian](../usage/historian/sizing.md) on the same machine |
 | --- | --- | --- |
-| CPU | 4 cores (host CPUs, or vCPUs reserved on a VM) | 8 cores (host CPUs, or vCPUs reserved on a VM) |
+| CPU | 4 vCPU | 8 vCPU |
 | RAM | 8 GB | 16 GB |
 | Disk | 250 GB free on top of the OS | 250 GB free on top of the OS, plus the Historian's disk for your retention |
+| Example cloud instance | AWS `c8i.xlarge`, Azure `D4ls_v6` | AWS `c8i.2xlarge`, Azure `D8ls_v6` |
 | Architecture | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) |
 
-This is a starting point for about 15 running [flows](../usage/data-flows/README.md). Actual usage depends on the applications you build on UMH Core (for example the number of flows, the message rate, the protocol and the number of tags) and on how fast your CPUs are. The CPU figures assume a modern CPU, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](#overcommitting-slow-cpus-and-other-software). If the [Historian](../usage/historian/README.md) runs on the same machine, use the second column.
+This is a starting point for about 15 running [flows](../usage/data-flows/README.md). Actual usage depends on the applications you build on UMH Core (for example the number of flows, the message rate, the protocol and the number of tags) and on how fast your CPUs are. If the [Historian](../usage/historian/README.md) runs on the same machine, use the second column.
+
+The CPU figures assume vCPUs as fast as those of the example instances, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](#overcommitting-slow-cpus-and-other-software). On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full physical core, as on AWS Graviton, the same vCPU count gives at least as much. UMH Core counts each vCPU as one core.
 
 ## Scaling
 
 | Resource | Base | Grows by |
 | --- | --- | --- |
-| CPU | 1 core for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and UMH Core's own services | 0.2 cores per running flow for monitoring overhead, plus the flow's own work |
+| CPU | 1 vCPU for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and UMH Core's own services | 0.2 vCPU per running flow for monitoring overhead, plus the flow's own work |
 | Memory | 3.5 GB for the Unified Namespace, 150 MB for the agent | ≈ 100 MB per running flow |
-| Disk | None | 0.06–0.08 GB per message per second, see [Disk](#disk) |
+| Disk | None | ≈ 0.07–0.09 GB per message per second at seven days' retention, see [Disk](#disk) |
 
-A bridge counts as 1 running flow, or 2 when it also writes to the device. A stand-alone flow counts as 1, and so does a stream processor.
+A bridge counts as 1 running flow for its read flow and 1 for its write flow. A stand-alone flow counts as 1, and so does a stream processor.
 
-A flow's own work depends on what it does. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags. A flow that writes many log lines also adds more overhead than one that writes few, because UMH Core analyses every log line. The Unified Namespace's own cost per message is negligible up to a few thousand messages per second. Above about 10,000 messages per second, plan more cores and [contact us](https://discord.gg/F9mqkZnm8U).
+A flow's own work depends on what it does. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags. A flow that writes many log lines also adds more overhead than one that writes few, because UMH Core analyses every log line. Above about 10,000 messages per second, plan more vCPU and [contact us](https://discord.gg/F9mqkZnm8U).
 
 ## Disk
 
-Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that. 250 GB holds seven days at roughly 3,000 messages per second. That figure assumes small JSON payloads of about 200 bytes, which Redpanda's default Snappy compression shrinks to 50–70 bytes. Larger payloads need more disk. A [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) that drops unchanged values sends fewer messages and needs less.
+Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that.
+
+```text
+disk = messages per second × bytes per message × retention in seconds ÷ 0.85
+```
+
+Seven days are 604,800 seconds. The 0.85 keeps the disk below the level where it shows as degraded. Bytes per message is an estimate of about 100–130 bytes. Example: 3,000 messages per second × 115 bytes × 604,800 seconds ÷ 0.85 ≈ 245 GB.
+
+To get your own figure, run this twice, 24 hours apart, within the first days after install or after a retention change. Multiply the growth by the retention in days and divide by 0.85:
+
+```bash
+docker exec umh-core du -sh /data/redpanda
+```
+
+With a default Docker volume, `/data` sits on the operating system's partition, so the operating system counts toward the disk use too.
 
 If you run the Historian, add its disk on top. See [Historian Sizing](../usage/historian/sizing.md#disk-per-year).
 
-The instance reports disk as degraded at 85% use of the partition that holds `/data`. With a default Docker volume, that is the operating system's partition, so the operating system counts toward the 85%.
-
-To use less disk, shorten retention or cap the topic size:
+To use less disk:
 
 - Set retention during install with `internal.redpanda.redpandaServiceConfig.topic.defaultTopicRetentionMs`, or later per topic with `rpk`.
 - Cap the topic with `defaultTopicRetentionBytes`. Under heavy load a cap can cut the replay window below seven days.
+- Drop unchanged values with the [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) before they reach the Unified Namespace.
 
 ## Overcommitting, slow CPUs and other software
 
-All CPU figures in these docs assume a modern CPU, not overcommitted, with no other software on the machine. Each of these three reduces what UMH Core can do:
+All CPU figures in these docs assume vCPUs as fast as those of the [example instances](#recommended-machine), not overcommitted, with no other software on the machine. Each of these reduces what UMH Core can do:
 
-- **Other software on the machine.** Antivirus, compliance agents and other containers use CPU, memory and disk on top of UMH Core.
-- **Overcommitted virtual machines.** Reserve the vCPUs for UMH Core's VM. UMH Core works in short bursts, so its work waits whenever the host lends its core to another VM, even though the VM looks idle. [CPU contention while cores are free](../usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md) shows how to spot this.
-- **Older or slower CPUs.** A slower core does less work, so each flow takes a larger share of it.
+- **Overcommitted virtual machines.** Set a CPU reservation for UMH Core's VM. If [CPU Health](../usage/instances/container/cpu-health/README.md#thresholds) shows Steal above 10% (status "CPU taken by the server"), the host is giving the VM's cores to other VMs. VMware shows the same on the host as CPU Ready. Even an idle-looking VM can wait for its cores, see [CPU contention while cores are free](../usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md).
+- **Older or slower CPUs.** Each flow takes a larger share of an older or slower core.
+- **Other software on the machine.** Antivirus, compliance agents and other containers use CPU, memory and disk on top of UMH Core. Exclude the host directory behind the `/data` volume from real-time antivirus scanning.
 
-## Bridge limit
+## Headroom
 
-An instance starts at most `(CPU cores − 1) × 5` bridges: 15 on 4 cores. More cores raise the limit.
+Size the machine so that normal load stays within these levels:
 
-The limit is a safety cap. It counts bridges, not workload: a bridge reading 10 tags counts the same as one reading 10,000. Stopped bridges and waiting bridges listed earlier in `config.yaml` count too. Stand-alone flows and stream processors do not. Size the machine by running flows instead.
-
-A new bridge also waits while a resource is degraded or its health is not proven yet. [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) explains each reason and the emergency setting that starts bridges anyway.
+- memory below 70% and disk below 75%, as shown on the [Container card](../usage/instances/container/README.md#when-the-container-shows-degraded)
+- more than 1.5 free vCPU on the machine, and with a CPU limit, below 85% of the limit, as shown by [CPU Health](../usage/instances/container/cpu-health/README.md#thresholds)
 
 ## Resizing
 
-Grow the machine when the instance shows a degraded resource in the Management Console or reaches its bridge limit. For CPU, [CPU Health](../usage/instances/container/cpu-health/README.md) explains each status and what to do.
+Grow the machine when the Container card shows CPU, memory or disk as degraded, or when new bridges wait at the [bridge limit](../usage/data-flows/bridges-do-not-start.md#bridge-limit). For CPU, [CPU Health](../usage/instances/container/cpu-health/README.md) explains each status and what to do.
 
 UMH Core keeps all its state in the `/data` volume. To grow the machine:
 
@@ -78,4 +91,4 @@ Redpanda's Seastar framework needs a 48-bit virtual address space. Raspberry Pi'
 
 ## Redpanda and `--overprovisioned`
 
-UMH Core runs Redpanda with the `--overprovisioned` flag, which turns off busy-polling, so Redpanda uses close to no CPU while no messages arrive. The cost is latency of up to low milliseconds, which manufacturing data tolerates. UMH Core needs the flag because CPU pinning does not work reliably in Docker and Redpanda shares the container with other processes.
+UMH Core runs Redpanda with the `--overprovisioned` flag, which turns off busy-polling. Redpanda then uses close to no CPU while no messages arrive, and adds up to a few milliseconds of latency.

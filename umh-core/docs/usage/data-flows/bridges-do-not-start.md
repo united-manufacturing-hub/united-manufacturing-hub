@@ -10,13 +10,19 @@ Before umh-core starts a new bridge, it runs bridge admission. A new bridge wait
 - **Memory degraded: [message]** — memory is short. Free memory on the host, or raise the container's memory limit.
 - **Disk degraded: [message]** — the disk is short. Free space on the volume, or make the volume larger.
 - **Resource health not proven yet** — umh-core has not yet shown the instance's resources to be healthy. A bridge always waits for this proof, so a fresh instance starts no bridges until its first health readings arrive. If the reason stays at "no health reading yet", the instance cannot read its own resources: use the emergency setting below and report it to UMH. The reason "instance not active yet" means the container has not reached the active state; the same advice applies. The reasons "container monitor not available", "container health status unavailable" and "CPU cores not measured yet" also mean umh-core has no reading yet. The same advice applies.
-- **Cannot create bridge - limit exceeded (N bridges maximum with X CPU cores, 1 core reserved for Redpanda)** — the instance has reached its bridge limit. The count includes the bridges already running and the waiting bridges listed before this one in config.yaml. The [Sizing Guide](../../production/sizing-guide.md#bridge-limit) explains the limit and what raises it.
+- **Cannot create bridge - limit exceeded (N bridges maximum with X CPU cores, 1 core reserved for Redpanda)** — the instance has reached its bridge limit. The count includes the bridges already running and the waiting bridges listed before this one in config.yaml. [Bridge limit](#bridge-limit) explains the limit and what raises it.
 
 ## What to do
 
 1. Read the reason on the bridge's status.
-2. Fix the resource it names. For CPU, follow the [CPU Health](../instances/container/cpu-health/README.md) page. For the bridge limit, follow the [Sizing Guide](../../production/sizing-guide.md#bridge-limit).
+2. Fix the resource it names. For CPU, follow the [CPU Health](../instances/container/cpu-health/README.md) page. For the bridge limit, see [Bridge limit](#bridge-limit).
 3. Wait. The bridge starts on its own once the resource is healthy again, or once the instance runs fewer bridges than its limit. Nothing needs to be redeployed.
+
+## Bridge limit
+
+An instance starts at most `(CPU cores − 1) × 5` bridges: 15 on 4 cores. CPU cores means the container's CPU limit, or all of the machine's cores when the container has no limit. More cores raise the limit.
+
+The limit counts bridges, not workload: a bridge reading 10 tags counts the same as one reading 10,000. Stopped bridges and waiting bridges listed earlier in `config.yaml` count too. Stand-alone flows and stream processors do not. To size the machine, see the [Sizing Guide](../../production/sizing-guide.md).
 
 ## Emergency settings: Turn off bridge admission
 
