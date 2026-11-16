@@ -312,6 +312,15 @@ var _ = Describe("EditInstance", func() {
 				Expect(failureReply(drainReplies(outboundChannel)).ErrorCode).To(Equal(models.ErrValidationFailed))
 			})
 
+			It("accepts a location that moves write flow topics outside the bridge location with BYPASS_WRITE_FLOW_VALIDATION", func() {
+				withWriteBridge(`^umh\.v1\.Old Enterprise\.Old Site\._raw\.`)
+
+				mockConfig.Config.Agent.BypassWriteFlowValidation = true
+
+				Expect(moveTo("New Enterprise")).To(Succeed())
+				Expect(agentEnterprise()).To(Equal("New Enterprise"))
+			})
+
 			It("accepts a location that write flow topics follow through location_path", func() {
 				withWriteBridge(`^umh\.v1\.{{ .location_path }}\._raw\.`)
 
