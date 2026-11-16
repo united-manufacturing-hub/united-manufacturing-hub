@@ -14,7 +14,7 @@ The Historian's database can run on the same machine as UMH Core. As a starting 
 * about **8 GB more RAM**
 * disk for your retention, from the table below
 
-Actual usage depends on the applications you build on top of the Historian, such as dashboards, and on the queries your users run.
+Actual usage depends on the applications you build on top of the Historian, such as dashboards, and on the queries your users run. The CPU figures assume a modern CPU, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](../../production/sizing-guide.md#overcommitting-slow-cpus-and-other-software).
 
 ## Disk per year
 

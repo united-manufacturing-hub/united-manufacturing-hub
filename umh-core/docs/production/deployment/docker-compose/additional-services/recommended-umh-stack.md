@@ -125,7 +125,7 @@ To start the stack, see [Starting the Stack](../setup.md#starting-the-stack).
 
 ## VM Sizing
 
-The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 CPU cores, 8 GB RAM and 250 GB of free disk. This stack also runs TimescaleDB, PgBouncer and Grafana on the same machine, so add the Historian's needs from [Historian Sizing](../../../../usage/historian/sizing.md): about 4 more CPU cores, 8 GB more RAM, and disk for the retention you choose.
+The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 CPU cores, 8 GB RAM and 250 GB of free disk. This stack also runs TimescaleDB, PgBouncer and Grafana on the same machine, so add the Historian's needs from [Historian Sizing](../../../../usage/historian/sizing.md): about 4 more CPU cores, 8 GB more RAM, and disk for the retention you choose. Both CPU figures assume a modern CPU, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](../../../sizing-guide.md#overcommitting-slow-cpus-and-other-software).
 
 ## What's next
 
