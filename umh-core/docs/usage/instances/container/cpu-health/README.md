@@ -1,7 +1,7 @@
 # CPU Health
 
 {% hint style="info" %}
-The CPU health check is the only CPU status. It is on by default from UMH Core v0.44.46, and the `USE_FSMV2_CPU` flag that used to turn it off no longer exists. The check does not need Management Console credentials: it also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
+The CPU health check is the only CPU status. It is on by default from UMH Core v0.44.46. On v0.44.37 to v0.44.45, it runs only when the container is started with `USE_FSMV2_CPU=true`. UMH Core now ignores `USE_FSMV2_CPU`, which used to turn the check on or off. The check does not need Management Console credentials: it also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
 {% endhint %}
 
 UMH Core checks whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page. While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)).

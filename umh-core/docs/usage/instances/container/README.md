@@ -104,6 +104,6 @@ To alert on a single resource, for example the disk:
 umh_container_disk_usage_percent{exported_instance="Core"} > 80
 ```
 
-The `umh_container_cpu_*` gauges report the CPU health check's 60-second average of the container's own usage. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
+`umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` report the CPU health check's 60-second average of the container's own usage. `umh_container_cpu_core_count` is the number of CPU cores available to the container. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
 
 The container monitor, the part of the agent that collects these values, also reports the standard [FSMv1 metrics](../agent/metrics.md#fsmv1-metrics) with `component="container_monitor"` and `instance="Core"`. The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go). umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges, which [CPU Health](cpu-health/README.md#metrics) lists.
