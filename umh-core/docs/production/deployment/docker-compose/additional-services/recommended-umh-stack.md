@@ -125,7 +125,7 @@ To start the stack, see [Starting the Stack](../setup.md#starting-the-stack).
 
 ## VM Sizing
 
-Our **[Sizing Guide](../../../sizing-guide.md)** covers umh-core on its own, and its recommended box is sized for that. Redpanda inside umh-core already budgets roughly 2 GB per core plus headroom, so running a database and Grafana next to it on the minimum box leaves little room. Give the host more memory and disk than the baseline, and watch actual usage before settling on a size.
+The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 vCPU, 8 GB RAM and 250 GB of free disk. This stack also runs TimescaleDB, PgBouncer and Grafana on the same machine, so add the Historian's needs from [Historian Sizing](../../../../usage/historian/sizing.md): about 4 more vCPU, 8 GB more RAM, and disk for the retention you choose.
 
 ## What's next
 
