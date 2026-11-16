@@ -656,7 +656,7 @@ github.com/united-manufacturing-hub/expiremap/v2/pkg/expiremap
 github.com/united-manufacturing-hub/umh-utils/env
 github.com/united-manufacturing-hub/umh-utils/logger
 # github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0 => ./fsmv2
-## explicit; go 1.27.3
+## explicit; go 1.27.4
 # github.com/vektah/gqlparser/v2 v2.5.64
 ## explicit; go 1.25
 github.com/vektah/gqlparser/v2
@@ -674,8 +674,8 @@ github.com/yusufpapurcu/wmi
 ## explicit; go 1.20
 go.elastic.co/ecszap
 go.elastic.co/ecszap/internal
-# go.mongodb.org/mongo-driver/v2 v2.8.2
-## explicit; go 1.19
+# go.mongodb.org/mongo-driver/v2 v2.9.3
+## explicit; go 1.25.0
 go.mongodb.org/mongo-driver/v2/bson
 go.mongodb.org/mongo-driver/v2/internal/binaryutil
 go.mongodb.org/mongo-driver/v2/internal/bsoncoreutil

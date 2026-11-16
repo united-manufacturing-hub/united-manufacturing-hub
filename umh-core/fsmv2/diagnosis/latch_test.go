@@ -177,7 +177,7 @@ var _ = Describe("Latch", func() {
 		Expect(fired).To(BeFalse(), "Reset releases a fired latch whatever its coverage")
 	})
 
-	It("should re-fire from the last trusted update after a reset, so a reset never permanently blocks re-firing", func() {
+	It("should fire again on the next reading past the fire mark after a reset", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
@@ -185,40 +185,37 @@ var _ = Describe("Latch", func() {
 		_, fired := l.Fired()
 		Expect(fired).To(BeTrue(), "a value above the fire mark fires")
 
-		// Reset takes no clock, so it anchors the re-fire bar at the last trusted
-		// Update (the firing one at t0), never at the wall clock.
 		l.Reset()
 		_, fired = l.Fired()
 		Expect(fired).To(BeFalse(), "Reset releases the fired latch")
 
-		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(latchSpan-time.Second))
-		_, fired = l.Fired()
-		Expect(fired).To(BeFalse(), "a reset latch does not re-fire before one full window has elapsed since the last update")
-
-		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(latchSpan))
-		_, fired = l.Fired()
-		Expect(fired).To(BeTrue(), "a reset latch re-fires once one full window has elapsed since the last update")
+		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(time.Second))
+		f, fired := l.Fired()
+		Expect(fired).To(BeTrue(), "a reset latch fires again on the next reading past the fire mark")
+		Expect(f.Since).To(Equal(t0.Add(time.Second)), "Since is the time it fired again, not the first fire at t0")
 	})
 
-	It("should not fire again until one full window has elapsed since the release", func() {
+	It("should fire again on the next reading past the fire mark after a release", func() {
 		t0 := time.Unix(1_000_000, 0)
 		l := NewLatch(Identity{})
 
-		// Here the release happens on the clearing Update at tClear, and the
-		// re-fire bar counts one Coverage.Span from that release.
 		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0)
-		tClear := t0.Add(time.Second)
-		l.Update("march", Reduced{v: 0.02, state: StateValue}, full(), march(), tClear)
+		l.Update("march", Reduced{v: 0.02, state: StateValue}, full(), march(), t0.Add(time.Second))
 		_, fired := l.Fired()
 		Expect(fired).To(BeFalse(), "a below-clear value with full coverage clears the fired latch")
 
-		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), tClear.Add(latchSpan-time.Second))
+		l.Update("march", Reduced{v: 0.08, state: StateValue}, full(), march(), t0.Add(2*time.Second))
 		_, fired = l.Fired()
-		Expect(fired).To(BeFalse(), "a value above the fire mark does not re-fire before one full window has elapsed since the release")
+		Expect(fired).To(BeFalse(), "a value between the clear and fire marks does not fire")
 
-		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), tClear.Add(latchSpan))
-		_, fired = l.Fired()
-		Expect(fired).To(BeTrue(), "a value above the fire mark re-fires once one full window has elapsed since the release")
+		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(3*time.Second))
+		f, fired := l.Fired()
+		Expect(fired).To(BeTrue(), "a value above the fire mark fires again right after a release")
+		Expect(f.Since).To(Equal(t0.Add(3*time.Second)), "Since is the time it fired again, not the first fire at t0")
+
+		l.Update("march", Reduced{v: 0.20, state: StateValue}, full(), march(), t0.Add(4*time.Second))
+		f, _ = l.Fired()
+		Expect(f.Since).To(Equal(t0.Add(3*time.Second)), "a further reading past the fire mark while fired keeps Since")
 	})
 
 	It("should not discard a fired latch merely because a different instrument became usable", func() {

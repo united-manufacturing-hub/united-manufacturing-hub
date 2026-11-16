@@ -1,6 +1,6 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/99designs/gqlgen v0.17.98
@@ -123,7 +123,7 @@ require (
 	github.com/ugorji/go/codec v1.3.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.elastic.co/ecszap v1.0.3 // indirect
-	go.mongodb.org/mongo-driver/v2 v2.8.2 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.9.3 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0 // indirect
 	go.opentelemetry.io/otel v1.46.0 // indirect

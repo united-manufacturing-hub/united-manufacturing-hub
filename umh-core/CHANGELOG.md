@@ -11,8 +11,9 @@
 
 - Updated dependencies with known vulnerabilities:
   - zlib, now 1.4-r0 (CVE-2026-4738)
-  - MongoDB Go driver, now 2.9.3 (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
+  - MongoDB Go driver, now 2.9.3 in benthos-umh and in the umh-core binary (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
   - go-jose, now 4.1.9 (CVE-2026-116587, CVE-2026-116585, CVE-2026-116586)
+  - Go in the umh-core binary, now 1.27.4 — may be reachable through the opt-in Topic Browser GraphQL API (CVE-2026-97054)
 
   Update to reduce your attack surface.
 
@@ -41,6 +42,10 @@
 ### Improvements
 
 - The CPU status on an instance's page now comes from the [CPU health check](https://docs.umh.app/production/cpu-health) by default, so an instance is degraded, and new bridges wait, when its CPU headroom is gone, its work is measurably delayed or its CPU cannot be measured, not whenever usage reaches 70%. To go back to the 70% CPU usage rule, recreate the container with `-e USE_FSMV2_CPU=false`
+
+### Fixes
+
+- An instance whose CPU status has just gone back to healthy now turns degraded again on the first reading past one of the [CPU health check](https://docs.umh.app/production/cpu-health)'s thresholds. Before, it stayed healthy for up to a minute
 
 ## [0.44.45]
 

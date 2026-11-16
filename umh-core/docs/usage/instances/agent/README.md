@@ -1,0 +1,66 @@
+# Agent
+
+The agent is the `umh-core` process inside the UMH Core container. It starts, watches and restarts the components inside the container. These components are the bridges, the stand-alone flows, the stream processors and Redpanda. Two frameworks inside the agent do this work: FSMv1, the older one, and FSMv2, the newer one. See [Which framework runs a component](metrics.md#which-framework-runs-a-component).
+
+## What the agent does
+
+The agent works in a control loop. Every 100 milliseconds, one cycle of the loop compares each component with the [config file](../config-file.md). The agent then starts, stops or restarts the component until it matches the config file. A Kubernetes controller and the scan cycle of a PLC work the same way.
+
+The agent also checks the health of each component:
+
+- It reads the last 10 minutes of the log of each bridge, stand-alone flow and stream processor. An error in the log marks the component as degraded. So does a warning that contains `failed to`, `connection lost` or `unable to`. The error counters of Benthos, the program that runs these components, also mark a component as degraded.
+- For a bridge, it checks whether the port of the device is reachable. While the port is not reachable, the bridge reports the connection as the reason it is degraded. The errors of the bridge's read and write flows are not reported then.
+- When a component's process stops, s6 starts it again. s6 is the process supervisor inside the container.
+- When a component stays stuck for about 60 seconds while the agent creates or removes it, the agent removes it and creates it again. A component that waits in a starting step, such as a bridge that waits for its connection, is not removed this way.
+
+Each bridge, stand-alone flow and stream processor runs as its own process. A crash in one of them does not stop the others. They still share the CPU and memory of the container.
+
+### When the agent process stops
+
+Bridges, stand-alone flows, stream processors and Redpanda run as processes separate from the agent. They keep running while the agent process is down. s6 starts the agent again. When the agent starts again, it may restart them once.
+
+### Health checks in Kubernetes
+
+UMH Core has no health or readiness endpoint. Port 8080 serves `/metrics` and an internal debug page. For a liveness check, use the running state of the container. An answer from `/metrics` shows that the agent process runs. It does not show that the components are healthy.
+
+## The Agent card
+
+The Agent card on the instance details page shows the identity and the version of the instance.
+
+| Field | Shows |
+|---|---|
+| Status badge | The health of the agent. Hover over it to see the reason. See [When the Agent shows Degraded](#when-the-agent-shows-degraded). |
+| Name | The name of the instance. The **Rename** button changes it. |
+| Location | The location path of the instance, one level per line. It is set when you create the instance and cannot be changed on the card. |
+| Core Version | The version of UMH Core. Hover over it to see the versions of S6 Overlay, Benthos and Redpanda. A marker next to the version shows when the release channel has a newer version. |
+| Release Channel | The release channel the instance follows, from `agent.releaseChannel` in the config file: `stable`, `nightly` or `enterprise`. It shows `n/a` when `agent.releaseChannel` is missing or has another value. |
+
+The **Logs** button opens the logs of the agent. The agent writes them to `/data/logs/umh-core/`. See [Container Layout](../../../reference/container-layout.md#logs). The **Metrics** button is not available yet.
+
+## When the Agent shows Degraded
+
+The Agent shows Degraded while the emergency setting *Turn off bridge admission* is on. The badge reason then starts with `Bridge admission is off (agent.enableResourceLimitBlocking: false).` New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit.
+
+To clear it, fix the resource problem first. Then set `agent.enableResourceLimitBlocking: true` in the config file. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
+
+A degraded Agent also marks the whole instance as degraded. In the instance list, hover over the status dot of the instance to see the line `Agent: <reason>`.
+
+## Metrics
+
+The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. In Prometheus, `instance` usually arrives as `exported_instance`.
+
+To alert when the control loop stalls, alert on any increase of the starved counter:
+
+```promql
+increase(umh_core_reconcile_starved_total_seconds[5m]) > 0
+```
+
+To alert when the agent stops managing components, alert on errors that stop the control loop. These are the series with `instance="main"` and `instance="config_permanent_failure"`. In Prometheus, write `exported_instance` for `instance`:
+
+```promql
+increase(umh_core_errors_total{component="control_loop", exported_instance=~"main|config_permanent_failure"}[5m]) > 0
+```
+
+The other `control_loop` series are named after a manager and count that manager's failed reconcile cycles. A failure there does not always stop the control loop, so the rule leaves them out. A stopped agent also stops answering scrapes, so alert on the scrape target being down (`up == 0`) as well.
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go). A cycle that takes longer than 100 milliseconds writes a warning to the agent log.

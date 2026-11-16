@@ -155,6 +155,29 @@ dataFlow:
           stdout: {}
 ```
 
+## Metrics
+
+The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts. It carries the flow's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stand-alone flows and what the labels and the state values mean.
+
+Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a flow named `<flow>`, the series carry these labels:
+
+| Part of the flow | `component` | `instance` |
+|---|---|---|
+| The flow | `dataflow_component_instance` | `<flow>` |
+| Its Benthos process | `benthos_instance` | `dataflow-<flow>` |
+
+To alert when a flow has not been active for 5 minutes, use this rule with `for: 5m`. Prometheus renames `instance` to `exported_instance`. With `honor_labels: true` in the scrape job it keeps `instance`, so write `instance` in the rule instead. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. A flow whose own name starts with `protocolconverter-` or `dfc-streamprocessor-` is left out too. To watch one flow, replace the filter with `exported_instance="<flow>"`:
+
+```promql
+umh_core_service_current_state{component="dataflow_component_instance", exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*"} != 3 != 4 != 0
+```
+
+The rule does not fire for a flow that is stopped (0) or idle (4). A stopped flow is one you stopped on purpose, and an idle flow is one that has no data to process.
+
+When you delete a flow, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for the deleted flow. Add the deleted name to the exclusion filter, for example `exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*|<deleted flow>"`, or restart the container.
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+
 ## Next Steps
 
 - Learn about [Bridges](bridges.md) for device connectivity
