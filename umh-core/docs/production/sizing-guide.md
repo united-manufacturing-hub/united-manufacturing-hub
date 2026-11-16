@@ -11,33 +11,25 @@ This page says what machine to set up for UMH Core and how its needs grow.
 | Disk | 250 GB free on top of the OS | 250 GB free on top of the OS, plus the Historian's disk for your retention |
 | Architecture | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) |
 
-This is a starting point for about 15 flows. Actual usage depends on the applications you build on UMH Core: what your flows do (message rate, protocol, number of tags) and how fast your CPUs are. For more flows, add CPU and memory as shown in [Scaling](#scaling). Other software on the machine, such as antivirus, compliance agents and other containers, needs resources on top.
+This is a starting point for about 15 running [flows](../usage/data-flows/README.md). Actual usage depends on the applications you build on UMH Core (for example the number of flows, the message rate, the protocol and the number of tags) and on how fast your CPUs are. If the Historian runs on the same machine, use the second column.
 
 ## Scaling
 
 | Resource | Base | Grows by |
 | --- | --- | --- |
-| CPU | 1 core for the [Unified Namespace](../usage/unified-namespace/README.md) and UMH Core's own services | 0.2 cores per running flow |
+| CPU | 1 core for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and UMH Core's own services | 0.2 cores per running flow for monitoring overhead, plus the flow's own work |
 | Memory | 3.5 GB for the Unified Namespace, 150 MB for the agent | ≈ 100 MB per running flow |
-| Disk | None | 0.06–0.08 GB per message per second, with the Unified Namespace keeping 7 days |
-
-### CPU
+| Disk | None | 0.06–0.08 GB per message per second, see [Disk](#disk) |
 
 A bridge counts as 1 running flow, or 2 when it also writes to the device. A stand-alone flow counts as 1, and so does a stream processor.
 
-Each running flow adds about 0.2 cores of management overhead for monitoring, health checks and restarts. Flows that write many log lines add more.
+A flow's own work depends on what it does. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags, and a flow that writes many log lines needs more than one that writes few. The Unified Namespace's own cost per message is negligible up to a few thousand messages per second. Above about 10,000 messages per second, plan more cores and [contact us](https://discord.gg/F9mqkZnm8U).
 
-Your flows' own work comes on top. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags.
+## Disk
 
-The Unified Namespace's cost per message is negligible up to a few thousand messages per second. Above about 10,000 messages per second, plan more cores and [contact us](https://discord.gg/F9mqkZnm8U).
+Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that. With the default, 250 GB covers roughly 3,000 messages per second. Payload size drives the real figure, so measure it on your instance.
 
-### Memory
-
-At 15 running flows this comes to about 5.2 GB, so 8 GB leaves room.
-
-### Disk
-
-Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer, which keeps seven days of messages for replay. With that default, 250 GB covers roughly 3,000 messages per second. Payload size drives the real figure, so measure it on your instance.
+The Historian's database needs disk on top of this. [Historian Sizing](../usage/historian/sizing.md#disk-per-year) lists how much per year.
 
 The instance reports disk as degraded at 85% use of the partition that holds `/data`. With a default Docker volume, that is the operating system's partition, so the operating system counts toward the 85%.
 
@@ -46,13 +38,25 @@ To use less disk, shorten retention or cap the topic size:
 - Set retention during install with `internal.redpanda.redpandaServiceConfig.topic.defaultTopicRetentionMs`, or later per topic with `rpk`.
 - Cap the topic with `defaultTopicRetentionBytes`. Under heavy load a cap can cut the replay window below seven days.
 
-## Virtual machines
+## What reduces capacity
 
-Reserve the vCPUs for UMH Core's VM and do not overcommit them. UMH Core works in short bursts, so its work waits whenever the host lends its core to another VM, even though the VM looks idle. [CPU contention while cores are free](../usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md) shows how to spot this.
+The figures above assume UMH Core has the whole machine to itself and runs on a recent CPU. Three things reduce what it can do:
+
+- **Other software on the machine.** Antivirus, compliance agents and other containers use CPU, memory and disk on top of UMH Core.
+- **Overcommitted virtual machines.** Reserve the vCPUs for UMH Core's VM. UMH Core works in short bursts, so its work waits whenever the host lends its core to another VM, even though the VM looks idle. [CPU contention while cores are free](../usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md) shows how to spot this.
+- **Older or slower CPUs.** A slower core does less work, so each flow takes a larger share of it.
+
+## Bridge limit
+
+An instance starts at most `(CPU cores − 1) × 5` bridges: 15 on 4 cores. The one core it subtracts stays with Redpanda. More cores raise the limit.
+
+The limit is a safety cap. It counts bridges, not workload: a bridge reading 10 tags counts the same as one reading 10,000. Stopped bridges and waiting bridges listed earlier in `config.yaml` count too. Stand-alone flows and stream processors do not. Size the machine by running flows instead.
+
+A new bridge also waits while a resource is degraded or its health is not proven yet. [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) explains each reason and the emergency setting that starts bridges anyway.
 
 ## Resizing
 
-Check the machine's size when the instance shows a degraded state in the Management Console. For CPU, [CPU Health](../usage/instances/container/cpu-health/README.md) explains each status and what to do.
+Grow the machine when the instance shows a degraded resource in the Management Console or reaches its bridge limit. For CPU, [CPU Health](../usage/instances/container/cpu-health/README.md) explains each status and what to do.
 
 UMH Core keeps all its state in the `/data` volume. To grow the machine:
 
@@ -61,29 +65,6 @@ UMH Core keeps all its state in the `/data` volume. To grow the machine:
 3. Start the same image. No reinstall or reconfiguration is needed.
 
 For failover across several nodes, see [High Availability](./high-availability.md).
-
-## Bridge limit
-
-An instance starts at most `(CPU cores − 1) × 5` bridges: 15 on 4 cores. A new bridge also waits while a resource is degraded (CPU, memory at 80% or more, disk at 85% or more) or its health is not proven yet, for example right after a restart. Bridges that are already running are left alone.
-
-The limit is a safety cap. It counts bridges, not workload: a bridge reading 10 tags counts the same as one reading 10,000. Stopped bridges and waiting bridges listed earlier in `config.yaml` count too. Stand-alone flows and stream processors do not. Size the machine by running flows instead.
-
-The bridge's status reason starts with one of these lines, followed by how to start bridges anyway in an emergency:
-
-- **Bridge limit**: `Cannot create bridge - limit exceeded (15 bridges maximum with 4.0 CPU cores, 1 core reserved for Redpanda)`
-- **High CPU**: `CPU degraded: CPU contention`, or another CPU Health headline such as `CPU limited`
-- **High Memory**: `Memory degraded: Memory utilization critical`
-- **High Disk**: `Disk degraded: Disk utilization critical`
-- **Health not proven yet**: `Resource health not proven yet`
-
-In an emergency, the setting *Turn off bridge admission* starts bridges anyway. Set it in your `config.yaml`:
-
-```yaml
-agent:
-  enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or not proven yet, or the bridge limit is reached
-```
-
-`true` is the default, also when the key is missing. While it is `false`, the instance shows as degraded. [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) covers every reason and the full procedure.
 
 ## Supported architectures
 
