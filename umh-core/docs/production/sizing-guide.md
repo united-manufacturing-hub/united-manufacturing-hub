@@ -17,19 +17,19 @@ This is a starting point for about 15 flows. Actual usage depends on the applica
 
 | Resource | Base | Grows by |
 | --- | --- | --- |
-| CPU | 1 core for Redpanda and UMH Core's own services | 0.2 cores per running flow |
-| Memory | 3.5 GB for Redpanda, 150 MB for the agent | ≈ 100 MB per running flow |
-| Disk | None | 0.06–0.08 GB per message per second, with Redpanda keeping 7 days |
+| CPU | 1 core for the [Unified Namespace](../usage/unified-namespace/README.md) and UMH Core's own services | 0.2 cores per running flow |
+| Memory | 3.5 GB for the Unified Namespace, 150 MB for the agent | ≈ 100 MB per running flow |
+| Disk | None | 0.06–0.08 GB per message per second, with the Unified Namespace keeping 7 days |
 
 ### CPU
 
 A bridge counts as 1 running flow, or 2 when it also writes to the device. A stand-alone flow counts as 1, and so does a stream processor.
 
-The 0.2 cores pay for UMH Core watching the flow: reading its logs and metrics, checking its health and restarting it. A flow that logs heavily raises this.
+Each running flow adds about 0.2 cores of management overhead for monitoring, health checks and restarts. Flows that write many log lines add more.
 
 Your flows' own work comes on top. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags.
 
-Redpanda's cost is negligible up to a few thousand messages per second. Above about 10,000 messages per second, plan more cores and [contact us](https://discord.gg/F9mqkZnm8U).
+The Unified Namespace's cost per message is negligible up to a few thousand messages per second. Above about 10,000 messages per second, plan more cores and [contact us](https://discord.gg/F9mqkZnm8U).
 
 ### Memory
 
@@ -37,7 +37,7 @@ At 15 running flows this comes to about 5.2 GB, so 8 GB leaves room.
 
 ### Disk
 
-Most of the disk holds Redpanda's buffer, which keeps seven days of messages for replay. With that default, 250 GB covers roughly 3,000 messages per second. Payload size drives the real figure, so measure it on your instance.
+Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer, which keeps seven days of messages for replay. With that default, 250 GB covers roughly 3,000 messages per second. Payload size drives the real figure, so measure it on your instance.
 
 The instance reports disk as degraded at 85% use of the partition that holds `/data`. With a default Docker volume, that is the operating system's partition, so the operating system counts toward the 85%.
 
