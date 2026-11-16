@@ -357,6 +357,27 @@ var _ = Describe("DataFlowComponentService", func() {
 			// Assert
 			Expect(err).To(MatchError(ErrServiceNotExist))
 		})
+
+		It("returns the flow configs written by UpdateInManager and the desired states set by EvaluateDFCDesiredStates", func() {
+			Expect(service.UpdateInManager(ctx, mockSvcRegistry.GetFileSystem(), &updatedRuntimeCfg, protConvName, false)).To(Succeed())
+
+			readConfig, writeConfig, err := service.ManagerDFCConfigs(protConvName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(readConfig.DataFlowComponentServiceConfig).To(Equal(updatedRuntimeCfg.DataflowComponentReadServiceConfig))
+			Expect(readConfig.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
+			Expect(writeConfig.DesiredFSMState).To(Equal(dfcfsm.OperationalStateStopped))
+
+			Expect(service.EvaluateDFCDesiredStates(protConvName, "active", "idle", "", "")).To(Succeed())
+
+			readConfig, _, err = service.ManagerDFCConfigs(protConvName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(readConfig.DesiredFSMState).To(Equal(dfcfsm.OperationalStateActive))
+		})
+
+		It("returns ErrServiceNotExist from ManagerDFCConfigs for an unknown bridge", func() {
+			_, _, err := service.ManagerDFCConfigs("non-existent")
+			Expect(err).To(MatchError(ErrServiceNotExist))
+		})
 	})
 
 	Describe("StartAndStopDataFlowComponent", func() {
