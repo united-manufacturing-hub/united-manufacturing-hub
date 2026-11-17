@@ -1,12 +1,12 @@
 module github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/DataDog/gostackparse v0.7.0
 	github.com/benbjohnson/clock v1.3.5
 	github.com/getsentry/sentry-go v0.50.0
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.25.0
 	go.uber.org/zap v1.28.0

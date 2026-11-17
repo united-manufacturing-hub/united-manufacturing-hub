@@ -27,7 +27,7 @@ COPY .docker-cache/redpanda/arm64/ /redpanda/arm64/
 
 
 # --- Downloader Stage (using cached files) ---
-FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS downloader
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS downloader
 RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
@@ -75,7 +75,7 @@ RUN apk add --no-cache nmap=${NMAP_VERSION}
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS build-base
+FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build-base
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 # Copy dependency manifests first — only invalidated when deps change
@@ -179,7 +179,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     fi
 
 # --- Final Stage ---
-FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS runner
+FROM alpine:3.24.4@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS runner
 # Copy everything from the downloader stage
 COPY --from=downloader / /
 
