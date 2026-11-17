@@ -2,7 +2,7 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization. While read flows work with any protocol, write flows are not yet implemented - use [stand-alone flows](stand-alone-flow.md) for writing to external systems.
+Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization. A bridge's read flow brings data into the UNS. Its [write flow](write-flow.md) sends UNS data to an external system, such as an MES, a data lake or the Historian. If a new bridge shows "Pending Creation" and does not start, see [Bridges Do Not Start](troubleshooting/bridges-do-not-start.md).
 
 > **New to UMH?** This page is the reference for setting up real bridges. If you just want to get mock data flowing and learn the basics first, start with [Step 2: Connect Your First Data Source](../../getting-started/1-connect-data.md).
 

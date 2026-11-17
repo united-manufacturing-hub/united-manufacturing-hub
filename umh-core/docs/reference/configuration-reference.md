@@ -176,7 +176,8 @@ protocolConverter:
 | `protocolConverterServiceConfig.location`  | Appended to the global `agent.location`. Optional, but useful to identify per-machine data. |
 | `protocolConverterServiceConfig.config.connection.nmap` | TCP liveness check to decide if the device is reachable.                                    |
 | `protocolConverterServiceConfig.config.dataflowcomponent_read.benthos` | Benthos pipeline to pull and forward data.                                                  |
-| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow that pushes data from the UNS to the device, set with `source`, `processing` and `destination`. |
+| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow that sends data from the UNS to an external system, set with `source`, `processing`, `destination` and `extra`. Its topics must stay at the bridge's location. See [Write Flow](../usage/data-flows/write-flow.md#configuration). |
+| `protocolConverterServiceConfig.writeDFCDesiredState` | `active` or `stopped`. Starts or stops the write flow alone. Defaults to the bridge's `desiredState`. |
 | `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](variables.md#variables) for details. |
 
 ### Benthos-UMH Processors
