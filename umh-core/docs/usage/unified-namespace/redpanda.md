@@ -29,7 +29,7 @@ The badge tooltip starts with `degraded:`, a space and the reason. umh-core runs
 | `healthchecks did not pass, live: false, ready: false` | Redpanda does not report itself as ready. Both values come from the same readiness check. They are therefore always equal. | Read the Redpanda logs. |
 | `found error (clears in <time>): <log line>` with `Address already in use` | Another process holds a port that Redpanda needs, such as 9092 or 9644. | Stop the other process. If the container shares the host network, check which host process uses the port. |
 | `found error (clears in <time>): <log line>` with `Reactor stalled for <n> ms` | Redpanda was blocked for more than 500 milliseconds and processed nothing in that time. | Check [CPU Health](../instances/container/cpu-health/README.md). Give the container more CPU or a faster disk. |
-| `Redpanda storage free space alert: <free> free bytes (total: <total> bytes)` | Redpanda reports that its disk is nearly full. | Free disk space, enlarge the disk, or shorten the retention. See [Disk usage in practice](../../production/sizing-guide.md#disk-usage-in-practice). |
+| `Redpanda storage free space alert: <free> free bytes (total: <total> bytes)` | Redpanda reports that its disk is nearly full. | Free disk space, enlarge the disk, or shorten the retention. See [Disk](../../production/sizing-guide.md#disk). |
 | `Redpanda unavailable topics: <n>` | Redpanda cannot serve `<n>` partitions. A partition is one part of a Kafka topic. | Read the Redpanda logs to find the cause. |
 | `unexpected restarts within the last hour: [<exit codes>]` | The Redpanda process exited with an error at least once in the last hour. The reason stays for one hour after the last exit. | Read the Redpanda logs around the time of the exit. |
 
@@ -63,7 +63,7 @@ The Redpanda Metrics page shows a table with the columns Path, Name and Value. S
 
 ## Settings
 
-Redpanda's settings are under `internal.redpanda` in the [config file](../instances/config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk usage in practice](../../production/sizing-guide.md#disk-usage-in-practice) in the sizing guide.
+Redpanda's settings are under `internal.redpanda` in the [config file](../instances/config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk](../../production/sizing-guide.md#disk) in the sizing guide.
 
 When umh-core starts without a config file, it creates one with the two settings in this table. Both are under `internal.redpanda.redpandaServiceConfig.topic`.
 

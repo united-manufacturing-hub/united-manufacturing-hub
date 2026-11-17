@@ -36,6 +36,7 @@
   * [Historian](usage/historian/README.md)
     * [Save data to the Historian](usage/historian/save-to-historian.md)
     * [Query the Historian](usage/historian/querying.md)
+    * [Historian Sizing](usage/historian/sizing.md)
 * [Management Console](management-console/README.md)
   * [Authentication](management-console/authentication/README.md)
     * [Email Code](management-console/authentication/email-code.md)

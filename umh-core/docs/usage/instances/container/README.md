@@ -34,7 +34,7 @@ A new bridge waits to start while CPU, memory or disk is degraded. Bridges that 
 ### What to do
 
 - **Memory**: raise the memory limit of the container, or remove bridges or flows. If the memory preview names `host-memory-full` as the cause (see [Memory monitor](#memory-monitor-preview)), the machine is out of memory. A higher container limit does not help. Free memory on the machine or add memory to it. The [Sizing Guide](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
-- **Disk**: free space on the `/data` volume, or shorten how long Redpanda keeps data. See [Disk usage in practice](../../../production/sizing-guide.md#disk-usage-in-practice).
+- **Disk**: free space on the `/data` volume, or shorten how long Redpanda keeps data. See [Disk](../../../production/sizing-guide.md#disk).
 - **CPU**: raise or remove the CPU limit of the container, or reduce the load. [CPU Health](cpu-health/README.md) lists what to do for each CPU status.
 
 If a bridge must start before the resource problem is fixed, use the emergency setting. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).

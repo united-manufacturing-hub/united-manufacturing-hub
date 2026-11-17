@@ -24,8 +24,8 @@ package bridgeadmission
 import "fmt"
 
 // BridgesPerCore is how many bridges each CPU core may run once
-// redpandaReservedCores are set aside. docs/production/sizing-guide.md
-// recommends this figure.
+// redpandaReservedCores are set aside. docs/usage/data-flows/bridges-do-not-start.md
+// documents this figure.
 const BridgesPerCore = 5
 
 // redpandaReservedCores is the CPU, in cores, that the bridge limit leaves to
