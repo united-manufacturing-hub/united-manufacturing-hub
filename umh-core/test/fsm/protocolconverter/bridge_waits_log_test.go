@@ -29,6 +29,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	internalfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/internal/fsmtest"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/bridgeadmission"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
@@ -52,7 +53,7 @@ var _ = Describe("a bridge that waits", func() {
 
 		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance(name, protocolconverterfsm.OperationalStateActive)
 		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
-		mockService.BridgeMustWaitReason = "Cannot create bridge - limit exceeded"
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.BridgeLimit, Reason: "Cannot create bridge - limit exceeded"}
 		registry := serviceregistry.NewMockRegistry()
 		start := time.Now()
 
@@ -74,5 +75,88 @@ var _ = Describe("a bridge that waits", func() {
 		// The throttle logs the first wait, then once more to say it suppresses
 		// further occurrences for its window.
 		Expect(waits.Len()).To(Equal(2))
+	})
+
+	It("records its admission refusal in ServiceInfo, and clears it once admitted", func() {
+		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-refused", protocolconverterfsm.OperationalStateActive)
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
+		registry := serviceregistry.NewMockRegistry()
+
+		admission := func() bridgeadmission.Decision {
+			snapshot, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
+			Expect(ok).To(BeTrue())
+
+			return snapshot.ServiceInfo.Admission
+		}
+
+		snapshot := fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{Location: map[int]string{0: "test-location"}},
+			},
+		}
+
+		err, _ := instance.Reconcile(context.Background(), snapshot, registry)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.GetCurrentFSMState()).To(Equal(internalfsm.LifecycleStateToBeCreated))
+		Expect(admission().Cause).To(Equal(bridgeadmission.Memory))
+
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{}
+		snapshot.Tick = 1
+
+		err, _ = instance.Reconcile(context.Background(), snapshot, registry)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.GetCurrentFSMState()).NotTo(Equal(internalfsm.LifecycleStateToBeCreated))
+		Expect(admission().Admitted()).To(BeTrue())
+	})
+
+	It("records its admission refusal even when the observation's deadline has passed", func() {
+		// Reconcile checks the deadline on entry, but it can expire before the
+		// observation step. The zero decision admits, so a skipped observation
+		// would let a refused bridge be created in the same tick.
+		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-deadline", protocolconverterfsm.OperationalStateActive)
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateActive)).To(Succeed())
+
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
+		registry := serviceregistry.NewMockRegistry()
+
+		expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		defer cancel()
+
+		snapshot := fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{Location: map[int]string{0: "test-location"}},
+			},
+		}
+
+		Expect(instance.UpdateObservedStateOfInstance(expired, registry, snapshot)).To(Succeed())
+
+		observed, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
+		Expect(ok).To(BeTrue())
+		Expect(observed.ServiceInfo.Admission.Cause).To(Equal(bridgeadmission.Memory))
+	})
+
+	It("leaves to_be_created despite a refusal when it is going to be stopped", func() {
+		instance, mockService, _ := fsmtest.SetupProtocolConverterInstance("test-pc-stopped", protocolconverterfsm.OperationalStateStopped)
+		Expect(instance.SetDesiredFSMState(protocolconverterfsm.OperationalStateStopped)).To(Succeed())
+		mockService.BridgeAdmissionDecision = bridgeadmission.Decision{Cause: bridgeadmission.Memory, Reason: "Memory degraded"}
+		registry := serviceregistry.NewMockRegistry()
+
+		snapshot := fsm.SystemSnapshot{
+			SnapshotTime: time.Now(),
+			CurrentConfig: config.FullConfig{
+				Agent: config.AgentConfig{Location: map[int]string{0: "test-location"}},
+			},
+		}
+
+		err, _ := instance.Reconcile(context.Background(), snapshot, registry)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.GetCurrentFSMState()).NotTo(Equal(internalfsm.LifecycleStateToBeCreated))
+
+		observed, ok := instance.CreateObservedStateSnapshot().(*protocolconverterfsm.ProtocolConverterObservedStateSnapshot)
+		Expect(ok).To(BeTrue())
+		Expect(observed.ServiceInfo.Admission.Admitted()).To(BeTrue())
 	})
 })

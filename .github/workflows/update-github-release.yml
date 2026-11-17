@@ -44,6 +44,7 @@ jobs:
           sparse-checkout: |
             umh-core/CHANGELOG.md
             umh-core/changelog-images/
+            umh-core/.changelog/
           ref: ${{ inputs.version || github.event.release.tag_name }}
 
       - name: Extract changelog section
@@ -94,3 +95,30 @@ jobs:
         run: |
           set -euo pipefail
           gh release edit "$VERSION" --notes-file /tmp/release-body.md
+
+      # `make release-changelog` must have been merged into staging before tagging.
+      # Runs last so the release body is still written from what was cut.
+      # Only on release events: tags from before the changie migration have no .changelog/.
+      - name: Check the changelog is cut
+        if: ${{ !cancelled() && github.event_name == 'release' }}
+        env:
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          SEMVER="${VERSION#v}"
+          RELEASE_FILE="umh-core/.changelog/${SEMVER}.md"
+          failed=0
+          # The first line is the "## [X.Y.Z]" heading; the entries follow it.
+          if [ ! -f "$RELEASE_FILE" ] || ! awk 'NR > 1 && NF { found = 1; exit } END { exit !found }' "$RELEASE_FILE"; then
+            echo "::error::${RELEASE_FILE} is missing or empty at ${VERSION}. The changelog must be cut with 'make release-changelog VERSION=${SEMVER}' in umh-core/ and merged into staging before tagging. See umh-core/RELEASING.md > Troubleshooting."
+            failed=1
+          fi
+          # A fragment left at the tag belongs to a PR merged after the release-changelog PR.
+          # Its change ships in this release but is missing from the release notes.
+          # changie batch cannot add it: it refuses an existing version file.
+          if [ -n "$(find umh-core/.changelog/unreleased -type f ! -name .gitkeep)" ]; then
+            find umh-core/.changelog/unreleased -type f ! -name .gitkeep
+            echo "::error::umh-core/.changelog/unreleased/ is not empty at ${VERSION}. These changes ship without release notes. On staging, copy each fragment's entry into ${RELEASE_FILE}, delete the fragments and run 'make rebuild-changelog' in umh-core/. Then add the entries to this GitHub Release and the changelog.umh.app entry by hand."
+            failed=1
+          fi
+          exit "$failed"

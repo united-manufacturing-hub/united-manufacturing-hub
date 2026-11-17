@@ -1,6 +1,90 @@
 # Sizing Guide
 
-## Supported Architectures
+## Recommended machine
+
+| | UMH Core | UMH Core + [Historian](../usage/historian/sizing.md) on the same machine |
+| --- | --- | --- |
+| CPU | 4 vCPU | 8 vCPU |
+| Memory | 8 GB | 16 GB |
+| Disk | 250 GB free on top of the OS | 250 GB free on top of the OS, plus the Historian's disk for your retention |
+| Example cloud instance | AWS `c8i.xlarge`, Azure `D4ls_v6` | AWS `c8i.2xlarge`, Azure `D8ls_v6` |
+| Architecture | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) |
+
+This is a starting point for about 15 running [flows](../usage/data-flows/README.md). Actual usage depends on the applications you build on UMH Core (for example the number of flows, the message rate, the protocol and the number of tags) and on how fast your CPUs are. If the [Historian](../usage/historian/README.md) runs on the same machine, use the second column.
+
+The CPU and memory figures on this page count running flows, not bridges:
+
+- a [bridge](../usage/data-flows/bridges.md) counts as 2 running flows, 1 for its read flow and 1 for its write flow
+- a [stand-alone flow](../usage/data-flows/stand-alone-flow.md) counts as 1
+- a [stream processor](../usage/data-flows/stream-processor.md) counts as 1
+
+The CPU figures assume vCPUs as fast as those of the example instances, not overcommitted, with no other software on the machine. See [Overcommitting, slow CPUs and other software](#overcommitting-slow-cpus-and-other-software).
+
+## CPU
+
+UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and its own services. Each running flow adds 0.2 vCPU for monitoring overhead, plus the flow's own work.
+
+A flow's own work depends on what it does. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags. A flow that writes many log lines also adds more overhead than one that writes few, because UMH Core analyses every log line. Above about 10,000 messages per second, plan more vCPU and [contact us](https://discord.gg/F9mqkZnm8U).
+
+On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full physical core, as on AWS Graviton, the same vCPU count gives at least as much. UMH Core counts each vCPU as one core.
+
+### Overcommitting, slow CPUs and other software
+
+All CPU figures in these docs assume vCPUs as fast as those of the [example instances](#recommended-machine), not overcommitted, with no other software on the machine. Each of these reduces what UMH Core can do:
+
+- **Overcommitted virtual machines.** Set a CPU reservation for UMH Core's VM. If [CPU Health](../usage/instances/container/cpu-health/README.md#thresholds) shows Steal above 10% (status "CPU taken by the server"), the host is giving the VM's cores to other VMs. VMware shows the same on the host as CPU Ready. Even an idle-looking VM can wait for its cores, see [CPU contention while cores are free](../usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md).
+- **Older or slower CPUs.** Each flow takes a larger share of an older or slower core.
+- **Other software on the machine.** Antivirus, compliance agents and other containers use CPU, memory and disk on top of UMH Core. Exclude the host directory behind the `/data` volume from real-time antivirus scanning.
+
+### Redpanda and `--overprovisioned`
+
+UMH Core runs Redpanda with the `--overprovisioned` flag, which turns off busy-polling. Redpanda then uses close to no CPU while no messages arrive, and adds up to a few milliseconds of latency.
+
+## Memory
+
+UMH Core needs 3.5 GB for the Unified Namespace and 150 MB for the agent. Each running flow adds about 100 MB.
+
+## Disk
+
+Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that. At seven days' retention, plan about 0.07–0.09 GB per message per second.
+
+```text
+disk = (messages per second × bytes per message × retention in seconds + what the partition already holds) ÷ 0.75
+```
+
+Seven days are 604,800 seconds. "What the partition already holds" is the operating system and any other files on the same partition. The 0.75 keeps the disk within the [headroom](#headroom-and-resizing). Bytes per message is an estimate of about 100–130 bytes. Example: 3,000 messages per second × 115 bytes × 604,800 seconds ÷ 0.75 ≈ 280 GB, plus what the partition already holds ÷ 0.75.
+
+To get your own figure, run this twice, 24 hours apart, while the buffer is still younger than the retention, for example in the first days after install. Once UMH Core deletes messages older than the retention, the growth no longer shows what it writes. Multiply the growth by the retention in days, add what the partition already holds and divide by 0.75:
+
+```bash
+docker exec umh-core du -sh /data/redpanda
+```
+
+With a default Docker volume, `/data` sits on the operating system's partition, so the operating system counts toward the disk use too.
+
+If you run the Historian, add its disk on top. See [Historian Sizing](../usage/historian/sizing.md#disk-per-year).
+
+To use less disk:
+
+- Set retention during install with `internal.redpanda.redpandaServiceConfig.topic.defaultTopicRetentionMs`, or later per topic with `rpk`.
+- Cap the topic with `defaultTopicRetentionBytes`. Under heavy load a cap can cut the replay window below seven days.
+- Drop unchanged values with the [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) before they reach the Unified Namespace.
+
+## Headroom and resizing
+
+Size the machine so that, under normal load, memory stays below 70% and disk below 75%, as shown on the [Container card](../usage/instances/container/README.md#when-the-container-shows-degraded), and [CPU Health](../usage/instances/container/cpu-health/README.md) stays healthy.
+
+Grow the machine when the Container card shows CPU, memory or disk as degraded, or when new bridges wait at the [bridge limit](../usage/data-flows/bridges-do-not-start.md#bridge-limit). For CPU, [CPU Health](../usage/instances/container/cpu-health/README.md) explains each status and what to do.
+
+UMH Core keeps all its state in the `/data` volume. To grow the machine:
+
+1. Stop the container.
+2. Move or resize the volume, or attach it to a bigger VM.
+3. Start the same image. No reinstall or reconfiguration is needed.
+
+For failover across several nodes, see [High Availability](./high-availability.md).
+
+## Supported architectures
 
 | Architecture | Status | Notes |
 |--------------|--------|-------|
@@ -8,97 +92,4 @@
 | ARM64 | ✅ Fully supported | 64-bit ARM processors (AWS Graviton, Apple Silicon, etc.) |
 | Raspberry Pi | ❌ Not supported | Redpanda requires 48-bit virtual address space; Raspberry Pi provides only 38-bit |
 
-**Why Raspberry Pi doesn't work:** Redpanda uses the Seastar framework which requires a 48-bit virtual address space. Raspberry Pi's ARM processors only provide 38-bit VA space, causing SIGABRT on startup. This is a fundamental hardware limitation documented in [Redpanda GitHub Issue #1542](https://github.com/redpanda-data/redpanda/issues/1542).
-
-## Recommended Starting Point
-
-**Start with → 2 vCPU · 4 GB RAM · 40 GB SSD**
-
-#### What that box handles
-
-* **≈ 4 bridges instances** (e.g. OPC UA ➜ Redpanda) **plus one bridge instance** that forwards from the local Redpanda to an external MQTT broker
-* **≈ 900 tags at 1 message / second each**
-* Keeps **seven days** of replayable raw history under the defaults a new instance starts with (`log_retention_ms = 7 days`, `log_cleanup_policy = delete`)
-* Leaves enough CPU headroom that [CPU Health](../usage/instances/container/cpu-health/README.md) stays healthy, so new bridges can still start
-
-#### Disk usage in practice
-
-Redpanda writes **128 MiB segments**; a segment can be deleted only after it is closed.\
-With Snappy compression, a typical 200 B JSON payload shrinks to ≈ 50–70 B (3–4× ratio).\
-Allowing a 5 GB safety buffer, a 40 GB SSD gives **≈ 35 GB usable history ≙ ~500–700 million messages**.
-
-Size the disk against your message rate, not your tag count: seven days of raw history is
-what makes replay possible, and time-based retention has no size ceiling of its own. At
-700 messages / second — ≈ 423 million records over seven days — `umh.messages` alone needs
-roughly **40–55 GB**. Measure the real figure on your instance, since payload size drives it.
-
-_Need more?_\
-Shorten retention (either during install with `internal.redpanda.redpandaServiceConfig.topic.defaultTopicRetentionMs` or later on the topic level using `rpk`), cap the topic with `defaultTopicRetentionBytes`, or enlarge the disk. A byte cap protects the disk but can cut the replay window below seven days under heavy load.
-
-#### Memory
-
-| Component           | Rule of thumb                                    |
-| ------------------- | ------------------------------------------------ |
-| Redpanda            | ≈ 2 GB · cores + 1.5 GB head-room (Seastar rule) |
-| Agent + supervision | ≈ 150 MB                                         |
-| Each extra pipeline | ≈ 100 MB                                         |
-
-#### CPU
-
-
-**Theoretical Bridge Limits:**
-- We recommend **5 bridges per CPU core** (after reserving 1 core for Redpanda)
-- Example: 2 CPU cores = (2-1) × 5 = **5 bridges maximum**
-- Example: 4 CPU cores = (4-1) × 5 = **15 bridges maximum**
-
-**Dynamic Resource Protection:**
-Since every bridge has different resource requirements (OPC UA with 10,000 tags uses more CPU than MQTT with 100 tags), we also monitor actual resource usage:
-
-- **CPU Utilization**: With the [CPU health check](../usage/instances/container/cpu-health/README.md), which is the only CPU status, usage alone does not make a new bridge wait. The check uses 70% usage only as a last-resort fallback, when no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured. If UMH Core cannot read a file it needs to measure the CPU, CPU health is degraded and a new bridge waits
-- **CPU Throttling**: A new bridge waits while the container is being throttled. Throttling means the system needs brief CPU bursts (e.g., when processing message batches) but hits the CPU limit, causing delays and degraded performance even if average CPU usage looks acceptable
-- **Memory Usage**: A new bridge waits while memory use is above 80%
-- **Disk Usage**: A new bridge waits while disk use is above 85%
-
-**Redpanda CPU Utilization:**
-UMH Core runs Redpanda with the `--overprovisioned` flag, which optimizes CPU usage for containerized environments. This disables Seastar's busy-polling reactor model, reducing idle CPU usage from 100% to near-zero when not processing messages. The trade-off is slightly higher latency (microseconds to low milliseconds), which is acceptable for manufacturing data that doesn't require sub-millisecond response times. This is required because UMH Core runs in Docker where CPU pinning doesn't work effectively, and Redpanda shares the container with other processes.
-
-**Automatic Enforcement:**
-The system will prevent you from deploying new bridges if:
-1. You've reached the theoretical limit for your CPU allocation, OR
-2. The system detects resource degradation (high CPU, throttling, memory, or disk pressure), OR
-3. The instance's resource health is not proven yet, for example right after a restart
-
-This check is bridge admission. The emergency setting *Turn off bridge admission* turns it off, in your `config.yaml`:
-```yaml
-agent:
-  enableResourceLimitBlocking: false  # Start bridges even when a resource is degraded or not proven yet, or the bridge limit is reached
-```
-
-`true` is the default, also when `config.yaml` does not contain the key. While it is `false`, the instance shows as degraded. See [Bridges Do Not Start](../usage/data-flows/bridges-do-not-start.md) for the full procedure.
-
-While bridge admission is on, it keeps one bridge from overloading the others. If you need more bridges, either:
-- Increase CPU allocation (for containerized deployments)
-- Upgrade to a larger instance (for VM/bare-metal deployments)
-- Optimize existing bridges (reduce polling rates, tag counts, or processing complexity)
-
-#### Resource Limit Error Messages
-
-When a new bridge waits, its status reason says why:
-
-- **Bridge limit**: `Cannot create bridge - limit exceeded (5 bridges maximum with 2.0 CPU cores, 1 core reserved for Redpanda)`
-- **High CPU**: `CPU degraded: CPU utilization critical`
-- **High Memory**: `Memory degraded: Memory usage at 85%`
-- **High Disk**: `Disk degraded: Disk usage at 90%`
-- **Health not proven yet**: `Resource health not proven yet`
-
-#### Easy vertical scaling
-
-UMH Core is stateless besides the **`/data`** volume. To grow:
-
-1. Stop the container
-2. Move or resize the volume / attach it to a bigger VM
-3. Start the same image — no reinstall or re-configuration required
-
-#### High availability
-
-For multi-node failover, mount `/data` on storage accessible from multiple nodes. See [High Availability](./high-availability.md).
+Redpanda's Seastar framework needs a 48-bit virtual address space. Raspberry Pi's ARM processors provide 38 bits, so Redpanda stops with SIGABRT on startup. See [Redpanda GitHub Issue #1542](https://github.com/redpanda-data/redpanda/issues/1542).
