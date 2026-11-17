@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixes
+
+- A bridge whose flow logs an error right after it starts, for example a Beckhoff ADS symbol that does not exist, now shows degraded for 10 minutes after the error, and its status counts down until the error clears. Before, its status switched between degraded and active about once a second, the status said the error clears in 0s, and deploying or editing the bridge could report success despite the error
+
 ## [0.45.1]
 
 ### Improvements
