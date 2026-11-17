@@ -568,9 +568,9 @@ var _ = Describe("Engine", func() {
 	})
 
 	// Observe takes the Reset arm on every AllAbsent tick of a release-on-absent
-	// signal, fired or not, and Reset stamps a release time. Stamping one on a
-	// latch that never fired would put the re-fire bar in front of a FIRST firing.
-	It("should not let an absent tick bar the first firing of a release-on-absent signal that has never fired", func() {
+	// signal, fired or not. On a latch that never fired, that Reset must not stop
+	// the first firing.
+	It("should fire a release-on-absent signal on its first reading past the fire mark after an absent tick", func() {
 		type qsnap struct{ v float64 }
 		marks := Marks{Unit: "u", Fire: Mark{At: 2, Inclusive: true}, Worst: 4, Clear: Mark{At: 1, Inclusive: false}, Polarity: HigherIsWorse}
 		sig := Signal[qsnap]{
@@ -608,7 +608,7 @@ var _ = Describe("Engine", func() {
 		Expect(fired).To(BeEmpty())
 
 		fired, _ = e.Observe(qsnap{v: 3.0}, withPSI, t0.Add(2*time.Second))
-		Expect(fired).To(HaveLen(1), "3.0 crosses the fire mark 2s after t0, and a latch that never fired carries no release for the 60s re-fire bar to count from")
+		Expect(fired).To(HaveLen(1), "3.0 crosses the fire mark 2s after t0, and the Reset on the absent tick before it does not stop the first firing")
 		Expect(fired[0].Value).To(Equal(3.0))
 	})
 

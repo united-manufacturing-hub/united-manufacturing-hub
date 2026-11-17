@@ -374,9 +374,9 @@ var _ = Describe("the share that narrows a full machine to a side", func() {
 
 	It("should never fire both shares on one tick, over a run that crosses the band in both directions", func() {
 		// Four phases of ninety ticks each, alternating a share of 0.30 and one
-		// of 0.60, so the band is crossed upward twice and downward once. A
-		// refinement may not fire again until a whole window has passed since it
-		// released, which is why each phase is longer than the window.
+		// of 0.60, so the band is crossed upward twice and downward once. Each
+		// phase is longer than the 60-second window, so each phase ends on its
+		// own share.
 		run := newShareRun(4, ScopeHost)
 		for _, usage := range []float64{1.05, 2.10, 1.05, 2.10} {
 			run.advance(90, 3.5, usage)

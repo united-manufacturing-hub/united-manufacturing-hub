@@ -247,7 +247,7 @@ func denominatorDelta(points []Point) float64 {
 }
 
 // Coverage reports the window's span and how long it has been collecting, for the
-// latch arms gated on those rather than on the reduced number.
+// latch's clear arm, which is gated on those rather than on the reduced number.
 func (w *SlidingWindow) Coverage() Coverage {
 	var collectedFor time.Duration
 	if len(w.points) >= 2 {

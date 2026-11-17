@@ -742,6 +742,30 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 	return true, ""
 }
 
+// processLifetime returns how long the current Benthos process has been
+// running at currentTime. It returns 0 if the process is down or S6 started
+// it after currentTime.
+//
+// The whole-second Uptime drops fractions of a second, so a log window built
+// from it misses errors logged right after startup.
+func (b *BenthosInstance) processLifetime(currentTime time.Time) time.Duration {
+	s6Info := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo
+	if s6Info.Status != s6service.ServiceUp {
+		return 0
+	}
+
+	processStartedAt := s6Info.LastChangedAt
+	// currentTime is taken when the tick starts and S6 status is read later
+	// in the tick, so a process started in between has a later start time.
+	if processStartedAt.After(currentTime) {
+		return 0
+	}
+
+	lifetime := currentTime.Sub(processStartedAt)
+
+	return lifetime
+}
+
 // IsBenthosLogsFine reports true when no suspicious entries are found in the
 // recent log window.
 //
@@ -750,29 +774,24 @@ func (b *BenthosInstance) IsBenthosRunningForSomeTimeWithoutErrors(currentTime t
 //	ok     – true when logs look clean, false otherwise.
 //	reason – empty when ok is true; otherwise the first offending log line.
 func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow time.Duration) (bool, string) {
-	// Cap the log window to the current process uptime so that errors from a
-	// previous process instance (before a stop/start or config-change restart)
-	// are ignored. When uptime is 0 (process not yet running or just started),
-	// the window becomes 0 and no historical logs are considered.
-	currentUptime := b.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo.Uptime
+	// Check errors from the last logWindow, but only from the current process
+	// run, so errors logged before a restart do not count.
+	scanWindow := min(logWindow, b.processLifetime(currentTime))
 
-	uptimeDuration := time.Duration(currentUptime) * time.Second
-	if uptimeDuration < logWindow {
-		logWindow = uptimeDuration
-	}
-
-	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, logWindow)
+	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, scanWindow)
 	if !logsFine {
 		reportPluginErrorAsync(
 			dataflowcomponentserviceconfig.BenthosPluginID(b.config.Input),
 			b.baseFSMInstance.GetID(),
 			b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs,
 			currentTime,
-			logWindow,
+			scanWindow,
 			logEntry.Content,
 			b.baseFSMInstance.GetLogger(),
 		)
 
+		// The line stays in the window until it is older than logWindow,
+		// because the process lifetime only grows.
 		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
 		if timeUntilClear > 0 {
 			return false, fmt.Sprintf("found error (clears in %v): %s",

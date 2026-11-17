@@ -140,7 +140,10 @@ func (a RecoveryAction) String() string {
 
 // ServiceInfo contains information about an S6 service.
 type ServiceInfo struct {
-	LastChangedAt      time.Time     // Timestamp when the service status last changed
+	// LastChangedAt is when S6 last saw the service go up or down. While the
+	// service is up, it is the start time of the current process.
+	// See updownsince in https://skarnet.org/software/s6/s6-svstat.html.
+	LastChangedAt      time.Time
 	LastReadyAt        time.Time     // Timestamp when the service was last ready
 	LastDeploymentTime time.Time     // Timestamp when the service config last changed
 	Status             ServiceStatus // Current status of the service

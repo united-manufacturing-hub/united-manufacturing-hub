@@ -1,0 +1,36 @@
+# Config used to record testdata/metrics.txt (make benthosmetrics-fixture): a
+# /metrics body that carries every series the parser reads, with the message,
+# error and latency series of the processor and the outputs non-zero. One
+# processor fails every second message, and a fan_out broker writes to one
+# output that succeeds, one that rejects and one whose endpoint is
+# unreachable. The generate input reports no latency, so its latency series
+# stay empty (NaN quantiles).
+#
+# Like umh-core's generated Benthos config (RenderBenthosYAML in
+# pkg/config/benthosserviceconfig/generator.go) it sets only `http.address`
+# and `logger.level` and has no `metrics:` section, so /metrics serves
+# Benthos' default metrics type.
+http:
+  address: 0.0.0.0:4195
+logger:
+  level: INFO
+input:
+  generate:
+    interval: 500ms
+    batch_size: 10
+    mapping: 'root = {"n": 1}'
+pipeline:
+  processors:
+    - label: fail_every_second
+      bloblang: 'root = if batch_index() % 2 == 0 { throw("forced processor error") } else { this }'
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - label: stdout_ok
+        stdout: {}
+      - label: reject_all
+        reject: "forced output error"
+      - label: http_unreachable
+        http_client:
+          url: http://127.0.0.1:1/unreachable

@@ -4,15 +4,27 @@
 
 ### Improvements
 
-- Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
 - Deploying a bridge while CPU, memory or disk is degraded now fails within a second instead of after 30 seconds. The error says which resource is degraded and how to start bridges anyway, and its error code names the resource: `ERR_BRIDGE_REFUSED_CPU`, `ERR_BRIDGE_REFUSED_MEMORY` or `ERR_BRIDGE_REFUSED_DISK`. As with any failed deploy, the bridge is kept
 
 ### Fixes
 
+- A bridge whose flow logs an error right after it starts, for example a Beckhoff ADS symbol that does not exist, now shows degraded for 10 minutes after the error, and its status counts down until the error clears. Before, its status switched between degraded and active about once a second, the status said the error clears in 0s, and deploying or editing the bridge could report success despite the error
+
+## [0.45.1]
+
+### Improvements
+
+- Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+- `BYPASS_WRITE_FLOW_VALIDATION=true` now also lets write flows subscribe to topics outside the location of their own bridge, such as a historian bridge that stores data from other sites. These write flows keep running, and the bridge reports degraded with the offending topics in its status. Each topic must still start with `umh.v1.` and name exactly one data contract
+
+### Fixes
+
+- An instance whose CPU status has just gone back to healthy now turns degraded again on the first reading past one of the [CPU health check](https://docs.umh.app/production/cpu-health)'s thresholds. Before, it stayed healthy for up to a minute
 - Updated dependencies with known vulnerabilities:
   - zlib, now 1.4-r0 (CVE-2026-4738)
-  - MongoDB Go driver, now 2.9.3 (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
+  - MongoDB Go driver, now 2.9.3 in benthos-umh and in the umh-core binary (CVE-2026-107324, CVE-2026-107325, CVE-2026-88031, CVE-2026-81521)
   - go-jose, now 4.1.9 (CVE-2026-116587, CVE-2026-116585, CVE-2026-116586)
+  - Go in the umh-core binary, now 1.27.4 — may be reachable through the opt-in Topic Browser GraphQL API (CVE-2026-97054)
 
   Update to reduce your attack surface.
 

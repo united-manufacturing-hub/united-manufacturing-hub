@@ -48,7 +48,8 @@ type FeatureUsage struct {
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
 	HistorianConfigured bool `json:"historianConfigured"`
 	// WriteFlowValidationBypassed reports whether BYPASS_WRITE_FLOW_VALIDATION is true, so
-	// bridge write flow topics may name unchecked data contracts (see
+	// bridge write flow topics may lie outside the bridge location and name unchecked data
+	// contracts (see
 	// config.BypassWriteFlowValidationEnv). The Management Console reads it to relax its
 	// own topic checks.
 	WriteFlowValidationBypassed bool `json:"writeFlowValidationBypassed"`

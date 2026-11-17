@@ -107,6 +107,22 @@ curl -X POST http://localhost:8090/graphql \
 - Large namespaces (>10,000 topics) may load progressively
 - Each UMH instance has its own Topic Browser service
 
+## Metrics
+
+The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process that reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
+
+The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+
+On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
+
+To alert when the Benthos process of the Topic Browser is degraded, use:
+
+```promql
+umh_core_service_current_state{component="benthos_instance", exported_instance="topicbrowser-topic-browser"} == 5
+```
+
+The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+
 ## Next Steps
 
 - [**Metadata and Tracing**](metadata-and-tracing.md) - Understanding metadata fields
