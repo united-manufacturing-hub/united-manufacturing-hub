@@ -1,7 +1,5 @@
 # Changelog
 
-## Unreleased
-
 ## [0.45.2]
 
 ### Improvements
