@@ -97,7 +97,7 @@ func managerInstances(s pkgfsm.SystemSnapshot, manager string) map[string]*pkgfs
 	return m.GetInstances()
 }
 
-var _ = Describe("BridgeMustWait admission", func() {
+var _ = Describe("BridgeAdmission admission", func() {
 	var service *protocolconverter.ProtocolConverterService
 
 	BeforeEach(func() {
@@ -110,14 +110,14 @@ var _ = Describe("BridgeMustWait admission", func() {
 			snapshot := admissionSnapshot(internalfsm.LifecycleStateToBeCreated, names...)
 
 			for _, name := range names[:15] {
-				mustWait, reason := service.BridgeMustWait(snapshot, name)
-				Expect(mustWait).To(BeFalse(), "bridge %s: %s", name, reason)
+				decision := service.BridgeAdmission(snapshot, name)
+				Expect(decision.Admitted()).To(BeTrue(), "bridge %s: %s", name, decision.Message())
 			}
 
-			mustWait, reason := service.BridgeMustWait(snapshot, names[15])
-			Expect(mustWait).To(BeTrue())
-			Expect(reason).To(ContainSubstring("limit exceeded"))
-			Expect(reason).To(ContainSubstring(admissionHint))
+			decision := service.BridgeAdmission(snapshot, names[15])
+			Expect(decision.Admitted()).To(BeFalse())
+			Expect(decision.Message()).To(ContainSubstring("limit exceeded"))
+			Expect(decision.Message()).To(ContainSubstring(admissionHint))
 		})
 
 		It("uses config.yaml order, not name order", func() {
@@ -125,11 +125,11 @@ var _ = Describe("BridgeMustWait admission", func() {
 			ordered := append([]string{names[15]}, names[:15]...)
 			snapshot := admissionSnapshot(internalfsm.LifecycleStateToBeCreated, ordered...)
 
-			mustWait, _ := service.BridgeMustWait(snapshot, names[15])
-			Expect(mustWait).To(BeFalse())
+			decision := service.BridgeAdmission(snapshot, names[15])
+			Expect(decision.Admitted()).To(BeTrue())
 
-			mustWait, _ = service.BridgeMustWait(snapshot, names[14])
-			Expect(mustWait).To(BeTrue())
+			decision = service.BridgeAdmission(snapshot, names[14])
+			Expect(decision.Admitted()).To(BeFalse())
 		})
 	})
 
@@ -138,25 +138,25 @@ var _ = Describe("BridgeMustWait admission", func() {
 			snapshot := admissionSnapshot("active", bridgeNames(14)...)
 			addWaitingBridge(&snapshot, "new-bridge")
 
-			mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
-			Expect(mustWait).To(BeFalse(), reason)
+			decision := service.BridgeAdmission(snapshot, "new-bridge")
+			Expect(decision.Admitted()).To(BeTrue(), decision.Message())
 		})
 
 		It("refuses a 16th bridge after 15 are running", func() {
 			snapshot := admissionSnapshot("active", bridgeNames(15)...)
 			addWaitingBridge(&snapshot, "new-bridge")
 
-			mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
-			Expect(mustWait).To(BeTrue())
-			Expect(reason).To(ContainSubstring("limit exceeded"))
+			decision := service.BridgeAdmission(snapshot, "new-bridge")
+			Expect(decision.Admitted()).To(BeFalse())
+			Expect(decision.Message()).To(ContainSubstring("limit exceeded"))
 		})
 
 		It("does not count bridges being removed", func() {
 			snapshot := admissionSnapshot(internalfsm.LifecycleStateRemoving, bridgeNames(15)...)
 			addWaitingBridge(&snapshot, "new-bridge")
 
-			mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
-			Expect(mustWait).To(BeFalse(), reason)
+			decision := service.BridgeAdmission(snapshot, "new-bridge")
+			Expect(decision.Admitted()).To(BeTrue(), decision.Message())
 		})
 	})
 
@@ -173,9 +173,9 @@ var _ = Describe("BridgeMustWait admission", func() {
 			cpu.CPUHealth.CapacityCores = 4
 			snapshot.CurrentConfig.Agent.UseFSMv2CPU = false
 
-			mustWait, reason := service.BridgeMustWait(snapshot, "new-bridge")
-			Expect(mustWait).To(BeTrue())
-			Expect(reason).To(ContainSubstring("15 bridges maximum with 4.0 CPU cores"))
+			decision := service.BridgeAdmission(snapshot, "new-bridge")
+			Expect(decision.Admitted()).To(BeFalse())
+			Expect(decision.Message()).To(ContainSubstring("15 bridges maximum with 4.0 CPU cores"))
 		})
 	})
 
@@ -185,14 +185,14 @@ var _ = Describe("BridgeMustWait admission", func() {
 				snapshot := admissionSnapshot(internalfsm.LifecycleStateToBeCreated, "bridge-01")
 				mutate(&snapshot)
 
-				mustWait, reason := service.BridgeMustWait(snapshot, "bridge-01")
-				Expect(mustWait).To(BeTrue())
-				Expect(reason).To(HavePrefix("Resource health not proven yet"))
-				Expect(reason).To(ContainSubstring(admissionHint))
+				decision := service.BridgeAdmission(snapshot, "bridge-01")
+				Expect(decision.Admitted()).To(BeFalse())
+				Expect(decision.Message()).To(HavePrefix("Resource health not proven yet"))
+				Expect(decision.Message()).To(ContainSubstring(admissionHint))
 
 				snapshot.CurrentConfig.Agent.EnableResourceLimitBlocking = false
-				mustWait, reason = service.BridgeMustWait(snapshot, "bridge-01")
-				Expect(mustWait).To(BeFalse(), reason)
+				decision = service.BridgeAdmission(snapshot, "bridge-01")
+				Expect(decision.Admitted()).To(BeTrue(), decision.Message())
 			},
 			Entry("no container monitor", func(s *pkgfsm.SystemSnapshot) {
 				delete(s.Managers, constants.ContainerManagerName)
@@ -227,10 +227,10 @@ var _ = Describe("BridgeMustWait admission", func() {
 		observed.ServiceInfoSnapshot.OverallHealth = models.Degraded
 		observed.ServiceInfoSnapshot.CPU.Health = &models.Health{Category: models.Degraded, Message: "cpu is full"}
 
-		mustWait, reason := service.BridgeMustWait(snapshot, "bridge-01")
-		Expect(mustWait).To(BeTrue())
-		Expect(reason).To(HavePrefix("CPU degraded: cpu is full"))
-		Expect(reason).To(ContainSubstring(admissionHint))
+		decision := service.BridgeAdmission(snapshot, "bridge-01")
+		Expect(decision.Admitted()).To(BeFalse())
+		Expect(decision.Message()).To(HavePrefix("CPU degraded: cpu is full"))
+		Expect(decision.Message()).To(ContainSubstring(admissionHint))
 	})
 })
 

@@ -111,16 +111,20 @@ type IProtocolConverterService interface {
 	// This is used internally for both initial startup and config change re-evaluation.
 	EvaluateDFCDesiredStates(protConvName string, protocolConverterDesiredState string, currentFSMState string, readDFCDesiredState string, writeDFCDesiredState string) error
 
-	// BridgeMustWait decides whether the bridge named bridgeName may be created.
-	//
-	// It returns:
-	//    mustWait – true when the bridge must wait, false otherwise.
-	//    reason   – empty when mustWait is false; otherwise why the bridge waits and how to start bridges anyway.
-	BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string)
+	// BridgeAdmission decides whether the bridge named bridgeName may be
+	// created. When the decision does not admit the bridge, its Cause names
+	// what the bridge waits for and its Message says why and how to start
+	// bridges anyway.
+	BridgeAdmission(snapshot fsm.SystemSnapshot, bridgeName string) bridgeadmission.Decision
 }
 
-// ServiceInfo holds information about the ProtocolConverters underlying health states.
+// ServiceInfo is what the service reports about one bridge: its admission
+// decision before the bridge is created, and the health of its underlying
+// components after.
 type ServiceInfo struct {
+	// Admission is the bridge admission decision while the bridge waits to be
+	// created. It is the zero Decision, which admits, once the bridge exists.
+	Admission bridgeadmission.Decision
 
 	// DataflowComponentReadObservedState mirrors the DFC manager.
 	DataflowComponentReadObservedState dfcfsm.DataflowComponentObservedState
@@ -1152,8 +1156,8 @@ func (c *ProtocolConverterService) ForceRemoveProtocolConverter(
 	return nil
 }
 
-// BridgeMustWait decides whether the bridge named bridgeName may be created.
-func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, bridgeName string) (bool, string) {
+// BridgeAdmission decides whether the bridge named bridgeName may be created.
+func (p *ProtocolConverterService) BridgeAdmission(snapshot fsm.SystemSnapshot, bridgeName string) bridgeadmission.Decision {
 	// Health of CPU, memory and disk, and the cores the container may use, from the container monitor.
 	res := admissionResources(snapshot)
 	in := bridgeadmission.Input{
@@ -1168,11 +1172,11 @@ func (p *ProtocolConverterService) BridgeMustWait(snapshot fsm.SystemSnapshot, b
 
 	d := bridgeadmission.Decide(in)
 	if d.MaxBridges != nil {
-		p.logger.Debugf("BridgeMustWait: bridge limit=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
-			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admit)
+		p.logger.Debugf("BridgeAdmission: bridge limit=%d (1 core reserved for Redpanda), created=%d, waiting before=%d, bridge %s admit=%v",
+			*d.MaxBridges, in.Created, in.WaitingBefore, bridgeName, d.Admitted())
 	}
 
-	return !d.Admit, d.Message()
+	return d
 }
 
 // resources is what bridge admission needs from the container monitor: the

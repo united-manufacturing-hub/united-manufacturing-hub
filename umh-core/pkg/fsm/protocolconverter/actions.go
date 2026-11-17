@@ -241,6 +241,17 @@ func (p *ProtocolConverterInstance) getServiceStatus(ctx context.Context, servic
 func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) error {
 	p.ObservedState.ConfigDivergence = ""
 
+	currentState := p.baseFSMInstance.GetCurrentFSMState()
+	desiredState := p.baseFSMInstance.GetDesiredFSMState()
+
+	// Observe admission before the context check. reconcileStateTransition
+	// creates the bridge in this tick unless the decision refuses it, and the
+	// zero decision admits, so a context that ends here must not skip it.
+	// Admission reads only the snapshot and takes no context.
+	if currentState == internalfsm.LifecycleStateToBeCreated {
+		p.observeAdmission(snapshot, desiredState)
+	}
+
 	if ctx.Err() != nil {
 		if p.baseFSMInstance.IsDeadlineExceededAndHandle(ctx.Err(), snapshot.Tick, "UpdateObservedStateOfInstance") {
 			return nil
@@ -281,13 +292,9 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	p.ObservedState.ObservedProtocolConverterSpecConfig = p.specConfig
 	p.ObservedState.ObservedProtocolConverterSpecConfig.Location = mergedLocation
 
-	currentState := p.baseFSMInstance.GetCurrentFSMState()
-	desiredState := p.baseFSMInstance.GetDesiredFSMState()
-
-	// For to_be_created/creating states, spec config is stored above
-	// but service doesn't exist yet, so return early to avoid service operations
-	if currentState == internalfsm.LifecycleStateToBeCreated ||
-		currentState == internalfsm.LifecycleStateCreating {
+	// The service does not exist before creation, so there is no status to read.
+	switch currentState {
+	case internalfsm.LifecycleStateToBeCreated, internalfsm.LifecycleStateCreating:
 		return nil
 	}
 
@@ -435,6 +442,33 @@ func (p *ProtocolConverterInstance) UpdateObservedStateOfInstance(ctx context.Co
 	}
 
 	return nil
+}
+
+// observeAdmission stores the bridge admission decision for a bridge that waits
+// in to_be_created. Its service does not exist yet, so ServiceInfo holds only
+// the decision and its message.
+func (p *ProtocolConverterInstance) observeAdmission(snapshot fsm.SystemSnapshot, desiredState string) {
+	// A bridge that is going to be stopped or removed is not started, so
+	// admission does not apply to it.
+	if desiredState == OperationalStateStopped || desiredState == internalfsm.LifecycleStateRemoving || desiredState == internalfsm.LifecycleStateRemoved {
+		p.baseFSMInstance.GetLogger().Debugf("Bridge %s in to_be_created with desired state %s - allowing removal despite resource limits", p.baseFSMInstance.GetID(), desiredState)
+		// KNOWN EDGE CASE: A user could potentially bypass resource limits by:
+		// 1. Creating a bridge when at resource limits (it gets stuck in to_be_created)
+		// 2. Setting desired state to "stopped" (transitions to creating->stopped)
+		// 3. Setting desired state back to "active" (now bypasses the resource check)
+		// This is acceptable as it requires deliberate action and the resource limits
+		// will still protect against accidental overload. The system will degrade
+		// appropriately if actually overloaded.
+		p.ObservedState.ServiceInfo = protocolconvertersvc.ServiceInfo{}
+
+		return
+	}
+
+	admission := p.service.BridgeAdmission(snapshot, p.baseFSMInstance.GetID())
+	p.ObservedState.ServiceInfo = protocolconvertersvc.ServiceInfo{
+		Admission:    admission,
+		StatusReason: admission.Message(),
+	}
 }
 
 // convertIntMapToStringMap converts a map[int]string to map[string]string.
