@@ -224,6 +224,36 @@ connection:
     port: "{{ .PORT }}"    # Uses PORT variable
 ```
 
+## Metrics
+
+The Management Console shows each bridge's message counts. Open the bridge and select **Metrics** (see [View Metrics](#view-metrics)). The view shows messages received and sent, errors, connection status and latency for the bridge's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry per-bridge message counts. It carries the bridge's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs bridges and what the labels and the state values mean.
+
+Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels:
+
+| Part of the bridge | `component` | `instance` |
+|---|---|---|
+| The bridge | `protocol_converter_instance` | `mixing-station` |
+| Its connection | `connection_instance` | `protocolconverter-mixing-station` |
+| Its read flow | `dataflow_component_instance` | `read-protocolconverter-mixing-station` |
+| Its write flow | `dataflow_component_instance` | `write-protocolconverter-mixing-station` |
+| The Benthos process of its read flow | `benthos_instance` | `dataflow-read-protocolconverter-mixing-station` |
+| The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
+
+To alert when a bridge has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
+
+```promql
+umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 4 != 0
+```
+
+For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or restart the container. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+
+### Connection Check
+
+Before umh-core starts a bridge, it checks that the device's host and port answer. This connection check runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
+
+When the device stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the device answers, read the bridge's state.
+
+The check's series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`.
 
 ## Next Steps
 

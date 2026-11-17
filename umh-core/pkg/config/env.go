@@ -26,9 +26,10 @@ import (
 )
 
 // BypassWriteFlowValidationEnv is the name of the BYPASS_WRITE_FLOW_VALIDATION environment
-// variable. When it is true, bridge write flow topics may name unchecked data contracts:
-// contracts that are not declared in dataContracts: or have no version. A bridge that
-// relies on this runs its write flow but reports degraded.
+// variable. When it is true, bridge write flow topics may lie outside the bridge location
+// and may name unchecked data contracts: contracts that are not declared in
+// dataContracts: or have no version. A bridge that relies on this runs its write flow but
+// reports degraded.
 const BypassWriteFlowValidationEnv = "BYPASS_WRITE_FLOW_VALIDATION"
 
 // BypassWriteFlowValidation reports whether BYPASS_WRITE_FLOW_VALIDATION is true. A value

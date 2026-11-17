@@ -246,15 +246,15 @@ var _ = Describe("write_config", func() {
 		)
 	})
 
-	Describe("topic data contract with BYPASS_WRITE_FLOW_VALIDATION (unchecked data contracts)", func() {
+	Describe("topic rules with BYPASS_WRITE_FLOW_VALIDATION (any location, unchecked data contracts)", func() {
 		declared := []string{"_pump_v1", "_pump_v2", "_pump"}
 
-		DescribeTable("reports whether a topic names exactly one data contract, declared or not",
+		DescribeTable("reports whether a topic beneath umh.v1. names exactly one data contract, declared or not",
 			func(topic string, expected bool) {
 				input := dataflowcomponentserviceconfig.DataflowComponentWriteConfigInput{
 					Source: dataflowcomponentserviceconfig.WriteConfigSource{Topics: topic},
 				}
-				accepted := input.ToWriteConfig().ValidateTopicsWithBypass("acme.cologne.line-4", declared) == nil
+				accepted := input.ToWriteConfig().ValidateTopicsWithBypass(declared) == nil
 
 				Expect(accepted).To(Equal(expected))
 			},
@@ -271,7 +271,14 @@ var _ = Describe("write_config", func() {
 			Entry("wildcard contract", `^umh\.v1\.acme\.cologne\.line-4\._.*\.`, false),
 			Entry("undeclared contract not followed by a dot", `^umh\.v1\.acme\.cologne\.line-4\._custom`, false),
 			Entry("no contract", `^umh\.v1\.acme\.cologne\.line-4\.pump-01\.temperature`, false),
-			Entry("undeclared contract outside the bridge location", `^umh\.v1\.acme\.cologne\.line-3\._custom\.`, false),
+			Entry("undeclared contract outside the bridge location", `^umh\.v1\.acme\.cologne\.line-3\._custom\.`, true),
+			Entry("builtin contract outside the bridge location", `^umh\.v1\.acme\.barcelona\._historian\.`, true),
+			Entry("contract on every level of another site", `^umh\.v1\.acme\.barcelona\.(?:[^._][^.]*\.)*_historian\.`, true),
+			Entry("wildcard across levels also reaches levels after another contract", `^umh\.v1\.acme\..*\._historian\.`, false),
+			Entry("no contract outside the bridge location", `^umh\.v1\.acme\.barcelona\.pump-01\.temperature`, false),
+			Entry("wildcard contract outside the bridge location", `^umh\.v1\.acme\.barcelona\._.*\.`, false),
+			Entry("topic outside the UNS", `^umh\.v2\.acme\.cologne\.line-4\._historian\.`, false),
+			Entry("unescaped dot after the UNS prefix", `^umh\.v1.acme\.cologne\.line-4\._historian\.`, false),
 			Entry("unanchored undeclared contract", `umh\.v1\.acme\.cologne\.line-4\._custom\.`, false),
 		)
 	})

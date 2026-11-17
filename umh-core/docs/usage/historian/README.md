@@ -134,6 +134,20 @@ A bridge counts as a Historian bridge when its write flow's destination protocol
 umh-core then targets the bridge's health check at the shared connection rather than at a host and
 port entered on the bridge, so the check follows the connection whenever you change it.
 
+## Metrics
+
+umh-core checks the Historian connection once per second. The check exists only while `config.yaml` has a `historian:` section. It runs on FSMv2 (see [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component)) and reports the standard [FSMv2 series](../instances/agent/metrics.md#fsmv2-metrics). Its `hierarchy_path` ends in `timescale-001(historian-timescale)`. The state is `running` while the check succeeds and `degraded` while it fails, for example when TimescaleDB is unreachable or rejects the credentials.
+
+This alert fires when the connection has been down for more than a minute:
+
+```promql
+umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(historian-timescale\\)", state="degraded"} > 60
+```
+
+A rising `umh_fsmv2_state_transitions_total` for this path shows a connection that keeps dropping. Both state series are defined in [`fsmv2/supervisor/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/supervisor/metrics/metrics.go). The database size and job details appear only in the Management Console. The Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
+
+The Historian output inside each Historian bridge counts its own writes. The bridge's Benthos process keeps these counters. Neither port 8080 nor the Management Console's Metrics view shows them. The [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) describes them.
+
 ## Next steps
 
 - [Save data to the Historian](save-to-historian.md)

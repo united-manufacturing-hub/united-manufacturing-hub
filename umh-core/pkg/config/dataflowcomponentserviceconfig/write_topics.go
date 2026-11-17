@@ -60,17 +60,19 @@ func (c DataflowComponentWriteConfig) ValidateTopics(locationPath string, dataCo
 }
 
 // ValidateTopicsWithBypass is ValidateTopics as used with BYPASS_WRITE_FLOW_VALIDATION.
-// A topic may also name an unchecked data contract: one that is not declared or has no
-// version, such as `_mes_order`.
+// A topic may lie anywhere beneath `umh.v1.`, also outside the bridge location, and may
+// name an unchecked data contract: one that is not declared or has no version, such as
+// `_mes_order`.
 //
-// All other rules still apply: the topic lies beneath the bridge location and names
+// All other rules still apply: the topic is anchored, starts with `umh.v1.` and names
 // exactly one contract, spelled out. `_.*` and `_mes_.*` are still rejected.
-func (c DataflowComponentWriteConfig) ValidateTopicsWithBypass(locationPath string, dataContracts []string) error {
-	return c.validateTopics(locationPath, dataContracts, true)
+func (c DataflowComponentWriteConfig) ValidateTopicsWithBypass(dataContracts []string) error {
+	return c.validateTopics("", dataContracts, true)
 }
 
 // With bypass set (BYPASS_WRITE_FLOW_VALIDATION), validateTopics also accepts topics that
-// name an unchecked data contract.
+// name an unchecked data contract. An empty locationPath accepts topics at any location
+// beneath `umh.v1.`.
 func (c DataflowComponentWriteConfig) validateTopics(locationPath string, dataContracts []string, bypass bool) error {
 	versioned, unversioned := splitByVersion(dataContracts)
 	grammar := newWriteTopicGrammar(locationPath, append(slices.Clone(builtinDataContracts), versioned...), unversioned)
