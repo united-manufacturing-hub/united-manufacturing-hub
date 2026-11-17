@@ -56,7 +56,7 @@ var _ = Describe("Decide", func() {
 
 			d := ba.Decide(in)
 
-			Expect(d.Admit).To(BeTrue())
+			Expect(d.Admitted()).To(BeTrue())
 			Expect(d.Cause).To(Equal(ba.None))
 			Expect(d.MaxBridges).To(BeNil())
 			Expect(d.Message()).To(BeEmpty())
@@ -67,7 +67,7 @@ var _ = Describe("Decide", func() {
 		It("makes the zero Input wait, because nothing is proven", func() {
 			d := ba.Decide(ba.Input{EnableResourceLimitBlocking: true})
 
-			Expect(d.Admit).To(BeFalse())
+			Expect(d.Admitted()).To(BeFalse())
 			Expect(d.Cause).To(Equal(ba.NotProven))
 			Expect(d.Reason).To(Equal("Resource health not proven yet"))
 		})
@@ -79,7 +79,7 @@ var _ = Describe("Decide", func() {
 
 				d := ba.Decide(in)
 
-				Expect(d.Admit).To(BeFalse())
+				Expect(d.Admitted()).To(BeFalse())
 				Expect(d.Cause).To(Equal(cause))
 				Expect(d.Reason).To(Equal(reason))
 				Expect(d.MaxBridges).To(BeNil())
@@ -123,7 +123,7 @@ var _ = Describe("Decide", func() {
 
 				d := ba.Decide(in)
 
-				Expect(d.Admit).To(BeFalse())
+				Expect(d.Admitted()).To(BeFalse())
 				Expect(d.Cause).To(Equal(ba.NotProven))
 				Expect(d.Reason).To(Equal("Resource health not proven yet: instance not active yet"))
 				Expect(d.MaxBridges).To(BeNil())
@@ -143,7 +143,7 @@ var _ = Describe("Decide", func() {
 
 				d := ba.Decide(in)
 
-				Expect(d.Admit).To(Equal(admit))
+				Expect(d.Admitted()).To(Equal(admit))
 				Expect(d.MaxBridges).NotTo(BeNil())
 				Expect(*d.MaxBridges).To(Equal(15))
 
@@ -173,7 +173,7 @@ var _ = Describe("Decide", func() {
 
 				Expect(d.MaxBridges).NotTo(BeNil())
 				Expect(*d.MaxBridges).To(Equal(limit))
-				Expect(d.Admit).To(Equal(limit > 0))
+				Expect(d.Admitted()).To(Equal(limit > 0))
 			},
 			Entry("4 cores", 4.0, 15),
 			Entry("2.5 cores", 2.5, 7),
@@ -187,7 +187,7 @@ var _ = Describe("Decide", func() {
 
 			d := ba.Decide(in)
 
-			Expect(d.Admit).To(BeFalse())
+			Expect(d.Admitted()).To(BeFalse())
 			Expect(d.Cause).To(Equal(ba.NotProven))
 			Expect(d.Reason).To(Equal("Resource health not proven yet: CPU cores not measured yet"))
 			Expect(d.MaxBridges).To(BeNil())
@@ -209,7 +209,7 @@ var _ = Describe("Decide", func() {
 			func(in ba.Input) {
 				d := ba.Decide(in)
 
-				Expect(d.Admit).To(BeFalse())
+				Expect(d.Admitted()).To(BeFalse())
 				Expect(d.Message()).To(HavePrefix(d.Reason))
 				Expect(d.Message()).To(ContainSubstring(hint))
 			},

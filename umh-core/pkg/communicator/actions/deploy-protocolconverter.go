@@ -266,7 +266,8 @@ func (a *DeployProtocolConverterAction) Execute() (interface{}, map[string]inter
 				nil,
 			)
 
-			if errCode != models.ErrConfigFileInvalid {
+			// A terminal failure is the user's to fix, not a bug.
+			if !isTerminalFailureCode(errCode) {
 				a.fsmLogger.SentryError(deps.FeatureDeploymentSaveConfig, "", err, "deploy_protocol_converter_wait_failed",
 					deps.String("pcConfig", pcConfig.String()),
 					deps.String("desiredState", pcConfig.DesiredFSMState))
@@ -558,11 +559,8 @@ func (a *DeployProtocolConverterAction) waitForComponentToAppear(desiredState st
 						sentReadLogs = SendLimitedLogs(readLogs, sentReadLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 						sentWriteLogs = SendLimitedLogs(writeLogs, sentWriteLogs, a.instanceUUID, a.userEmail, a.actionUUID, a.outboundChannel, models.DeployProtocolConverter, remainingSeconds)
 
-						configError, hasConfigError := findFlowConfigError(readLogs, writeLogs, startTime)
-						if hasConfigError {
-							errorMsg := fmt.Sprintf("Bridge '%s' has an invalid configuration: %s", a.payload.Name, configError.message)
-
-							return models.ErrConfigFileInvalid, lastSnapshot, configError.flows, errors.New(errorMsg)
+						if failure, failed := terminalFailure(a.payload.Name, pcSnapshot.ServiceInfo.Admission, readLogs, writeLogs, startTime); failed {
+							return failure.code, lastSnapshot, failure.flows, errors.New(failure.message)
 						}
 					}
 

@@ -5,6 +5,7 @@
 ### Improvements
 
 - New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
+- Deploying a bridge while CPU, memory or disk is degraded now fails within a second instead of after 30 seconds. The error says which resource is degraded and how to start bridges anyway, and its error code names the resource: `ERR_BRIDGE_REFUSED_CPU`, `ERR_BRIDGE_REFUSED_MEMORY` or `ERR_BRIDGE_REFUSED_DISK`. As with any failed deploy, the bridge is kept
 
 ### Fixes
 
