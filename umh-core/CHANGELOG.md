@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Improvements
+
+- New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
+
 ### Fixes
 
 - A bridge whose flow logs an error right after it starts, for example a Beckhoff ADS symbol that does not exist, now shows degraded for 10 minutes after the error, and its status counts down until the error clears. Before, its status switched between degraded and active about once a second, the status said the error clears in 0s, and deploying or editing the bridge could report success despite the error
@@ -10,7 +14,6 @@
 
 ### Improvements
 
-- New `USE_FSMV2_BENTHOS_METRICS` flag, off by default: umh-core reads each Benthos instance's metrics in-process instead of starting a separate monitor process per instance. It accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off.
 - Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
 - `BYPASS_WRITE_FLOW_VALIDATION=true` now also lets write flows subscribe to topics outside the location of their own bridge, such as a historian bridge that stores data from other sites. These write flows keep running, and the bridge reports degraded with the offending topics in its status. Each topic must still start with `umh.v1.` and name exactly one data contract
 
