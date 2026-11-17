@@ -501,9 +501,27 @@ var _ = Describe("BuildRuntimeConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should still reject topics outside the bridge location", func() {
-				result, err := runtime_config.BuildRuntimeConfig(bypassSpec(`^umh\.v1\.plant-A\.line-9\._mes_order\.`), agentLocation, globalVars, nil, nil, true, nodeName, pcName)
-				Expect(errors.As(err, new(*runtime_config.WriteFlowConfigError))).To(BeTrue())
+			It("should render a write flow reading outside the bridge location and report it", func() {
+				topic := `^umh\.v1\.plant-A\.line-9\._mes_order\.`
+
+				result, err := runtime_config.BuildRuntimeConfig(bypassSpec(topic), agentLocation, globalVars, nil, nil, true, nodeName, pcName)
+
+				var writeFlowErr *runtime_config.WriteFlowConfigError
+				Expect(errors.As(err, &writeFlowErr)).To(BeTrue())
+				Expect(writeFlowErr.Bypassed).To(BeTrue())
+				Expect(err).To(MatchError(ContainSubstring(topic)))
+
+				unsInput, ok := result.DataflowComponentWriteServiceConfig.BenthosConfig.Input["uns"].(map[string]any)
+				Expect(ok).To(BeTrue())
+				Expect(unsInput["umh_topics"]).To(Equal([]string{topic}))
+			})
+
+			It("should still reject topics outside the UNS", func() {
+				result, err := runtime_config.BuildRuntimeConfig(bypassSpec(`^umh\.v2\.plant-A\.line-4\._historian\.`), agentLocation, globalVars, nil, nil, true, nodeName, pcName)
+
+				var writeFlowErr *runtime_config.WriteFlowConfigError
+				Expect(errors.As(err, &writeFlowErr)).To(BeTrue())
+				Expect(writeFlowErr.Bypassed).To(BeFalse())
 				Expect(result.DataflowComponentWriteServiceConfig).To(Equal(dataflowcomponentserviceconfig.DataflowComponentServiceConfig{}))
 			})
 

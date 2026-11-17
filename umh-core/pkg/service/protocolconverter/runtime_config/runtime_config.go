@@ -281,16 +281,16 @@ func dataContractNames(dataContracts []config.DataContractsConfig) []string {
 type WriteFlowConfigError struct {
 	Err error
 	// Bypassed is set when BYPASS_WRITE_FLOW_VALIDATION is true and the topics break only
-	// the data contract rules, because they name unchecked data contracts. The write flow
-	// is then rendered and runs, and the bridge reports degraded with this error. When it
-	// is not set, the write flow is blank.
+	// the rules it lifts: they name unchecked data contracts or lie outside the bridge
+	// location. The write flow is then rendered and runs, and the bridge reports degraded
+	// with this error. When it is not set, the write flow is blank.
 	Bypassed bool
 }
 
 // Error implements the error interface.
 func (e *WriteFlowConfigError) Error() string {
 	if e.Bypassed {
-		return config.BypassWriteFlowValidationEnv + " is set, so the write flow runs although its topics break the data contract rules: " + e.Err.Error()
+		return config.BypassWriteFlowValidationEnv + " is set, so the write flow runs although its topics break the write flow topic rules: " + e.Err.Error()
 	}
 
 	return e.Err.Error()
@@ -432,8 +432,8 @@ func renderConfig(
 	// blanks the write flow instead of failing the render, leaving connection and read flow
 	// up. A write flow with no destination, or a stopped one, subscribes to nothing.
 	//
-	// With BYPASS_WRITE_FLOW_VALIDATION, a write flow whose topics break only the data
-	// contract rules is kept, and the returned error has Bypassed set.
+	// With BYPASS_WRITE_FLOW_VALIDATION, a write flow whose topics break only the location
+	// or data contract rules is kept, and the returned error has Bypassed set.
 	var writeFlowErr error
 
 	writeStopped := spec.WriteDFCDesiredState == protocolconverterserviceconfig.DFCDesiredStateStopped
@@ -442,7 +442,7 @@ func renderConfig(
 		if err := writeConfig.ValidateTopics(locationPath, dataContracts); err != nil {
 			bypassed := false
 			if bypassWriteFlowValidation {
-				bypassed = writeConfig.ValidateTopicsWithBypass(locationPath, dataContracts) == nil
+				bypassed = writeConfig.ValidateTopicsWithBypass(dataContracts) == nil
 			}
 
 			writeFlowErr = &WriteFlowConfigError{Err: err, Bypassed: bypassed}
