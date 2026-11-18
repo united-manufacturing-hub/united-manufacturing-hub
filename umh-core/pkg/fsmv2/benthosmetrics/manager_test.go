@@ -551,6 +551,55 @@ var _ = Describe("The Failures hold's sweep and forget", func() {
 			"the not-found read drops the name from the hold")
 	})
 
+	It("keeps the newer sample when an older read arrives late", func() {
+		name := "benthos-late-reader"
+		reader := &stubManagerReader{}
+		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
+		fsmv2client.SetClient(c)
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
+
+		base := time.Now().Add(-time.Minute)
+		withErrors := func(at time.Time, count int64) *fsmv2.Observation[simple.Status[Scrape]] {
+			f := &benthosmetrics.Failures{ObservedAt: at}
+			if count > 0 {
+				f.Entries = []benthosmetrics.FailureEntry{{
+					Signal: "output_error", Label: "output error",
+					Count: count, LastErrorAt: at,
+				}}
+			}
+
+			return &fsmv2.Observation[simple.Status[Scrape]]{
+				CollectedAt: at,
+				Status:      simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: f}}},
+			}
+		}
+
+		// The health path and the telemetry count read the same name on
+		// different goroutines. Here the newer read lands first: it finds
+		// an error.
+		reader.obs = withErrors(base.Add(2*time.Second), 3)
+		_, ok := Failures(context.Background(), name)
+		Expect(ok).To(BeTrue(), "the newer read answers")
+
+		// Then a reader that started earlier arrives with an OLDER,
+		// error-free sample. Storing it would put the hold back in time.
+		reader.obs = withErrors(base, 0)
+		_, ok = Failures(context.Background(), name)
+		Expect(ok).To(BeTrue(), "the older read still answers its own caller")
+
+		// An unknown read now answers from the hold. It must see the newer
+		// sample's error, not the older sample's all-clear.
+		reader.obs = nil
+		reader.err = errors.New("store read timed out")
+		held, ok := Failures(context.Background(), name)
+		Expect(ok).To(BeTrue(), "a failed read answers from the last good Failures")
+		Expect(held.ObservedAt).To(Equal(base.Add(2*time.Second)),
+			"the hold keeps the newer sample when an older read arrives late")
+		Expect(held.Entries).To(HaveLen(1),
+			"the newer sample's error survives the late older read")
+	})
+
 	It("sweeps out names whose worker is no longer registered", func() {
 		oldName := "benthos-swept-out"
 		newName := "benthos-sweeping-in"
