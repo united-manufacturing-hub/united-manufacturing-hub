@@ -1,4 +1,4 @@
-# Connection
+# Setup
 
 Each instance has one Historian connection, which every Historian bridge on the instance uses. This
 page lists what the database needs and the fields of the connection form.

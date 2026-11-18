@@ -78,7 +78,7 @@ For a tag without a virtual path, pass `''`, not `NULL`. `data_contract` accepts
 
 The **SQL query** tab shows queries for every time-series tag. They return rows once the Historian
 stores the tag's data contract; see
-[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
+[SQL Query Returns No Rows](troubleshooting/sql-query-returns-no-rows.md).
 
 | Control | Effect |
 |---|---|

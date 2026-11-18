@@ -24,7 +24,7 @@ Defaults and accepted values are in the output reference's
 
 | Field | Key | Notes |
 |---|---|---|
-| **Historian Connection** | `host`, `port`, `database`, `username`, `password`, `sslmode` | Read-only. Taken from the instance's [connection](connection.md) through `{{ .historian.timescale.* }}`. |
+| **Historian Connection** | `host`, `port`, `database`, `username`, `password`, `sslmode` | Read-only. Taken from the instance's [connection](setup.md) through `{{ .historian.timescale.* }}`. |
 | **Data Contract** | `data_contract_name` | Read-only. Follows the source topic. |
 
 **Advanced Settings:**
@@ -49,7 +49,7 @@ Durations take hours, minutes or seconds, such as `168h`, not days.
 **Compress After**, **Retention** and the two chunk intervals apply only when the bridge creates its
 tables, and are read-only after that. Before the first deployment, Advanced Settings shows **Table
 settings apply once**; afterwards it shows **Table settings are fixed**. See
-[Historian parameters](historian-parameters.md).
+[Historian parameters](how-the-historian-stores-data.md#historian-parameters).
 
 ## What the bridge writes
 

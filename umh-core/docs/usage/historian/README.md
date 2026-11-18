@@ -15,10 +15,10 @@ Once a connection is configured, the **Plugins** tab shows the Historian card wi
 settings, the latency and the connection health.
 
 - **Add plugin** → **Historian** opens the connection form. The fields are described in
-  [Connection](connection.md#connection-fields).
+  [Connection](setup.md#connection-fields).
 - **Open plugin** opens the overview page.
 - The card's menu has **Monitor**, **Edit**, **Schema** and **Delete**. **Delete** removes the
-  connection; see [Connection](connection.md#editing-and-removing).
+  connection; see [Connection](setup.md#editing-and-removing).
 
 ### Overview page
 
@@ -56,7 +56,7 @@ Hypertables** table has one row per table:
 | **Compression**, **Before compression**, **After compression** | How much compression saves. |
 | **Chunks**, **Compressed chunks** | Number of chunks, and how many of them are compressed. |
 | **Earliest timestamp**, **History covered** | The oldest stored value, and the time from it to the newest. |
-| **Chunk interval**, **Compress after**, **Retention** | The [Historian parameters](historian-parameters.md), as the database holds them. |
+| **Chunk interval**, **Compress after**, **Retention** | The [Historian parameters](how-the-historian-stores-data.md#historian-parameters), as the database holds them. |
 
 The **Background Jobs** table lists TimescaleDB's compression and retention jobs, with their
 **Status**, **Job type**, **Table**, **Runs** (how often the job runs), **Last success** and
@@ -70,7 +70,7 @@ The **Data Models** page has a **Historian** column:
 | The column shows | Meaning | What to do |
 |---|---|---|
 | **add** | The data model is not stored, and it can be. | Click it to open a new Historian bridge for the data model, as in [Use the Historian](use-the-historian.md#step-3-save-the-data-model-to-the-historian). |
-| The bridge's health | A Historian bridge stores the data model. The tooltip names the bridge and the versions it stores. | Click it to open the bridge. When it is degraded, see [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md). |
+| The bridge's health | A Historian bridge stores the data model. The tooltip names the bridge and the versions it stores. | Click it to open the bridge. When it is degraded, see [Troubleshooting](troubleshooting/README.md). |
 | A dash (—) | The data model cannot be stored. Hover over it to see why, for example that the instance is offline or that the name contains a dash. | Fix the cause the tooltip names. |
 
 ### SQL query tab in the Topic Browser

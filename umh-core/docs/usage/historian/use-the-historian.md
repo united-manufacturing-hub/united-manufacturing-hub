@@ -7,7 +7,7 @@ You need:
 - A UMH Core instance connected to the Management Console.
 - A TimescaleDB database the instance can reach, for example from the
   [Getting Started Stack](../../production/deployment/docker-compose/additional-services/recommended-umh-stack.md).
-  For your own database, check the [requirements](connection.md#requirements).
+  For your own database, check the [requirements](setup.md#requirements).
 
 ## Step 1: Add the Historian plugin
 
@@ -16,7 +16,7 @@ Open your instance, go to the **Plugins** tab, click **Add plugin** and choose *
 ![The plugin list with the Historian plugin](./images/historian-select-plugin.png)
 
 Enter the connection of your database. The **Setup Guide** next to the form lists the values for the
-Getting Started Stack; the fields are described in [Connection](connection.md#connection-fields).
+Getting Started Stack; the fields are described in [Connection](setup.md#connection-fields).
 
 ![The connection form with the Historian Setup Guide](./images/historian-connection-form.png)
 
@@ -67,7 +67,7 @@ Do not deploy yet.
 4. Click **Save & Deploy**.
 
 Durations take hours, minutes or seconds, such as `168h`, not days. The values are fixed after the
-first deployment; see [Historian parameters](historian-parameters.md).
+first deployment; see [Historian parameters](how-the-historian-stores-data.md#historian-parameters).
 
 ![Advanced Settings with the notice that the table settings apply once](./images/historian-advanced-settings.png)
 
@@ -104,7 +104,7 @@ The fields are described in [Historian](README.md#overview-page).
 
 The tab shows queries for every tag, with the note **Historian database required**. They return rows
 only for stored data contracts; see
-[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
+[SQL Query Returns No Rows](troubleshooting/sql-query-returns-no-rows.md).
 
 ## Step 7: Let an AI assistant write your queries
 
