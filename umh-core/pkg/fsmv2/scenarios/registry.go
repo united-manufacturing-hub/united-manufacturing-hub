@@ -38,6 +38,8 @@ var Registry = map[string]scenariorunner.Scenario{
 
 	"historian": HistorianScenario,
 
+	"benthos-metrics": BenthosMetricsScenario,
+
 	"cpu-pressure": CPUPressureScenario,
 	"cpu-blind":    CPUBlindScenario,
 	"cpu-stall":    CPUStallScenario,

@@ -39,7 +39,10 @@ type FeatureUsage struct {
 	FSMv2MemoryCleanupEnabled bool `json:"fsmv2MemoryCleanupEnabled"`
 	// FSMv2ProtocolConverterEnabled reports whether USE_FSMV2_PROTOCOL_CONVERTER is set.
 	FSMv2ProtocolConverterEnabled bool `json:"fsmv2ProtocolConverterEnabled"`
-	FSMv2MemoryMonitorEnabled     bool `json:"fsmv2MemoryMonitorEnabled"`
+	// FSMv2BenthosMetricsEnabled reports whether USE_FSMV2_BENTHOS_METRICS is
+	// on, so the FSMv2 worker scrapes Benthos instead of the s6 process.
+	FSMv2BenthosMetricsEnabled bool `json:"fsmv2BenthosMetricsEnabled"`
+	FSMv2MemoryMonitorEnabled  bool `json:"fsmv2MemoryMonitorEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.

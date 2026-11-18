@@ -17,6 +17,8 @@ package adapter
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -116,6 +118,40 @@ func (*stubReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error
 	return persistence.ErrNotFound
 }
 
+// flipReader is a deps.StateReader whose reads alternate between a Fresh
+// observation and an error (Unknown). It lets one spec interleave the two
+// sides of the hold-last-status cache — the writes a Fresh read performs and
+// the reads an Unknown read performs — across goroutines. Safe for concurrent
+// use: only the call counter changes between reads.
+type flipReader struct {
+	obs   *fsmv2.Observation[probeStatus]
+	calls atomic.Uint64
+}
+
+func (f *flipReader) LoadObservedTyped(_ context.Context, _, _ string, result any) error {
+	if f.calls.Add(1)%2 == 0 {
+		return errors.New("transient store read boom")
+	}
+
+	if f.obs == nil {
+		return nil
+	}
+
+	out, ok := result.(*fsmv2.Observation[probeStatus])
+	if !ok {
+		return errors.New("flipReader: result is not *fsmv2.Observation[probeStatus]")
+	}
+
+	*out = *f.obs
+
+	return nil
+}
+
+// LoadDesiredTyped reports that no desired state is saved.
+func (*flipReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
+	return persistence.ErrNotFound
+}
+
 var _ = Describe("AdaptedInstance", func() {
 	// Unregistered worker type → staleAfter falls back to 1s.
 	ref := dynamicchildren.Ref{WorkerType: "adapter-probe", Name: "probe-1"}
@@ -141,6 +177,7 @@ var _ = Describe("AdaptedInstance", func() {
 				Stopped:        "stopped",
 				DesiredRunning: "running",
 			},
+			false,
 		)
 	}
 
@@ -265,6 +302,74 @@ var _ = Describe("AdaptedInstance", func() {
 		// Same concrete type as the Fresh path, not a foreign framework struct, so
 		// a consumer's type assertion holds on every tick.
 		Expect(inst.GetLastObservedState()).To(Equal(probeObserved{State: ""}))
+	})
+
+	// --- the hold-last-status cache under concurrency ---
+
+	// GetLastObservedState writes the cache on a Fresh read and reads it on
+	// an Unknown read, so concurrent control-loop reads must go through the
+	// instance mutex: without it, the interleaved cache writes and reads from
+	// several goroutines are a data race that go test -race reports. The
+	// assertion is about the cache's content — a filled cache holds "open"
+	// across the interleaved failures — because the race itself is only
+	// visible to the detector, not to the returned values.
+	It("GetLastObservedState reads and writes the hold-last-status cache safely from several goroutines", func() {
+		obs := freshObs(probeStatus{PortState: "open"})
+		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), &flipReader{obs: obs}))
+
+		inst := newAdaptedInstance(
+			ref, cfg, "running", 0, mapFresh, mapObserved, false, nil,
+			StateVocabulary{
+				Starting:       "starting",
+				Degraded:       "degraded",
+				Stopped:        "stopped",
+				DesiredRunning: "running",
+			},
+			true, // HoldLastStatusOnUnknown: the cache is read and written
+		)
+
+		// Fill the cache with one good read, so every later Unknown re-maps
+		// "open" instead of the zero status.
+		Expect(inst.GetLastObservedState()).To(Equal(probeObserved{State: "open"}))
+
+		const goroutines = 8
+		const iterations = 100
+
+		// Failures are collected and asserted in the spec goroutine: Ginkgo's
+		// matchers are not safe to call from spawned goroutines.
+		problems := make(chan string, goroutines*iterations)
+		var wg sync.WaitGroup
+		for g := 0; g < goroutines; g++ {
+			wg.Add(1)
+			go func(mixStateReads bool) {
+				defer wg.Done()
+				for n := 0; n < iterations; n++ {
+					observed, ok := inst.GetLastObservedState().(probeObserved)
+					if !ok {
+						problems <- "GetLastObservedState returned a foreign type"
+						return
+					}
+					if observed.State != "open" {
+						problems <- "a failed read must re-map the held status, got " + observed.State
+						return
+					}
+					// The fsmv1 control loop mixes GetLastObservedState with
+					// GetCurrentFSMState, which shares the same mutex; half the
+					// goroutines do the same.
+					if mixStateReads {
+						_ = inst.GetCurrentFSMState()
+					}
+				}
+			}(g%2 == 0)
+		}
+		wg.Wait()
+		close(problems)
+
+		var failures []string
+		for msg := range problems {
+			failures = append(failures, msg)
+		}
+		Expect(failures).To(BeEmpty(), "every read must re-map the held status")
 	})
 
 	// --- fsmv1 semantics ---
