@@ -174,6 +174,21 @@ var _ = Describe("HistorianFromFSMv2", func() {
 		Expect(result.Timescale.DatabaseOccupiedDiskBytes).To(Equal(readDatabaseBytes))
 	})
 
+	It("omits the database figures of a stale observation", func() {
+		observation := observationAt(time.Now().Add(-time.Minute), false)
+		observation.Status.Result.Summary = &timescalemetrics.Summary{TableNames: []string{"value_bench"}}
+		observation.Status.Result.DatabaseOccupiedDiskBytes = &readDatabaseBytes
+		useStore(&historianStore{obs: observation})
+
+		result := generator.HistorianFromFSMv2(context.Background(), log)
+
+		Expect(result).NotTo(BeNil())
+		Expect(result.Timescale.TableNames).To(BeNil(),
+			"the monitor stopped reporting, so the figures it read last may no longer hold")
+		Expect(result.Timescale.JobCount).To(BeNil())
+		Expect(result.Timescale.DatabaseOccupiedDiskBytes).To(BeZero())
+	})
+
 	It("omits the database figures the monitor has not read", func() {
 		useStore(&historianStore{obs: observationAt(time.Now(), false)})
 

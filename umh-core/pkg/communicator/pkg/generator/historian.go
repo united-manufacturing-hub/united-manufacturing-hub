@@ -85,7 +85,10 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 		Port:      result.Port,
 		Reachable: result.Reachable,
 	}
-	addDatabaseFigures(&timescale, result)
+
+	if freshness == fsmv2client.Fresh {
+		addDatabaseFigures(&timescale, result)
+	}
 
 	return &models.Historian{Timescale: timescale}
 }
