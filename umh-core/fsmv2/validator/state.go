@@ -148,55 +148,119 @@ func ValidateShutdownCheckFirst(baseDir string) []Violation {
 	return violations
 }
 
-// isStopStateFile reports whether a state file belongs to the stop path, which
-// reacts to a stop request by finishing the stop, not by starting one.
-func isStopStateFile(filename string) bool {
-	baseName := filepath.Base(filename)
+// stopBasesByStateType maps each state type declared in file to the stop
+// helper it embeds: "StoppedBase", "StoppingBase", or "" for an active state.
+func stopBasesByStateType(file *ast.File) map[string]string {
+	stopBases := map[string]string{}
 
-	return strings.Contains(baseName, "stopped") ||
-		strings.Contains(baseName, "trying_to_stop") ||
-		strings.Contains(baseName, "stopping")
-}
-
-// stopChecksIn lists which stop checks an expression reads.
-type stopChecksIn struct {
-	shouldStop bool
-	shutdown   bool
-	disabled   bool
-}
-
-func findStopChecks(expr ast.Node) stopChecksIn {
-	var found stopChecksIn
-
-	ast.Inspect(expr, func(node ast.Node) bool {
-		selExpr, ok := node.(*ast.SelectorExpr)
+	ast.Inspect(file, func(node ast.Node) bool {
+		typeSpec, ok := node.(*ast.TypeSpec)
 		if !ok {
 			return true
 		}
 
-		switch selExpr.Sel.Name {
-		case "ShouldStop":
-			found.shouldStop = true
-		case "IsShutdownRequested":
-			found.shutdown = true
-		case "IsDisabled":
-			found.disabled = true
+		structType, ok := typeSpec.Type.(*ast.StructType)
+		if !ok {
+			return true
+		}
+
+		stopBases[typeSpec.Name.Name] = ""
+
+		for _, field := range structType.Fields.List {
+			if len(field.Names) > 0 {
+				continue
+			}
+
+			embeddedType, ok := field.Type.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+
+			packageName, ok := embeddedType.X.(*ast.Ident)
+			if !ok || packageName.Name != "helpers" {
+				continue
+			}
+
+			if embeddedType.Sel.Name == "StoppedBase" || embeddedType.Sel.Name == "StoppingBase" {
+				stopBases[typeSpec.Name.Name] = embeddedType.Sel.Name
+			}
 		}
 
 		return true
 	})
 
-	return found
+	return stopBases
 }
 
-// checkShutdownCheckFirst parses a state file and checks that its first
-// conditional reacts to a shutdown and to a disable.
+// receiverTypeName returns the type name of a method receiver, without the
+// pointer, or "" for a plain function.
+func receiverTypeName(funcDecl *ast.FuncDecl) string {
+	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 {
+		return ""
+	}
+
+	receiverType := funcDecl.Recv.List[0].Type
+	if pointer, ok := receiverType.(*ast.StarExpr); ok {
+		receiverType = pointer.X
+	}
+
+	typeName, ok := receiverType.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+
+	return typeName.Name
+}
+
+// receiverName returns the variable name of a method receiver, or "" when the
+// receiver is unnamed.
+func receiverName(funcDecl *ast.FuncDecl) string {
+	if funcDecl.Recv == nil || len(funcDecl.Recv.List) == 0 || len(funcDecl.Recv.List[0].Names) == 0 {
+		return ""
+	}
+
+	return funcDecl.Recv.List[0].Names[0].Name
+}
+
+// selectorName returns the field or method name of expr when expr is a plain
+// selector such as snap.IsDisabled, and "" otherwise.
+func selectorName(expr ast.Expr) string {
+	selector, ok := ast.Unparen(expr).(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+
+	return selector.Sel.Name
+}
+
+// isStopCondition reports whether cond is snap.ShouldStop() or
+// snap.IsShutdownRequested || snap.IsDisabled, in either operand order.
+func isStopCondition(cond ast.Expr) bool {
+	cond = ast.Unparen(cond)
+
+	if call, ok := cond.(*ast.CallExpr); ok {
+		return len(call.Args) == 0 && selectorName(call.Fun) == "ShouldStop"
+	}
+
+	binary, ok := cond.(*ast.BinaryExpr)
+	if !ok || binary.Op != token.LOR {
+		return false
+	}
+
+	left := selectorName(binary.X)
+	right := selectorName(binary.Y)
+
+	if left == "IsShutdownRequested" && right == "IsDisabled" {
+		return true
+	}
+
+	return left == "IsDisabled" && right == "IsShutdownRequested"
+}
+
+// checkShutdownCheckFirst parses a state file and checks that the first
+// conditional of every active state's Next() is a stop condition.
 func checkShutdownCheckFirst(filename string) []Violation {
 	var violations []Violation
-
-	if isStopStateFile(filename) {
-		return violations
-	}
 
 	fset := token.NewFileSet()
 
@@ -205,9 +269,15 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		return violations
 	}
 
+	stopBases := stopBasesByStateType(node)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Next" {
+			return true
+		}
+
+		if stopBases[receiverTypeName(funcDecl)] != "" {
 			return true
 		}
 
@@ -228,8 +298,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 			return true
 		}
 
-		checks := findStopChecks(firstIfStmt.Cond)
-		if checks.shouldStop || (checks.shutdown && checks.disabled) {
+		if isStopCondition(firstIfStmt.Cond) {
 			return true
 		}
 
@@ -248,17 +317,13 @@ func checkShutdownCheckFirst(filename string) []Violation {
 }
 
 // ValidateStoppedStateHandlesDisable checks that every Stopped state's Next()
-// reads the disable, so a disabled worker stays in Stopped instead of starting.
+// keeps a disabled worker in Stopped instead of starting or removing it.
 func ValidateStoppedStateHandlesDisable(baseDir string) []Violation {
 	var violations []Violation
 
 	stateFiles := FindStateFiles(baseDir)
 
 	for _, file := range stateFiles {
-		if !strings.Contains(filepath.Base(file), "stopped") {
-			continue
-		}
-
 		fileViolations := checkStoppedStateHandlesDisable(file)
 		violations = append(violations, fileViolations...)
 	}
@@ -266,6 +331,67 @@ func ValidateStoppedStateHandlesDisable(baseDir string) []Violation {
 	return violations
 }
 
+// returnStatementsIn lists the return statements in node, leaving out those
+// inside function literals, which return from the literal and not from Next().
+func returnStatementsIn(node ast.Node) []*ast.ReturnStmt {
+	var returns []*ast.ReturnStmt
+
+	ast.Inspect(node, func(child ast.Node) bool {
+		if _, ok := child.(*ast.FuncLit); ok {
+			return false
+		}
+
+		if returnStmt, ok := child.(*ast.ReturnStmt); ok {
+			returns = append(returns, returnStmt)
+		}
+
+		return true
+	})
+
+	return returns
+}
+
+// returnStaysInState reports whether returnStmt returns a transition whose
+// target state is the receiver itself, such as fsmv2.Transition(s, ...).
+func returnStaysInState(returnStmt *ast.ReturnStmt, receiver string) bool {
+	if receiver == "" || len(returnStmt.Results) != 1 {
+		return false
+	}
+
+	call, ok := returnStmt.Results[0].(*ast.CallExpr)
+	if !ok || len(call.Args) == 0 {
+		return false
+	}
+
+	target, ok := call.Args[0].(*ast.Ident)
+
+	return ok && target.Name == receiver
+}
+
+// returnSignalsRemoval reports whether returnStmt passes SignalNeedsRemoval.
+func returnSignalsRemoval(returnStmt *ast.ReturnStmt) bool {
+	signalsRemoval := false
+
+	ast.Inspect(returnStmt, func(node ast.Node) bool {
+		identifier, ok := node.(*ast.Ident)
+		if ok && identifier.Name == "SignalNeedsRemoval" {
+			signalsRemoval = true
+		}
+
+		return true
+	})
+
+	return signalsRemoval
+}
+
+// isDisableBranch reports whether ifStmt is if snap.IsDisabled { ... }.
+func isDisableBranch(ifStmt *ast.IfStmt) bool {
+	return ifStmt.Init == nil && selectorName(ifStmt.Cond) == "IsDisabled"
+}
+
+// checkStoppedStateHandlesDisable checks that a Stopped state's Next() reaches
+// an if snap.IsDisabled branch before any return that leaves Stopped, and that
+// the branch stays in Stopped without signalling removal.
 func checkStoppedStateHandlesDisable(filename string) []Violation {
 	var violations []Violation
 
@@ -276,14 +402,20 @@ func checkStoppedStateHandlesDisable(filename string) []Violation {
 		return violations
 	}
 
+	stopBases := stopBasesByStateType(node)
+
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Next" || funcDecl.Body == nil {
 			return true
 		}
 
-		checks := findStopChecks(funcDecl.Body)
-		if checks.disabled || checks.shouldStop {
+		if stopBases[receiverTypeName(funcDecl)] != "StoppedBase" {
+			return true
+		}
+
+		message := stoppedDisableProblem(funcDecl.Body.List, receiverName(funcDecl))
+		if message == "" {
 			return true
 		}
 
@@ -292,13 +424,53 @@ func checkStoppedStateHandlesDisable(filename string) []Violation {
 			File:    filename,
 			Line:    pos.Line,
 			Type:    "STOPPED_IGNORES_DISABLE",
-			Message: "Stopped state's Next() never reads snap.IsDisabled",
+			Message: message,
 		})
 
 		return true
 	})
 
 	return violations
+}
+
+// stoppedDisableProblem describes why the statements of a Stopped state's
+// Next() do not keep a disabled worker in Stopped, or returns "" when they do.
+func stoppedDisableProblem(statements []ast.Stmt, receiver string) string {
+	for _, stmt := range statements {
+		ifStmt, ok := stmt.(*ast.IfStmt)
+		if ok && isDisableBranch(ifStmt) {
+			return disableBranchProblem(ifStmt, receiver)
+		}
+
+		for _, returnStmt := range returnStatementsIn(stmt) {
+			if !returnStaysInState(returnStmt, receiver) {
+				return "Stopped state's Next() can leave Stopped before it checks snap.IsDisabled"
+			}
+		}
+	}
+
+	return "Stopped state's Next() has no if snap.IsDisabled branch"
+}
+
+// disableBranchProblem describes why an if snap.IsDisabled branch does not
+// keep the worker in Stopped, or returns "" when it does.
+func disableBranchProblem(disableBranch *ast.IfStmt, receiver string) string {
+	returns := returnStatementsIn(disableBranch.Body)
+	if len(returns) == 0 {
+		return "the if snap.IsDisabled branch in a Stopped state's Next() does not return"
+	}
+
+	for _, returnStmt := range returns {
+		if !returnStaysInState(returnStmt, receiver) {
+			return "the if snap.IsDisabled branch in a Stopped state's Next() leaves Stopped"
+		}
+
+		if returnSignalsRemoval(returnStmt) {
+			return "the if snap.IsDisabled branch in a Stopped state's Next() signals removal"
+		}
+	}
+
+	return ""
 }
 
 // ValidateStateXORAction checks that Next() returns either state change OR action, not both.
