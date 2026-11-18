@@ -10,7 +10,7 @@ value of every tag; the Historian keeps the past.
 
 {% hint style="info" %}
 **Early access.** The Historian is not switched on by default. If you want to use it, get in touch
-with us on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH contact, and we will
+with us on [Discord](https://discord.com/invite/F9mqkZnm9d) or through your usual UMH contact, and we will
 show you how to get started.
 {% endhint %}
 
