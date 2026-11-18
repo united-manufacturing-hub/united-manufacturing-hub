@@ -45,7 +45,7 @@
     * [Database Schema](usage/historian/database-schema.md)
     * [Historian Sizing](usage/historian/sizing.md)
     * [Contracts, Versions and Tables](usage/historian/contracts-versions-and-tables.md)
-    * [Settings Applied Once](usage/historian/settings-applied-once.md)
+    * [Historian Parameters](usage/historian/historian-parameters.md)
     * [Precision and Datatypes](usage/historian/precision-and-datatypes.md)
 * [Management Console](management-console/README.md)
   * [Authentication](management-console/authentication/README.md)

@@ -67,7 +67,7 @@ written. Advanced Settings shows a notice about this:
 | **Table settings apply once** | Before the first deployment. The values you set apply when the tables are created. |
 | **Table settings are fixed** | After the first deployment, or once the tables exist. The four fields are read-only. |
 
-The [Settings applied once](settings-applied-once.md) page explains why.
+The [Historian parameters](historian-parameters.md) page explains why.
 
 ## What the bridge writes
 

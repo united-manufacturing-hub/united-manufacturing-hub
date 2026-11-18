@@ -68,7 +68,7 @@ The **Historian Hypertables** table has one row per table:
 | **Compression**, **Before compression**, **After compression** | How much compression saves. |
 | **Chunks**, **Compressed chunks** | Number of chunks, and how many of them are compressed. |
 | **Earliest timestamp**, **History covered** | The oldest stored value, and the time from it to the newest. |
-| **Chunk interval**, **Compress after**, **Retention** | The [settings applied once](settings-applied-once.md), as the database holds them. |
+| **Chunk interval**, **Compress after**, **Retention** | The [Historian parameters](historian-parameters.md), as the database holds them. |
 
 The **Background Jobs** table lists TimescaleDB's compression and retention jobs, with their
 **Status**, **Job type**, **Table**, **Runs** (how often the job runs), **Last success** and

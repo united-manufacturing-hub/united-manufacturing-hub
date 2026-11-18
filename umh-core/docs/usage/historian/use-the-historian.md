@@ -81,7 +81,7 @@ unit, so `7d` is rejected.
 
 These values apply only when the Historian creates the tables for the data model, before the first
 value is written. After that, the form shows them read-only. To find out why, see
-[Settings applied once](settings-applied-once.md).
+[Historian parameters](historian-parameters.md).
 
 ![Advanced Settings with the notice that the table settings apply once](./images/historian-advanced-settings.png)
 
