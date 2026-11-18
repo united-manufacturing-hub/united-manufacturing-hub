@@ -18,6 +18,7 @@ package generator
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -46,9 +47,12 @@ func (s *stubNotClearedReader) LoadObservedTyped(_ context.Context, _, id string
 		return persistence.ErrNotFound
 	}
 
+	// A nil return here would read as "stored nothing", so the count would
+	// silently drop the worker and the spec would stay green for the wrong
+	// reason. Fail loudly instead.
 	out, ok := result.(*fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]])
 	if !ok {
-		return nil
+		return fmt.Errorf("stubNotClearedReader: want *fsmv2.Observation[simple.Status[benthosmetrics.Scrape]], got %T", result)
 	}
 	*out = *obs
 
