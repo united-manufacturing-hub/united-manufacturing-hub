@@ -1,11 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Improvements
-
-- New `USE_FSMV2_BENTHOS_METRICS` flag, off by default, that lowers CPU use and disk writes, most on instances with many bridges and stand-alone flows. Without the flag, each flow of a bridge, and each stand-alone flow, has a monitor process next to it that starts 14 short-lived processes each second (curl, gzip and xxd for each of four status endpoints, plus date and sleep) and writes their output to `/data/logs`, which umh-core then reads back and parses. With the flag on, umh-core reads the same status and metrics directly over HTTP, so these monitor processes and their log files go away; the status shown in the UI stays the same. The flag accepts true, false, 1, 0, yes, no, y, n, on and off in any case; any other value logs a warning and leaves the flag off
-
 ## [0.45.2]
 
 ### Improvements

@@ -6,6 +6,9 @@ integration/umh-config
 
 .docker-cache
 
+# Pinned dev tools installed by the Makefile
+.tools/
+
 tmp/
 
 # Compiled binaries
