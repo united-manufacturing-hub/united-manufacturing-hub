@@ -29,9 +29,11 @@ import (
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	fsmv2benthosmetrics "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos_monitor"
@@ -122,6 +124,7 @@ func fsmv2BackendService(s6Name string) *BenthosService {
 	s := &BenthosService{
 		s6ServiceName:         s6Name,
 		benthosMonitorManager: fsmv2benthosmetrics.NewManager("delegation"),
+		logger:                logger.For("benthos-failures-delegation-test"),
 	}
 
 	return s
@@ -193,17 +196,23 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 
 	// Sustained read errors keep answering from the held Failures, and the
 	// freshness rule ages that answer out on its own: once the held sample
-	// is older than three scrape intervals, the read answers "no fresh
-	// Benthos metrics".
+	// is older than constants.BenthosMaxMetricsAndConfigAge, the read
+	// answers "no fresh Benthos metrics".
 	It("answers 'no fresh Benthos metrics' once held Failures age out under sustained read errors", func() {
 		setBenthosMetricsFlag("true")
 
-		// A sample two seconds old is fresh; the read after it fails, so
-		// only the hold answers.
-		reader := stubFailuresLookup(name, &benthosmetrics.Failures{}, time.Now().Add(-2*time.Second))
+		// margin is how much life the sample has left when the spec
+		// starts: enough for two reads on a loaded machine, and short
+		// enough that the spec waits it out in a second or two.
+		const margin = 2 * time.Second
+
+		// A sample with margin to spare is fresh; the read after it fails,
+		// so only the hold answers.
+		reader := stubFailuresLookup(name, &benthosmetrics.Failures{},
+			time.Now().Add(margin-constants.BenthosMaxMetricsAndConfigAge))
 
 		ok, _ := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "a two-second-old sample is fresh")
+		Expect(ok).To(BeTrue(), "a sample inside the health age is fresh")
 
 		reader.err = context.DeadlineExceeded
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
@@ -211,10 +220,10 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 		Expect(reason).To(BeEmpty())
 
 		// The read errors are sustained while the held sample ages past
-		// three scrape intervals.
-		time.Sleep(1200 * time.Millisecond)
+		// the health age.
+		time.Sleep(margin + 200*time.Millisecond)
 		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeFalse(), "held Failures older than three scrape intervals fail closed")
+		Expect(ok).To(BeFalse(), "held Failures past the health age fail closed")
 		Expect(reason).To(Equal("no fresh Benthos metrics"),
 			"the freshness rule ages the held answer out on its own")
 	})
@@ -343,25 +352,25 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "a two-second-old sample still answers with its entry")
 		Expect(reason).To(Equal("benthos reported 1 output error in the last 10 minutes"),
-			"still inside the three-scrape-interval freshness rule")
+			"still inside the health freshness rule")
 
 		aged := &benthosmetrics.Failures{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
 			}},
 		}
-		stubStoredFailuresAt(name, aged, time.Now().Add(-5*time.Second))
+		stubStoredFailuresAt(name, aged, time.Now().Add(-2*constants.BenthosMaxMetricsAndConfigAge))
 		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "an old sample fails closed")
 		Expect(reason).To(Equal("no fresh Benthos metrics"),
-			"past three scrape intervals the last error's reason is gone")
+			"past the health age the last error's reason is gone")
 	})
 
 	// With the flag on, error-free Failures older than the freshness rule
 	// also answer "no fresh Benthos metrics", not error-free.
 	It("answers 'no fresh Benthos metrics' for old error-free Failures too", func() {
 		setBenthosMetricsFlag("true")
-		stubStoredFailuresAt(name, &benthosmetrics.Failures{}, time.Now().Add(-5*time.Second))
+		stubStoredFailuresAt(name, &benthosmetrics.Failures{}, time.Now().Add(-2*constants.BenthosMaxMetricsAndConfigAge))
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "an old sample fails closed")

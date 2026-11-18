@@ -1139,10 +1139,20 @@ func (s *BenthosService) usesFsmv2Metrics() bool {
 }
 
 // fsmv2MetricsErrorFree answers IsMetricsErrorFree from the stored
-// Failures of this instance's FSMv2 worker. Failures older than
-// fsmv2benthosmetrics.StaleAfter answer "no fresh Benthos metrics";
-// fsmv2benthosmetrics.Failures explains how an unknown read still answers from
-// the last good one.
+// Failures of this instance's FSMv2 worker. Failures too old to trust
+// answer "no fresh Benthos metrics"; fsmv2benthosmetrics.Failures explains
+// how an unknown read still answers from the last good one.
+//
+// Two separate questions ask how old a scrape may be, and they get
+// different answers. fsmv2benthosmetrics.StaleAfter, three scrape
+// intervals, is the worker's liveness rule: is the scraper still running?
+// Below is the health rule: may this sample still say whether a customer's
+// flow is degraded? A scrape that lands a second or two late on a loaded
+// instance comes from a scraper that is working fine, and a flow must not
+// flip to degraded and back over it, so health allows the wider
+// constants.BenthosMaxMetricsAndConfigAge - the age at which the FSMv1
+// monitor path also stops trusting Benthos metrics (see
+// benthos_monitor.isMonitorHealthy).
 func (s *BenthosService) fsmv2MetricsErrorFree() (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), fsmv2FailuresTimeout)
 	defer cancel()
@@ -1152,7 +1162,9 @@ func (s *BenthosService) fsmv2MetricsErrorFree() (bool, string) {
 		return false, "no Benthos metrics yet"
 	}
 
-	if time.Since(failures.ObservedAt) > fsmv2benthosmetrics.StaleAfter {
+	if age := time.Since(failures.ObservedAt); age > constants.BenthosMaxMetricsAndConfigAge {
+		s.logger.Warnf("last Benthos metrics sample is %s old, reporting no fresh metrics", age)
+
 		return false, "no fresh Benthos metrics"
 	}
 
