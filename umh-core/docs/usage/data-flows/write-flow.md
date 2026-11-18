@@ -10,7 +10,7 @@ A write flow sends data from the Unified Namespace (UNS) to a system outside UMH
 
 The write flow is one part of a [bridge](bridges.md). The bridge's read flow brings data into the UNS, and its write flow takes data out.
 
-This page shows how to set up a write flow in the Management Console. It then lists which UNS topics a write flow may receive, and shows the same write flow in `config.yaml`. When the Management Console rejects your topics, or the bridge shows as degraded, see [Write Flow Topics Rejected](write-flow-topics-rejected.md).
+This page shows how to set up a write flow in the Management Console. It then lists which UNS topics a write flow may receive, and shows the same write flow in `config.yaml`. When the Management Console rejects your topics, or the bridge shows as degraded, see [Write Flow Topics Rejected](troubleshooting/write-flow-topics-rejected.md).
 
 Write flows need umh-core 0.45.0 or later. On an instance with an older version, the **Write Flow** tab is disabled, with the tooltip "This instance does not support write flows yet. Update umh-core."
 
@@ -139,7 +139,7 @@ The **Destination** card holds the settings of the system you write to, for exam
 
 ![The Write Flow card on the bridge overview page](images/write-flows-overview-page.png)
 
-If the dialog shows **Bridge deploy failed** and names your topics, see [Write Flow Topics Rejected](write-flow-topics-rejected.md). After an upgrade to umh-core 0.45.0, a write flow that ran before can stop for the same reason. The same page covers that case.
+If the dialog shows **Bridge deploy failed** and names your topics, see [Write Flow Topics Rejected](troubleshooting/write-flow-topics-rejected.md). After an upgrade to umh-core 0.45.0, a write flow that ran before can stop for the same reason. The same page covers that case.
 
 To stop only the write flow, turn off **Activate Flow** and deploy again. The read flow keeps running.
 

@@ -91,7 +91,7 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 **Implementation**: All connections to management.umh.app use TLS 1.2 or higher with modern cipher suites including AES-GCM and ChaCha20-Poly1305. Certificate validation is always on, using Go's standard library crypto packages, and all cryptographic operations follow current industry standards for secure communications.
 
-**Deployment Considerations**: Certificate validation is always enforced; there is no configuration option to disable it, and the minimum TLS version cannot be lowered. Corporate environments with TLS inspection should add their corporate CA certificate to the container's trusted certificates instead. See [Instance Stays Offline Behind a Corporate Firewall](../../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) for the steps.
+**Deployment Considerations**: Certificate validation is always enforced; there is no configuration option to disable it, and the minimum TLS version cannot be lowered. Corporate environments with TLS inspection should add their corporate CA certificate to the container's trusted certificates instead. See [Instance Stays Offline Behind a Corporate Firewall](../../../usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) for the steps.
 
 ---
 

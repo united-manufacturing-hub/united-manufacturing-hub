@@ -6,7 +6,7 @@ Write and review pages with the `writing-standards:umh-documentation` skill. It 
 
 ## Page types
 
-Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, reference or explanation. Getting Started is tutorials, Reference is reference, and Production is how-to and explanation. A usage page is the one deliberate mix, the skill's troubleshooting/feature shape, so a reader in the middle of a problem needs to open only one page. Child pages under a usage page have a single type, usually how-to or troubleshooting.
+Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, reference or explanation. Getting Started is tutorials, Reference is reference, and Production is how-to and explanation. A usage page is the one deliberate mix, the skill's troubleshooting/feature shape, so a reader in the middle of a problem needs to open only one page. Child pages under a usage page have a single type, usually how-to. A troubleshooting page, named after the symptom, goes in the section's `troubleshooting/` folder and is listed under that section's **Troubleshooting** entry in `SUMMARY.md`, not under the usage page it belongs to. The usage page links to it.
 
 ## Readers
 

@@ -27,6 +27,10 @@ redirects:
   production/corporate-firewalls: production/security/umh-core/network-configuration.md
   production/cpu-health: usage/instances/container/cpu-health/README.md
   usage/instances/cpu-health: usage/instances/container/cpu-health/README.md
-  usage/instances/cpu-health/cpu-contention-while-cores-are-free: usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md
+  usage/instances/cpu-health/cpu-contention-while-cores-are-free: usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md
+  usage/instances/container/cpu-health/cpu-contention-while-cores-are-free: usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md
+  usage/instances/communicator/instance-offline-behind-corporate-firewall: usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md
+  usage/data-flows/bridges/bridges-do-not-start: usage/data-flows/troubleshooting/bridges-do-not-start.md
+  usage/data-flows/bridges-do-not-start: usage/data-flows/troubleshooting/bridges-do-not-start.md
   usage/instances/cpu-health/enable-cpu-pressure-stats: usage/instances/container/cpu-health/enable-cpu-pressure-stats.md
   production/metrics: usage/instances/agent/metrics.md
