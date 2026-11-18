@@ -475,7 +475,7 @@ type readCache[T any] struct {
 }
 
 // refresh reads again once the interval has elapsed or the database changed. A
-// failed read keeps the previous value and waits its turn rather than retrying
+// failed read drops the previous value and waits its turn rather than retrying
 // every poll.
 func (c *readCache[T]) refresh(
 	now time.Time,
@@ -494,9 +494,14 @@ func (c *readCache[T]) refresh(
 
 	c.readAt = now
 
-	if value, ok := read(); ok {
-		c.value = &value
+	value, ok := read()
+	if !ok {
+		c.value = nil
+
+		return nil
 	}
+
+	c.value = &value
 
 	return c.value
 }

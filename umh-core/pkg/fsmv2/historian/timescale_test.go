@@ -442,6 +442,18 @@ var _ = Describe("the summary cache", func() {
 		Expect(summary.TableNames).To(ConsistOf("value_other"))
 	})
 
+	It("reports nothing when a later read of the same database fails", func() {
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
+		first, second := 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(2*time.Minute), dsnA, failsToRead(&second))
+
+		Expect(second).To(Equal(1), "the interval elapsed, so the cache read again")
+		Expect(summary).To(BeNil(),
+			"the summary read before the failed read may no longer hold, and the console would show it as current")
+	})
+
 	It("reports nothing rather than the previous database when the first read of the new one fails", func() {
 		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		first, second := 0, 0
