@@ -87,10 +87,11 @@ ORDER  BY ts;
 
 ## Queries in the SQL query tab
 
-The Topic Browser's **SQL query** tab generates the queries for one tag. It shows them only when the
-Historian stores the tag's data contract; see
-[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#the-sql-query-tab-has-no-query). The
-Management Console runs none of these queries.
+The Topic Browser's **SQL query** tab generates the queries for one tag from its topic name. It shows
+them for every time-series tag, and they return rows only once the Historian stores the tag's data
+contract; see
+[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
+The Management Console runs none of these queries.
 
 | Control | Effect |
 |---|---|

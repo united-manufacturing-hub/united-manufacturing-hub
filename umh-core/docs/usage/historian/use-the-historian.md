@@ -126,14 +126,9 @@ whether storing works. Hover over it for the details, including the versions the
 The queries return only values the Historian stored. An interval without a stored value stays empty
 and shows as a gap in Grafana.
 
-The tab shows queries only when the Historian stores the tag's data contract. Otherwise it says why:
-
-| What the tab shows | Cause | What to do |
-|---|---|---|
-| The tab is greyed out, and its tooltip says the instance has no historian. | The instance has no Historian connection. | Click **Configure Historian** and do Step 1. |
-| "This data contract isn't saved to the historian yet" | No Historian bridge stores the contract. | Click **Save to Historian** and do Steps 3 and 4. |
-| "The historian bridge for this data contract hasn't stored any data yet" | The bridge exists but has written nothing. | Click **Open historian bridge**. See [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md). |
-| The Grafana and TimescaleDB queries | The Historian stores the contract. | Copy the query. |
+The tab shows queries for every time-series tag, with the note **Historian database required**. A
+query returns rows only for a tag whose data contract the Historian stores. If it returns none, see
+[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
 
 ## Step 7: Let an AI assistant write your queries
 

@@ -60,21 +60,19 @@ version to the source topic in Code mode, for example `_pump_v[1-3]\.`. See
 [Contracts, versions and tables](contracts-versions-and-tables.md) for why a new version is not
 stored on its own.
 
-## The SQL query tab has no query
+## A query from the SQL query tab returns no rows
 
-The Topic Browser's **SQL query** tab shows queries only when the Historian stores the tag's data
-contract.
+**Cause.** The Topic Browser builds the queries from the topic name, so the **SQL query** tab shows
+them for every time-series tag, whether or not the Historian stores it. A query returns no rows when:
 
-| What the tab shows | Cause | Fix |
-|---|---|---|
-| The tab is greyed out, and its tooltip says the instance has no historian. | The instance has no Historian connection. | Click **Configure Historian** and add the connection, as in [Use the Historian](use-the-historian.md#step-1-add-the-historian-plugin). |
-| "This data contract isn't saved to the historian yet" | No Historian bridge stores the data contract. | Click **Save to Historian**, as in [Use the Historian](use-the-historian.md#step-3-save-the-data-model-to-the-historian). Without the button, the data contract cannot be saved from the Management Console, for example because its name contains a dash. |
-| "The historian bridge for this data contract hasn't stored any data yet" | The bridge exists, but its tables do not exist yet. | Click **Open historian bridge** and check its status and logs against the sections above. |
+- the instance has no Historian connection.
+- no Historian bridge stores the tag's data contract.
+- the bridge has not written any data yet.
+- the bridge does not read the tag, for example because the tag's version is not in its source topic.
 
-![The SQL query tab for a data contract that is not saved to the Historian](./images/historian-sql-query-not-saved.png)
-
-The tab counts a tag as stored when its data contract is stored. A query for a tag the bridge does not
-read, for example a tag of a version outside the source topic, returns no rows.
+**Fix.** Check the **Historian** column on the **Data Models** page. If the data model is not stored,
+save it as in [Use the Historian](use-the-historian.md#step-3-save-the-data-model-to-the-historian).
+If it is stored, open the bridge and check its status and logs against the sections above.
 
 ## Rows are dropped
 

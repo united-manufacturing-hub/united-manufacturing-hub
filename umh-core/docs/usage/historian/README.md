@@ -98,11 +98,11 @@ The **Data Models** page has a **Historian** column:
 
 ### SQL query tab in the Topic Browser
 
-For a tag of a stored data contract, the **SQL query** tab gives a ready-to-copy query for Grafana and
-one for TimescaleDB. The Management Console runs none of these queries. Otherwise the tab says why
-there is nothing to query and links to the fix; see
-[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#the-sql-query-tab-has-no-query). The
-queries are described in [Database schema](database-schema.md#queries-in-the-sql-query-tab).
+For every time-series tag, the **SQL query** tab gives a ready-to-copy query for Grafana and one for
+TimescaleDB. The Management Console builds the queries from the topic name and runs none of them. A
+query returns rows only once the Historian stores the tag's data contract; see
+[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
+The queries are described in [Database schema](database-schema.md#queries-in-the-sql-query-tab).
 
 ## Configuration
 
