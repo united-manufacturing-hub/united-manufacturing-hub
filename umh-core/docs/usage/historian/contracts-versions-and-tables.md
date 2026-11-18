@@ -24,9 +24,7 @@ would tie the tables to one version, so the name is the bare data contract: `pum
 
 The name becomes part of a PostgreSQL table identifier. An unquoted identifier allows only letters,
 digits and underscores, so a data contract with a dash in its name cannot be stored. The Management
-Console therefore rejects dashes in new data model names. The name is limited to 53 characters,
-because PostgreSQL limits identifiers to 63 characters and the table names add a prefix such as
-`attribute_`.
+Console therefore rejects dashes in new data model names.
 
 ## A bridge reads chosen versions
 
