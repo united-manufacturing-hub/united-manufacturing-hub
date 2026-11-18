@@ -252,15 +252,18 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	// counters hold no error.
 	It("asks the Failures lookup with the flag on", func() {
 		setBenthosMetricsFlag("true")
+		at := time.Now()
 		stubStoredFailures(name, &benthosmetrics.Failures{
+			ObservedAt: at,
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
+				LastErrorAt: at.Add(-4 * time.Minute),
 			}},
 		})
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "the verdict comes from the lookup")
-		Expect(reason).To(Equal("benthos reported 1 output error in the last 10 minutes"))
+		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, 4m ago"))
 	})
 
 	// With the flag on, an error-free verdict wins over cumulative error
@@ -335,23 +338,26 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	})
 
 	// With the flag on, a failed last scrape keeps answering from the last
-	// good Failures until they age past three scrape intervals: a sample two
-	// seconds old still answers with its entry's reason, one five seconds
-	// old answers "no fresh Benthos metrics", so a scrape outage does not
+	// good Failures until they age past the health freshness rule: a sample
+	// two seconds old still answers with its entry's reason, one past
+	// BenthosMaxMetricsAndConfigAge answers "no fresh Benthos metrics", so a
+	// scrape outage does not
 	// keep reporting the last error's reason.
 	It("keeps answering from the last good Failures until they age out", func() {
 		setBenthosMetricsFlag("true")
 
+		collectedAt := time.Now().Add(-2 * time.Second)
 		stored := &benthosmetrics.Failures{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
+				LastErrorAt: collectedAt.Add(-4 * time.Minute),
 			}},
 		}
 
-		stubStoredFailuresAt(name, stored, time.Now().Add(-2*time.Second))
+		stubStoredFailuresAt(name, stored, collectedAt)
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "a two-second-old sample still answers with its entry")
-		Expect(reason).To(Equal("benthos reported 1 output error in the last 10 minutes"),
+		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, 4m ago"),
 			"still inside the health freshness rule")
 
 		aged := &benthosmetrics.Failures{
