@@ -146,7 +146,7 @@ Components that run under FSMv1 report series named `umh_core_<name>`. They carr
 
 Other `component` values belong to internal layers of umh-core.
 
-Each running flow is watched by a monitoring service that reads the flow's Benthos metrics. That service reports its own state, errors and reconcile time under `component="benthos_monitor"`, one set of series per running flow.
+Each running flow is watched by a monitoring service that reads the flow's Benthos metrics. Benthos is the engine that moves the data. That service reports its own errors and reconcile time under `component="benthos_monitor"`, one set of series per running flow.
 
 With `USE_FSMV2_BENTHOS_METRICS=true`, umh-core does that work inside its own process. The `component="benthos_monitor"` series stop appearing, and `umh_fsmv2_*` series whose `hierarchy_path` ends in `(benthos_metrics)` appear in their place. Select them by matching the end of the path, for example `hierarchy_path=~".*\\(benthos_metrics\\)"`. Neither set carries the flow's own message counts. See [Environment Variables](../../../reference/environment-variables.md) for the accepted values.
 
