@@ -34,3 +34,5 @@ redirects:
   usage/data-flows/bridges-do-not-start: usage/data-flows/troubleshooting/bridges-do-not-start.md
   usage/instances/cpu-health/enable-cpu-pressure-stats: usage/instances/container/cpu-health/enable-cpu-pressure-stats.md
   production/metrics: usage/instances/agent/metrics.md
+  usage/historian/save-to-historian: usage/historian/use-the-historian.md
+  usage/historian/querying: usage/historian/database-schema.md
