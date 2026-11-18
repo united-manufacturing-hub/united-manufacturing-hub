@@ -32,7 +32,7 @@ Example: 2,000 analog values per second need about 400 GB for one year, plus abo
 
 ## Set retention
 
-By default the Historian deletes nothing, so its disk grows until it is full. With `retention` set, the Historian deletes all values older than the retention. Set `retention` in the Historian bridge before it writes its first value, because it applies only when the bridge creates its tables. To change it later, see the [Historian output reference](https://docs.umh.app/benthos-umh/output/historian#changing-compression-or-retention).
+By default the Historian deletes nothing, so its disk grows until it is full. To delete old values, set a retention in the [Historian bridge](bridge.md#settings-applied-once). The retention applies only before the bridge writes its first value.
 
 ## Reduce the volume
 
