@@ -38,29 +38,12 @@ var _ = Describe("The reason Failures.ErrorFree writes", func() {
 	}
 
 	It("names one failure in the singular", func() {
-		Expect(reason(1)).To(Equal("benthos reported 1 output error in the last 10 minutes"))
+		Expect(reason(1)).To(Equal("benthos reported 1 output error in the last 10m, just now"))
 	})
 
 	It("names more than one failure in the plural", func() {
-		Expect(reason(2)).To(Equal("benthos reported 2 output errors in the last 10 minutes"))
+		Expect(reason(2)).To(Equal("benthos reported 2 output errors in the last 10m, last one just now"))
 	})
-})
-
-var _ = Describe("Rendering a duration in words", func() {
-	// windowWords renders the user-facing duration of a reason. Below an
-	// hour it stays as it was; from an hour on a reader must not divide
-	// minutes in their head.
-	DescribeTable("windowWords",
-		func(d time.Duration, want string) {
-			Expect(windowWords(d)).To(Equal(want))
-		},
-		Entry("one minute", time.Minute, "1 minute"),
-		Entry("ten minutes", 10*time.Minute, "10 minutes"),
-		Entry("one hour", time.Hour, "1 hour"),
-		Entry("one hour and a minute", 61*time.Minute, "1 hour 1 minute"),
-		Entry("one hour and a quarter", 75*time.Minute, "1 hour 15 minutes"),
-		Entry("twelve hours", 12*time.Hour, "12 hours"),
-	)
 })
 
 var _ = Describe("The kind of a FailureEntry", func() {
@@ -74,7 +57,7 @@ var _ = Describe("The kind of a FailureEntry", func() {
 
 		ok, reason := (&Failures{Entries: []FailureEntry{e}}).ErrorFree()
 		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 1 output error in the last 10 minutes"),
+		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, just now"),
 			"not \"benthos reports 1 output error not connected\"")
 	})
 
@@ -87,4 +70,109 @@ var _ = Describe("The kind of a FailureEntry", func() {
 		Expect(ok).To(BeFalse())
 		Expect(reason).To(Equal("benthos reports 1 input not connected"))
 	})
+})
+
+var _ = Describe("The time in the reason", func() {
+	// observedT is the scrape the reason is written from. Every expectation
+	// below is exact against it, so a time taken from the wrong entry, or
+	// from the window instead of the error, reads as a different string.
+	observedT := time.Unix(1_800_000_000, 0)
+
+	errorEntry := func(count int64, lastErrorAgo time.Duration) FailureEntry {
+		return FailureEntry{
+			Signal: "output_error",
+			Label:  "output error",
+			Count:  count,
+			// Since is the first error of the run and LastErrorAt the
+			// newest. They differ here: the reason clocks the newest.
+			Since:       observedT.Add(-42 * time.Minute),
+			LastErrorAt: observedT.Add(-lastErrorAgo),
+		}
+	}
+
+	reasonFor := func(entries ...FailureEntry) string {
+		f := Failures{Entries: entries, ObservedAt: observedT}
+		ok, r := f.ErrorFree()
+		ExpectWithOffset(1, ok).To(BeFalse())
+
+		return r
+	}
+
+	It("times the newest error of the entry it names", func() {
+		// The named entry last rose 4 minutes ago. The second entry rose 7
+		// minutes ago, and the window alone would read 10m.
+		Expect(reasonFor(
+			errorEntry(3, 4*time.Minute),
+			errorEntry(1, 7*time.Minute),
+		)).To(Equal("benthos reported 3 output errors in the last 10m, last one 4m ago"))
+	})
+
+	// Both entries carry the same count, so only the time tells them apart:
+	// a reason built from the second one differs in nothing else.
+	It("takes the time from the entry it names, not from another one", func() {
+		Expect(reasonFor(
+			errorEntry(3, 7*time.Minute),
+			errorEntry(3, 4*time.Minute),
+		)).To(Equal("benthos reported 3 output errors in the last 10m, last one 7m ago"))
+	})
+
+	// One error needs no "last one": there is no other error for the time to
+	// belong to.
+	It("drops the last one clause for a single error", func() {
+		Expect(reasonFor(errorEntry(1, 4*time.Minute))).
+			To(Equal("benthos reported 1 output error in the last 10m, 4m ago"))
+	})
+
+	It("rounds the time to whole seconds", func() {
+		Expect(reasonFor(errorEntry(2, 4*time.Minute+30*time.Second+600*time.Millisecond))).
+			To(Equal("benthos reported 2 output errors in the last 10m, last one 4m31s ago"),
+				"rounded, not truncated to 4m30s")
+	})
+
+	// An error from this very scrape has no elapsed time to name, and
+	// "0s ago" reads as a stopped clock. The reset to "just now" is itself
+	// the signal that a new error landed.
+	It("reads an error from this scrape as just now", func() {
+		Expect(reasonFor(errorEntry(3, 0))).
+			To(Equal("benthos reported 3 output errors in the last 10m, last one just now"))
+		Expect(reasonFor(errorEntry(1, 999*time.Millisecond))).
+			To(Equal("benthos reported 1 output error in the last 10m, just now"))
+	})
+
+	// One clock stamps both, so this cannot happen; it lands in the same
+	// branch so that no reader ever meets a negative duration.
+	It("never prints a negative time", func() {
+		Expect(reasonFor(errorEntry(1, -time.Minute))).
+			To(Equal("benthos reported 1 output error in the last 10m, just now"))
+	})
+
+	// A connection entry lasts until Benthos reconnects, so it carries no
+	// time at all: neither the window it is not judged over, nor an error
+	// time it does not have.
+	It("leaves a connection entry without a time", func() {
+		Expect(reasonFor(FailureEntry{
+			Signal:     "input_connection",
+			Label:      "input",
+			Count:      1,
+			Since:      observedT.Add(-time.Minute),
+			Connection: true,
+		})).To(Equal("benthos reports 1 input not connected"))
+	})
+})
+
+var _ = Describe("Rendering a duration for a user", func() {
+	// short drops the trailing zero units Go leaves behind, so the window in
+	// the reason reads "10m" and not "10m0s".
+	DescribeTable("short",
+		func(d time.Duration, want string) {
+			Expect(short(d)).To(Equal(want))
+		},
+		Entry("the error window", ErrorWindow, "10m"),
+		Entry("seconds", 59*time.Second, "59s"),
+		Entry("minutes and seconds", 9*time.Minute+12*time.Second, "9m12s"),
+		Entry("whole minutes", 4*time.Minute, "4m"),
+		Entry("one hour", time.Hour, "1h"),
+		Entry("an hour and a quarter", 75*time.Minute, "1h15m"),
+		Entry("sub-second noise", 4*time.Minute+400*time.Millisecond, "4m"),
+	)
 })

@@ -99,7 +99,7 @@ var _ = Describe("The error counters", func() {
 			f := verdictAfterRise(nil, map[string]int64{name: 1})
 			ok, reason := f.ErrorFree()
 			Expect(ok).To(BeFalse(), "%s 0 -> 1", name)
-			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 1 %s in the last 10 minutes", label)))
+			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 1 %s in the last 10m, just now", label)))
 			Expect(f.Entries).To(HaveLen(1), "%s raised alone", name)
 		}
 	})
@@ -128,7 +128,7 @@ var _ = Describe("The error counters", func() {
 		Expect(f.Entries[1].Count).To(Equal(int64(2)), "the connection entry holds two inputs down")
 		ok, reason := f.ErrorFree()
 		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 1 processor error in the last 10 minutes"))
+		Expect(reason).To(Equal("benthos reported 1 processor error in the last 10m, just now"))
 	})
 
 	// Of two error counters, the one with the larger current increase is
@@ -137,7 +137,7 @@ var _ = Describe("The error counters", func() {
 		f := verdictAfterRise(nil, map[string]int64{"output_error": 1, "processor_error": 3})
 		ok, reason := f.ErrorFree()
 		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 3 processor errors in the last 10 minutes"))
+		Expect(reason).To(Equal("benthos reported 3 processor errors in the last 10m, last one just now"))
 	})
 
 	// A Benthos with no input, output or processor paths reports every
@@ -206,7 +206,7 @@ var _ = Describe("The error counters", func() {
 			Expect(sample.Failures).NotTo(BeNil(), "%s on the wire: the sample carries no Failures", name)
 			ok, reason := sample.Failures.ErrorFree()
 			Expect(ok).To(BeFalse(), "%s 0 -> 2 on the wire", name)
-			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 2 %ss in the last 10 minutes", label)))
+			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 2 %ss in the last 10m, last one just now", label)))
 		}
 	})
 

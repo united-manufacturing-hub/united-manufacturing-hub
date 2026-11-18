@@ -18,6 +18,7 @@ package benthosmetrics
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -70,8 +71,8 @@ func (e FailureEntry) IsConnection() bool {
 }
 
 // ErrorFree reports whether nothing is failing. Otherwise reason describes
-// the first entry, for example "benthos reported 3 output errors in the
-// last 10 minutes" or "benthos reports 1 input not connected".
+// the first entry, for example "benthos reported 3 output errors in the last
+// 10m, last one 4m ago" or "benthos reports 1 input not connected".
 func (f *Failures) ErrorFree() (ok bool, reason string) {
 	if len(f.Entries) == 0 {
 		return true, ""
@@ -87,7 +88,57 @@ func (f *Failures) ErrorFree() (ok bool, reason string) {
 		return false, fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
 	}
 
-	return false, fmt.Sprintf("benthos reported %d %s in the last %s", e.Count, label, windowWords(ErrorWindow))
+	// Only a count above one needs saying which error the time belongs to.
+	when := e.lastErrorAgo(f.ObservedAt)
+	if e.Count != 1 {
+		when = "last one " + when
+	}
+
+	return false, fmt.Sprintf("benthos reported %d %s in the last %s, %s",
+		e.Count, label, short(ErrorWindow), when)
+}
+
+// lastErrorAgo words how long before at this entry's error counter last
+// rose; at is the Failures' ObservedAt, the scrape they came from, so a mock
+// clock decides the wording in the specs exactly as a scrape does in
+// production. The caller's own clock is never read.
+//
+// This counts up, and the reason names ErrorWindow beside it so the number
+// has a denominator. The obvious improvement is to count down to the moment
+// the entry clears instead; that was decided against, and the record is
+// artifacts/2026-11-17_benthos-split/DECISIONS-degraded-reason-wording.md.
+// The short of it: remaining time jumps backwards the moment a new error
+// arrives, which is exactly when a user is watching, and a number that moves
+// backwards reads as a broken console. Elapsed time only grows, and its
+// reset to "just now" is the signal that a new error landed.
+//
+// Anything under a second reads "just now" rather than "0s ago". A scrape
+// stamped before the error it carries cannot happen on one clock, but it
+// lands in the same branch, so a reader never meets a negative duration.
+func (e FailureEntry) lastErrorAgo(at time.Time) string {
+	ago := at.Sub(e.LastErrorAt)
+	if ago < time.Second {
+		return "just now"
+	}
+
+	return short(ago) + " ago"
+}
+
+// short renders a duration for a user to read, rounded to whole seconds as
+// the log-window reason in pkg/fsm/benthos does and without the trailing
+// zero units Go's own String leaves behind: "10m0s" reads "10m" and
+// "1h0m0s" reads "1h", while "9m12s" is already short.
+func short(d time.Duration) string {
+	s := d.Round(time.Second).String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+
+	return s
 }
 
 // NotCleared reports whether f, as of its own ObservedAt, still holds an
@@ -106,29 +157,4 @@ func (f *Failures) NotCleared(margin time.Duration) bool {
 	}
 
 	return false
-}
-
-// windowWords renders one of the package's durations for a reason a user
-// reads: whole minutes in words below an hour — "1 minute", "10 minutes" —
-// and, from an hour on, hours with the minutes left over, "1 hour",
-// "1 hour 15 minutes", "12 hours"; never Go's "10m0s" or "75m0s".
-func windowWords(d time.Duration) string {
-	minutes := int(d / time.Minute)
-
-	words := func(n int, word string) string {
-		if n == 1 {
-			return "1 " + word
-		}
-		return fmt.Sprintf("%d %ss", n, word)
-	}
-
-	if minutes < 60 {
-		return words(minutes, "minute")
-	}
-
-	hours, rest := minutes/60, minutes%60
-	if rest == 0 {
-		return words(hours, "hour")
-	}
-	return words(hours, "hour") + " " + words(rest, "minute")
 }

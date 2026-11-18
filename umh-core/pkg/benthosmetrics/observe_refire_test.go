@@ -61,7 +61,7 @@ var _ = Describe("A signal that just cleared", func() {
 		ok, reason := tl.failures.ErrorFree()
 		Expect(ok).To(BeFalse(),
 			"one second after the release at R=T+%v, a new error", released.Sub(failureT))
-		Expect(reason).To(Equal("benthos reported 1 output error in the last 10 minutes"))
+		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, just now"))
 
 		Expect(tl.failures.Entries).To(HaveLen(1))
 		Expect(tl.failures.Entries[0].Since).To(Equal(secondAt),
