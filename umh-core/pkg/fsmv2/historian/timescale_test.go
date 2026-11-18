@@ -255,21 +255,39 @@ var _ = Describe("Poll", func() {
 	})
 })
 
-var _ = Describe("Poll on a connection fault", func() {
-	It("keeps reporting the last summary it read", func() {
-		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
-			Host:    "127.0.0.1",
-			Port:    closedPort(),
-			SSLMode: config.HistorianSSLModeDisable,
-		}}
+// freshContents is what the database holds once it answers again: different
+// figures from the ones cached before the fault, so a spec can tell them apart.
+var freshContents = timescalemetrics.FakeContents{
+	PostgresVersion:  "17.6",
+	TimescaleVersion: "2.24.0",
+	Tables: []timescalemetrics.Table{
+		{
+			Name:                 "value_fresh",
+			IsHypertable:         true,
+			OccupiedDiskBytes:    4_000_000,
+			EarliestRowTimestamp: "2026-01-01T00:00:00Z",
+			LatestRowTimestamp:   "2026-01-02T00:00:00Z",
+		},
+	},
+	DatabaseOccupiedDiskBytes: 1_200_000_000,
+}
 
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+var _ = Describe("Poll on a connection fault", func() {
+	var (
+		cfg  config.HistorianConfig
+		d    Deps
+		fake *timescalemetrics.FakeDatabase
+	)
+
+	// withFiguresCachedFor fills both caches as a successful check against cfg
+	// would have left them a moment ago.
+	withFiguresCachedFor := func(d *Deps, cfg config.HistorianConfig) {
 		dsn := cfg.WithDefaults().Timescale.ToDSN()
 		d.summary = &readCache[timescalemetrics.Summary]{
 			interval: time.Minute,
 			dsn:      dsn,
 			readAt:   time.Now(),
-			value:    &timescalemetrics.Summary{TableNames: []string{"value_bench"}, JobCount: 2},
+			value:    &timescalemetrics.Summary{TableNames: []string{"value_before_fault"}, JobCount: 2},
 		}
 		d.databaseSize = &readCache[int64]{
 			interval: time.Minute,
@@ -277,18 +295,61 @@ var _ = Describe("Poll on a connection fault", func() {
 			readAt:   time.Now(),
 			value:    &cachedDatabaseBytes,
 		}
+	}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	BeforeEach(func() {
+		cfg = config.HistorianConfig{Timescale: config.TimescaleConfig{Host: "timescale.test.invalid"}}
+		fake = timescalemetrics.NewFakeDatabase(freshContents)
+		d = newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+		d.database = fake
+		withFiguresCachedFor(&d, cfg)
+	})
 
-		status, err := Poll(ctx, d, cfg)
+	DescribeTable("reports no database figures while the database cannot be read",
+		func(fault error) {
+			fake.SetErr(fault)
+
+			status, err := Poll(context.Background(), d, cfg)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(status.Auth).NotTo(Equal(models.TimescaleAuthValid))
+			Expect(status.Summary).To(BeNil(),
+				"figures read before the fault would show in the console as current")
+			Expect(status.DatabaseOccupiedDiskBytes).To(BeNil())
+		},
+		Entry("nothing answers", timescalemetrics.ErrFakeConnectionRefused),
+		Entry("the credentials are rejected", timescalemetrics.ErrFakePasswordRejected),
+	)
+
+	It("reports no database figures when the pool cannot be built", func() {
+		unbuildable := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			SSLMode: "not-a-mode",
+		}}
+		d.database = nil
+		withFiguresCachedFor(&d, unbuildable)
+
+		status, err := Poll(context.Background(), d, unbuildable)
+
+		Expect(err).To(HaveOccurred())
+		Expect(status.Summary).To(BeNil())
+		Expect(status.DatabaseOccupiedDiskBytes).To(BeNil())
+	})
+
+	It("reads the figures again on the first successful check after the fault", func() {
+		fake.SetErr(timescalemetrics.ErrFakeConnectionRefused)
+
+		_, err := Poll(context.Background(), d, cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		fake.SetErr(nil)
+
+		status, err := Poll(context.Background(), d, cfg)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.Reachable).To(BeFalse())
-		Expect(status.Summary).NotTo(BeNil())
-		Expect(status.Summary.TableNames).To(ConsistOf("value_bench"))
-		Expect(status.Summary.JobCount).To(Equal(2))
-		Expect(status.DatabaseOccupiedDiskBytes).To(HaveValue(Equal(int64(900_000_000))))
+		Expect(status.Summary).To(HaveValue(HaveField("TableNames", ConsistOf("value_fresh"))),
+			"the figures cached before the fault are within their interval, and only a read after it shows the database as it is now")
+		Expect(status.DatabaseOccupiedDiskBytes).To(HaveValue(Equal(freshContents.DatabaseOccupiedDiskBytes)))
 	})
 })
 
@@ -391,16 +452,6 @@ var _ = Describe("the summary cache", func() {
 		Expect(second).To(Equal(1))
 		Expect(summary).To(BeNil(),
 			"keeping the last value across a failed read must not carry one database's tables onto another")
-	})
-
-	It("reports nothing as the last summary of a database it has not read", func() {
-		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
-		calls := 0
-
-		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &calls))
-
-		Expect(cache.last(dsnA)).To(HaveValue(HaveField("TableNames", ConsistOf("value_bench"))))
-		Expect(cache.last(dsnB)).To(BeNil())
 	})
 })
 

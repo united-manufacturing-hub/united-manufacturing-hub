@@ -132,13 +132,15 @@ var HistorianScenario = scenariorunner.Scenario{
 		env.Step("the database stops answering")
 		fake.SetErr(timescalemetrics.ErrFakeConnectionRefused)
 
-		if err := waitForHistorian("store shows degraded and unreachable",
+		if err := waitForHistorian("store shows degraded and unreachable, without the figures read before",
 			func(obs historianObservation) bool {
 				return obs.State == "degraded" &&
 					obs.Status.Degraded &&
 					!obs.Status.Result.Reachable &&
 					obs.Status.Result.Auth == models.TimescaleAuthUnknown &&
-					obs.Status.Reason == "TimescaleDB is unreachable"
+					obs.Status.Reason == "TimescaleDB is unreachable" &&
+					obs.Status.Result.Summary == nil &&
+					obs.Status.Result.DatabaseOccupiedDiskBytes == nil
 			}); err != nil {
 			return err
 		}
@@ -159,13 +161,14 @@ var HistorianScenario = scenariorunner.Scenario{
 		env.Step("the database accepts the password again; the monitor returns to running with reason \"connected to TimescaleDB\"")
 		fake.SetErr(nil)
 
-		return waitForHistorian("store shows running again",
+		return waitForHistorian("store shows running again, with the figures read again",
 			func(obs historianObservation) bool {
 				return obs.State == "running" &&
 					!obs.Status.Degraded &&
 					obs.Status.Result.Reachable &&
 					obs.Status.Result.Auth == models.TimescaleAuthValid &&
-					obs.Status.Reason == "connected to TimescaleDB"
+					obs.Status.Reason == "connected to TimescaleDB" &&
+					hasScenarioFigures(obs)
 			})
 	},
 }

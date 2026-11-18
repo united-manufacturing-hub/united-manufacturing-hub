@@ -100,7 +100,8 @@ type TimescaleStatus struct {
 	// timeout fault) and when the connection pool could not be built.
 	Reachable bool `json:"reachable"`
 	// Summary and DatabaseOccupiedDiskBytes are read on a slower schedule than the
-	// connection check. Each is nil until its first read succeeds.
+	// connection check. Each is nil until a read succeeds, and nil again after a
+	// failed connection check.
 	Summary                   *timescalemetrics.Summary `json:"summary,omitempty"`
 	DatabaseOccupiedDiskBytes *int64                    `json:"databaseOccupiedDiskBytes,omitempty"`
 }
@@ -309,13 +310,12 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Bool("reachable", false),
 			deps.Err(err))
 		d.report(ctx, tagPoolFailed, host, err)
+		d.forgetDatabaseFigures()
 
 		return TimescaleStatus{
-			Host:                      host,
-			Port:                      port,
-			Auth:                      models.TimescaleAuthUnknown,
-			Summary:                   d.summary.last(dsn),
-			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+			Host: host,
+			Port: port,
+			Auth: models.TimescaleAuthUnknown,
 		}, fmt.Errorf("timescale pool: %w", err)
 	}
 
@@ -325,11 +325,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	if err := db.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return TimescaleStatus{
-				Host:                      host,
-				Port:                      port,
-				Auth:                      models.TimescaleAuthUnknown,
-				Summary:                   d.summary.last(dsn),
-				DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+				Host: host,
+				Port: port,
+				Auth: models.TimescaleAuthUnknown,
 			}, fmt.Errorf("timescale query %s cancelled: %w", host, ctx.Err())
 		}
 
@@ -352,13 +350,13 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			d.report(ctx, tagQueryFailed, host, err)
 		}
 
+		d.forgetDatabaseFigures()
+
 		return TimescaleStatus{
-			Host:                      host,
-			Port:                      port,
-			Reachable:                 reachable,
-			Auth:                      auth,
-			Summary:                   d.summary.last(dsn),
-			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+			Host:      host,
+			Port:      port,
+			Reachable: reachable,
+			Auth:      auth,
 		}, nil
 	}
 
@@ -380,6 +378,14 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, db, host)),
 		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, db, host)),
 	}, nil
+}
+
+// forgetDatabaseFigures drops the cached figures after a failed connection
+// check, so the first successful check after it reads them again instead of
+// sending figures from before the fault.
+func (d Deps) forgetDatabaseFigures() {
+	d.summary.clear()
+	d.databaseSize.clear()
 }
 
 // The error is logged and reported, not returned: a summary that cannot be
@@ -495,14 +501,10 @@ func (c *readCache[T]) refresh(
 	return c.value
 }
 
-// The framework persists a failed Poll's status too, so it carries the last value.
-func (c *readCache[T]) last(dsn string) *T {
+func (c *readCache[T]) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if dsn != c.dsn {
-		return nil
-	}
-
-	return c.value
+	c.readAt = time.Time{}
+	c.value = nil
 }
