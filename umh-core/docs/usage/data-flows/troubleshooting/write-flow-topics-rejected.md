@@ -33,7 +33,7 @@ Each problem quotes the topic as written. Some problems end with `available:` an
 - **cannot match any topic, so the write flow would receive no messages** — the pattern can never match. Check it for typos.
 - **is not a valid regular expression** — the pattern does not parse. The message ends with the syntax error.
 
-For the topic of a Historian bridge, see [Save data to the Historian](../../historian/save-to-historian.md).
+For the topic of a Historian bridge, see [Historian bridge](../../historian/bridge.md).
 
 ## What to do
 

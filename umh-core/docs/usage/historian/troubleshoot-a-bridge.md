@@ -18,33 +18,15 @@ first write. It stops with an error that names the cause:
 fix the cause the error names; the [requirements](connection.md#requirements) list what the database
 needs.
 
-## The bridge stopped saving after updating umh-core
+## The bridge is degraded or does not deploy because of its topics
 
-**Cause.** This happens after an update to umh-core 0.45.0 or newer. Historian bridges created before umh-core 0.45.0 read the whole Unified Namespace.
-umh-core 0.45.0 rejects such source topics, so the write flow of these bridges does not start. The
-bridge shows degraded, and its status names each rejected topic and the reason.
+**Cause.** umh-core rejected the bridge's source topics. Historian bridges created before umh-core
+0.45.0 read the whole Unified Namespace, which umh-core 0.45.0 no longer accepts. Their write flow
+does not start, and the bridge shows degraded.
 
-**Fix.** Open the bridge. Its topic opens in Code mode. Pick one data contract in the topic table
-and save the bridge. The rules for source topics are in
-[Which topics the bridge reads](bridge.md#which-topics-the-bridge-reads).
-
-{% hint style="warning" %}
-**Don't copy the topics umh-core suggests.** The degraded status and the contract error in the logs
-each suggest a topic. The topic in the status may name a different data contract than this bridge
-stores, and matches only data published at the bridge location itself. The topic in the logs is
-rejected when you deploy. Write the source topic from the pattern in
-[Which topics the bridge reads](bridge.md#which-topics-the-bridge-reads), with this bridge's location,
-data contract and versions.
-{% endhint %}
-
-## The bridge is degraded and the output logs nothing
-
-**Cause.** umh-core rejected the bridge's source topics. The bridge stays connected, but its write
-flow does not start, so the output logs nothing. A topic is rejected when it reads outside the bridge
-location, names no single data contract, or matches versions that are not declared.
-
-**Fix.** The bridge status names the rejected topics. Correct them as in
-[Which topics the bridge reads](bridge.md#which-topics-the-bridge-reads).
+**Fix.** Open the bridge and pick one data contract in the topic table, then save it. For a topic
+written in Code mode or in `config.yaml`, follow
+[Write Flow Topics Rejected](../data-flows/troubleshooting/write-flow-topics-rejected.md).
 
 ## The bridge is running, but the data of its data contract is lost
 

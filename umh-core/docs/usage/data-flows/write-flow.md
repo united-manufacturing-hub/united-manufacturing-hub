@@ -44,7 +44,7 @@ flowchart LR
     W3 --> MES
 ```
 
-The read flow and the write flow of a bridge start, stop and report health separately. A bridge can also have only a write flow. A [Historian bridge](../historian/save-to-historian.md) is a bridge of that kind.
+The read flow and the write flow of a bridge start, stop and report health separately. A bridge can also have only a write flow. A [Historian bridge](../historian/bridge.md) is a bridge of that kind.
 
 A write flow has exactly one processing step. To call an MES and publish its answer back into the UNS, use a [stand-alone flow](stand-alone-flow.md).
 

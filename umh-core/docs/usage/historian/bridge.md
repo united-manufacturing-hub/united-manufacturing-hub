@@ -8,56 +8,15 @@ The output plugin behind it is described in the
 
 ## Which topics the bridge reads
 
-The bridge reads only the topics listed under `topics` in its write flow's source. In the Management
-Console, a Historian bridge has one source topic, which the topic table builds for you. A topic the
-table cannot build, such as a version range, opens in Code mode, where you write it yourself. A
-bridge edited outside the Management Console, for example in `config.yaml`, may have several source
-topics.
-
-Each source topic is a regular expression. It must start with `^`, so it matches from the beginning
-of the UNS topic name. Anything may follow the data contract, so a source topic selects every topic
-that begins with what it matches. umh-core checks the source topics of every write flow. For a
-Historian bridge, each source topic:
-
-- starts with `^umh\.v1\.` followed by the bridge location, so the bridge reads data at or beneath
-  its own location only.
-- names one data contract: `_historian`, or a versioned contract such as `_pump_v1`. Each data model
-  you add in the Management Console declares a versioned contract, and each new version of the model
-  declares the next one.
-- matches only declared versions of that data contract. `_pump_v[1-2]` and `_pump_v(?:1|2)` are
-  accepted while `_pump_v1` and `_pump_v2` are declared. `_pump_v\d+` and `_pump_v[0-9]` are
-  rejected, because they also match versions that are not declared.
-
-For a bridge at `acme.cologne` that stores `_pump_v1` and `_pump_v2`, at the location or any level
-beneath it:
-
-```
-^umh\.v1\.acme\.cologne\.(?:[^._][^.]*\.)*_pump_v[1-2]\.
-```
-
-You can write `{{ .location_path }}` in place of `acme\.cologne`. umh-core escapes it for you, and
-the topic follows the bridge if its location changes. The variable does not end in a dot, so you
-still write the `\.` after it:
-
-```
-^umh\.v1\.{{ .location_path }}\.(?:[^._][^.]*\.)*_pump_v[1-2]\.
-```
-
-For the data contract `historian`, the topic ends in `_historian\.` with no version. To store data
-from several sites in one bridge, place the bridge at a location above them, up to the enterprise
-itself, such as `acme`.
-
-When you pick a data contract in the topic table, the source topic lists its latest declared
-version. It does not follow later versions; see
+A Historian bridge reads one data contract at its own location and the levels below it. In the
+Management Console, the topic table builds its source topic and picks the latest declared version
+of the data contract. The source topic does not follow later versions; see
 [Contracts, versions and tables](contracts-versions-and-tables.md).
 
-Deploying or editing a bridge fails with an error that names the topic if a source topic breaks one
-of these rules. Examples are a topic outside the bridge location, such as `^umh\.v1\..*`, and one
-that names no single data contract, such as `^umh\.v1\.acme\.cologne\..*`. Changing a location in a
-way that would break an existing bridge's topics fails the same way.
-
-A bridge whose topics were saved before umh-core 0.45.0 keeps its config, but its write flow does
-not start. See [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#the-bridge-stopped-saving-after-updating-umh-core).
+The source topic follows the topic rules of every write flow, described in
+[Topic validation](../data-flows/write-flow.md#topic-validation). A deploy that breaks them fails
+with a message that names the topic; see
+[Write Flow Topics Rejected](../data-flows/troubleshooting/write-flow-topics-rejected.md).
 
 ## Data contract name
 
