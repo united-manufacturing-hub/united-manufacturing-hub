@@ -247,6 +247,60 @@ func checkShutdownCheckFirst(filename string) []Violation {
 	return violations
 }
 
+// ValidateStoppedStateHandlesDisable checks that every Stopped state's Next()
+// reads the disable, so a disabled worker stays in Stopped instead of starting.
+func ValidateStoppedStateHandlesDisable(baseDir string) []Violation {
+	var violations []Violation
+
+	stateFiles := FindStateFiles(baseDir)
+
+	for _, file := range stateFiles {
+		if !strings.Contains(filepath.Base(file), "stopped") {
+			continue
+		}
+
+		fileViolations := checkStoppedStateHandlesDisable(file)
+		violations = append(violations, fileViolations...)
+	}
+
+	return violations
+}
+
+func checkStoppedStateHandlesDisable(filename string) []Violation {
+	var violations []Violation
+
+	fset := token.NewFileSet()
+
+	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return violations
+	}
+
+	ast.Inspect(node, func(n ast.Node) bool {
+		funcDecl, ok := n.(*ast.FuncDecl)
+		if !ok || funcDecl.Name.Name != "Next" || funcDecl.Body == nil {
+			return true
+		}
+
+		checks := findStopChecks(funcDecl.Body)
+		if checks.disabled || checks.shouldStop {
+			return true
+		}
+
+		pos := fset.Position(funcDecl.Pos())
+		violations = append(violations, Violation{
+			File:    filename,
+			Line:    pos.Line,
+			Type:    "STOPPED_IGNORES_DISABLE",
+			Message: "Stopped state's Next() never reads snap.IsDisabled",
+		})
+
+		return true
+	})
+
+	return violations
+}
+
 // ValidateStateXORAction checks that Next() returns either state change OR action, not both.
 func ValidateStateXORAction(baseDir string) []Violation {
 	var violations []Violation

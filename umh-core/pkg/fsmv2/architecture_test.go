@@ -97,6 +97,17 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
+		Describe("Stopped State Handles Disable (Invariant: Disabled Workers Stay Stopped)", func() {
+			It("should stay in Stopped while the worker is disabled", func() {
+				violations := validator.ValidateStoppedStateHandlesDisable(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Stopped State Disable Violations", violations, "STOPPED_IGNORES_DISABLE")
+					Fail(message)
+				}
+			})
+		})
+
 		Describe("State Change XOR Action (Invariant: Deterministic Transitions)", func() {
 			It("should return either a new state or an action, never both", func() {
 				violations := validator.ValidateStateXORAction(getFsmv2Dir())

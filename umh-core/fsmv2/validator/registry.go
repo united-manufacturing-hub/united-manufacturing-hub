@@ -96,7 +96,7 @@ deterministic. Dependencies are for actions and observation, not derivation.`,
 WHY: A worker stops for two reasons: a shutdown and a disable by its parent.
 ShouldStop() is true for both. A state that checks only IsShutdownRequested
 keeps running, and keeps its children running, after its parent disabled it.
-Stopped and stopping state files are exempt.`,
+Stopped and stopping state files are exempt; STOPPED_IGNORES_DISABLE covers Stopped.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
     if snap.ShouldStop() {  // MUST be first conditional
@@ -105,6 +105,25 @@ Stopped and stopping state files are exempt.`,
     // Then other logic...
 }`,
 		ReferenceFile: "example-child/state/state_connected.go:30",
+	},
+	"STOPPED_IGNORES_DISABLE": {
+		Name: "Stopped State Handles Disable",
+		Why: `Every Stopped state's Next() must stay in Stopped while snap.IsDisabled is set.
+WHY: A parent pauses a child by disabling it. A Stopped state that checks only
+IsShutdownRequested moves a disabled worker to its starting state, whose
+ShouldStop() check sends it back to Stopped, so the worker switches between
+the two states on every tick.`,
+		CorrectCode: `func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
+    snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
+    if snap.IsShutdownRequested {
+        return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "shutdown requested", nil)
+    }
+    if snap.IsDisabled {
+        return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped", nil)
+    }
+    return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "starting", nil)
+}`,
+		ReferenceFile: "example-child/state/state_stopped.go",
 	},
 	"STATE_AND_ACTION": {
 		Name: "State Change XOR Action",

@@ -350,7 +350,7 @@
 // the worker. Stopped states check snap.IsShutdownRequested first and return
 // SignalNeedsRemoval, then check snap.IsDisabled and stay stopped. The
 // architecture test rejects an active state whose first conditional is not
-// snap.ShouldStop().
+// snap.ShouldStop(), and a Stopped state that never reads snap.IsDisabled.
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies

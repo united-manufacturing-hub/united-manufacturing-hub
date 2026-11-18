@@ -50,6 +50,36 @@ func (s *RunningState) Next(snapAny any) any {
 }
 `
 
+const stoppedStateCheckingOnlyShutdown = `package state
+
+func (s *StoppedState) Next(snapAny any) any {
+	snap := convert(snapAny)
+
+	if snap.IsShutdownRequested {
+		return remove()
+	}
+
+	return start()
+}
+`
+
+const stoppedStateCheckingDisable = `package state
+
+func (s *StoppedState) Next(snapAny any) any {
+	snap := convert(snapAny)
+
+	if snap.IsShutdownRequested {
+		return remove()
+	}
+
+	if snap.IsDisabled {
+		return s
+	}
+
+	return start()
+}
+`
+
 // writeStateFile writes source as workers/demo/state/<fileName> under a new
 // temporary base directory and returns that base directory.
 func writeStateFile(fileName string, source string) string {
@@ -75,5 +105,28 @@ var _ = Describe("ValidateShutdownCheckFirst", func() {
 		baseDir := writeStateFile("state_running.go", runningStateCheckingShouldStop)
 
 		Expect(validator.ValidateShutdownCheckFirst(baseDir)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("ValidateStoppedStateHandlesDisable", func() {
+	It("rejects a Stopped state that never reads the disable", func() {
+		baseDir := writeStateFile("state_stopped.go", stoppedStateCheckingOnlyShutdown)
+
+		violations := validator.ValidateStoppedStateHandlesDisable(baseDir)
+
+		Expect(violations).To(HaveLen(1))
+		Expect(violations[0].Type).To(Equal("STOPPED_IGNORES_DISABLE"))
+	})
+
+	It("accepts a Stopped state that stays stopped while disabled", func() {
+		baseDir := writeStateFile("state_stopped.go", stoppedStateCheckingDisable)
+
+		Expect(validator.ValidateStoppedStateHandlesDisable(baseDir)).To(BeEmpty())
+	})
+
+	It("ignores active states", func() {
+		baseDir := writeStateFile("state_running.go", runningStateCheckingOnlyShutdown)
+
+		Expect(validator.ValidateStoppedStateHandlesDisable(baseDir)).To(BeEmpty())
 	})
 })
