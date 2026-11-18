@@ -61,6 +61,32 @@ var _ = Describe("StoppedState", func() {
 			})
 		})
 
+		Context("when the parent disabled the worker", func() {
+			It("should stay in stopped state without signalling removal", func() {
+				snap := fsmv2.Snapshot{
+					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
+					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+						CollectedAt: time.Now(),
+					},
+					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+						BaseDesiredState: fsmv2config.BaseDesiredState{
+							Disabled: true,
+						},
+						Config: snapshot.PersistenceConfig{
+							CompactionInterval:  5 * time.Minute,
+							RetentionWindow:     24 * time.Hour,
+							MaintenanceInterval: 7 * 24 * time.Hour,
+						},
+					},
+				}
+
+				result := stateObj.Next(snap)
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNone))
+				Expect(result.Action).To(BeNil())
+			})
+		})
+
 		Context("when shutdown is not requested", func() {
 			It("should transition to TryingToStartState", func() {
 				snap := fsmv2.Snapshot{
