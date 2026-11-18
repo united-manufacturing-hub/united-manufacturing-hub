@@ -67,21 +67,44 @@ func GetAsBool(key string, required bool, defaultValue bool) (bool, error) {
 		return false, err
 	}
 
-	// Convert to lowercase for easier comparison
-	valueLower := strings.ToLower(value)
+	parsed, ok := parseBool(value)
+	if ok {
+		return parsed, nil
+	}
 
-	// Check for various true/false representations
-	switch valueLower {
-	case "true", "1", "yes", "y", "on":
-		return true, nil
-	case "false", "0", "no", "n", "off":
-		return false, nil
-	default:
-		if required {
-			return false, fmt.Errorf("environment variable %s must be a boolean value", key)
-		}
+	if required {
+		return false, fmt.Errorf("environment variable %s must be a boolean value", key)
+	}
 
+	return defaultValue, nil
+}
+
+// LookupBool reads key as a boolean. Unset returns defaultValue. A value that
+// is not a boolean returns defaultValue and an error naming key and the value.
+func LookupBool(key string, defaultValue bool) (bool, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok || raw == "" {
 		return defaultValue, nil
+	}
+
+	value, ok := parseBool(raw)
+	if !ok {
+		return defaultValue, fmt.Errorf("environment variable %s must be a boolean value (got %q)", key, raw)
+	}
+
+	return value, nil
+}
+
+// parseBool reads raw as a boolean in any case: true, 1, yes, y and on are
+// true; false, 0, no, n and off are false. ok is false for anything else.
+func parseBool(raw string) (value bool, ok bool) {
+	switch strings.ToLower(raw) {
+	case "true", "1", "yes", "y", "on":
+		return true, true
+	case "false", "0", "no", "n", "off":
+		return false, true
+	default:
+		return false, false
 	}
 }
 
