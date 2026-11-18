@@ -1,22 +1,18 @@
 # Historian
 
-The Historian stores the history of your machine data, so you can see what a machine did last night,
-last week or during the last batch. It keeps the values from the Unified Namespace in a TimescaleDB
-database, a PostgreSQL database built for time series. You read them back with SQL and build Grafana
-dashboards on them.
+The Historian stores the values of the Unified Namespace in TimescaleDB, a PostgreSQL database for
+time series, so you can query them with SQL and chart them in Grafana. You connect the database once
+per instance, then save each data model you want to keep. Each saved data model gets its own
+Historian bridge.
 
-You connect the database once per instance. Then you choose which data models to store. Each stored
-data model gets its own Historian bridge, which writes that model's data contract into the database.
-Data models you do not choose are not stored, so the disk holds only data someone needs.
-
-To set it up step by step, follow [Use the Historian](use-the-historian.md).
+To set it up, follow [Use the Historian](use-the-historian.md).
 
 ## In the Management Console
 
 ### Plugins tab
 
-The instance's **Plugins** tab shows the Historian card once a connection is configured. It shows
-the database, host, port, user and latency, and the health of the connection.
+Once a connection is configured, the **Plugins** tab shows the Historian card with the connection
+settings, the latency and the connection health.
 
 - **Add plugin** → **Historian** opens the connection form. The fields are described in
   [Connection](connection.md#connection-fields).
@@ -26,8 +22,7 @@ the database, host, port, user and latency, and the health of the connection.
 
 ### Overview page
 
-The **Database connection** card shows the connection settings and three fields that the instance
-updates once per second:
+The **Database connection** card shows the connection settings and three fields, updated every second:
 
 | Field | Meaning | What to do |
 |---|---|---|
@@ -35,8 +30,7 @@ updates once per second:
 | **Auth** | Whether the server accepted the user, password and database name. `Unknown` when the database did not answer. | When the login is rejected, click **Edit Config** and correct the user, password or database. |
 | **Latency** | Round-trip time of the check query. | |
 
-The **Database status** card shows what the database holds. It appears once the connection is
-configured and the instance reports its status.
+The **Database status** card shows what the database holds:
 
 | Field | Meaning |
 |---|---|
@@ -47,19 +41,13 @@ configured and the instance reports its status.
 | **Historian growth** | Disk the Historian uses per day, from its disk use and the history covered. |
 | **Historian failing jobs** | Background jobs whose last run failed. The tooltip shows the total number of jobs. |
 
-When **Historian growth** fills the disk sooner than planned, set a retention for the next data
-model, or reduce the volume; see [Historian Sizing](sizing.md). When a job fails, open the Monitor
-page.
-
-**Monitor database** opens the Monitor page. **Database schema** opens the
-[Database Schema page](database-schema.md#database-schema-page).
+If the disk fills faster than planned, see [Historian Sizing](sizing.md). **Monitor database** opens
+the Monitor page. **Database schema** opens the [Database Schema page](database-schema.md#database-schema-page).
 
 ### Monitor page
 
-The Monitor page ("Historian monitoring") reads its figures from the database when it opens, and
-again when you refresh it.
-
-The **Historian Hypertables** table has one row per table:
+The Monitor page reads its figures when it opens and when you refresh it. The **Historian
+Hypertables** table has one row per table:
 
 | Column | Meaning |
 |---|---|
@@ -72,8 +60,8 @@ The **Historian Hypertables** table has one row per table:
 
 The **Background Jobs** table lists TimescaleDB's compression and retention jobs, with their
 **Status**, **Job type**, **Table**, **Runs** (how often the job runs), **Last success** and
-**Next run**. A failing job means that data is not compressed or old data is not deleted, so the disk
-fills faster. The job's error is in the TimescaleDB logs.
+**Next run**. A failing job leaves data uncompressed or undeleted. Its error is in the TimescaleDB
+logs.
 
 ### Historian column on Data Models
 
@@ -87,16 +75,13 @@ The **Data Models** page has a **Historian** column:
 
 ### SQL query tab in the Topic Browser
 
-For every time-series tag, the **SQL query** tab gives a ready-to-copy query for Grafana and one for
-TimescaleDB. The Management Console builds the queries from the topic name and runs none of them. A
-query returns rows only once the Historian stores the tag's data contract; see
-[Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
-The queries are described in [Database schema](database-schema.md#queries-in-the-sql-query-tab).
+For every time-series tag, the **SQL query** tab gives a query for Grafana and one for TimescaleDB.
+The queries return rows once the Historian stores the tag's data contract; see
+[Database schema](database-schema.md#queries-in-the-sql-query-tab).
 
 ## Configuration
 
-The connection is the `historian:` section of the instance's `config.yaml`. The Management Console
-writes it when you save the connection form.
+The connection form writes the `historian:` section of `config.yaml`:
 
 ```yaml
 historian:
@@ -119,19 +104,16 @@ historian:
 | `timescale.sslmode` | `require` | `require`, `disable` or `verify-full`. The Management Console offers only `require` and `disable`. |
 | `timescale.sslrootcert`, `timescale.sslcert`, `timescale.sslkey` | empty | Certificate paths inside the container. Allowed only with `sslmode: verify-full`. |
 
-A change needs no restart and no redeploy. umh-core reloads `config.yaml` and renders every Historian
-bridge again with the new values. Removing the `historian:` section stops the Historian bridges; see
-[Connection](connection.md#editing-and-removing).
+A change applies without a restart: umh-core reloads `config.yaml` and restarts every Historian bridge
+with the new values. Removing the section stops the Historian bridges.
 
 ## Metrics
 
-umh-core checks the Historian connection once per second. The check exists only while `config.yaml`
-has a `historian:` section. It runs on FSMv2 (see
-[Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component))
-and reports the standard [FSMv2 series](../instances/agent/metrics.md#fsmv2-metrics). Its
-`hierarchy_path` ends in `timescale-001(historian-timescale)`. The state is `running` while the check
-succeeds and `degraded` while it fails, for example when TimescaleDB is unreachable or rejects the
-login. To read the metrics, see [Read the metrics](../instances/agent/metrics.md#read-the-metrics).
+While `config.yaml` has a `historian:` section, umh-core checks the connection every second. The
+check runs on FSMv2 and reports the standard [FSMv2 series](../instances/agent/metrics.md#fsmv2-metrics),
+with a `hierarchy_path` ending in `timescale-001(historian-timescale)`. Its state is `running` while
+the check succeeds and `degraded` while it fails. See
+[Read the metrics](../instances/agent/metrics.md#read-the-metrics).
 
 This alert fires when the connection has been down for more than a minute:
 
@@ -139,37 +121,29 @@ This alert fires when the connection has been down for more than a minute:
 umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(historian-timescale\\)", state="degraded"} > 60
 ```
 
-A rising `umh_fsmv2_state_transitions_total` for this path shows a connection that keeps dropping.
-Both state series are defined in
+A rising `umh_fsmv2_state_transitions_total` for this path means the connection keeps dropping. Both
+series are defined in
 [`fsmv2/supervisor/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/supervisor/metrics/metrics.go).
-The database size and the job details appear only in the Management Console.
-
-Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
+Historian bridges report like any other bridge; see [Bridges: Metrics](../data-flows/bridges.md#metrics).
 
 ### Historian output counters
 
-The Historian output in each bridge counts its own writes, such as `historian_value_rows_written`,
-`historian_rows_poisoned` and `messages_dropped`. The bridge's Benthos process keeps these counters.
-Neither port 8080 nor the Management Console's Metrics view shows them. The output reference's
-[Metrics](https://docs.umh.app/benthos-umh/output/historian#metrics) section lists them.
+Each bridge's Historian output counts its writes, for example `historian_value_rows_written`,
+`historian_rows_poisoned` and `messages_dropped`. These counters stay in the bridge's Benthos process
+and do not appear on port 8080 or in the Management Console. The output reference lists them under
+[Metrics](https://docs.umh.app/benthos-umh/output/historian#metrics).
 
 ## Details for IT
 
-**The connection check.** The check is one `SELECT 1` over one pooled connection. It shows that the
-database is reachable and the login works. It does not show whether a bridge writes. Each bridge's
-health, throughput and errors are in the **Data Flows** bridge list. Connections are reopened every
-five minutes, so a password changed on the server shows as an authentication failure within five
-minutes.
+The connection check is one `SELECT 1` over a pooled connection. It shows that the database answers
+and the login works, not that a bridge writes; bridge health is in the **Data Flows** list.
+Connections are reopened every five minutes, so a password changed on the server shows as an
+authentication failure within five minutes.
 
-**Bridge health follows the connection.** A bridge counts as a Historian bridge when its write flow's
-destination protocol is `historian`. umh-core checks its health against the instance's connection
-instead of a host and port entered on the bridge. When the database is unreachable, every Historian
-bridge on the instance shows it.
+A bridge whose write flow has the destination protocol `historian` is a Historian bridge. umh-core
+checks its health against the instance's connection, so an unreachable database degrades every
+Historian bridge on the instance.
 
-**Template variables.** Bridge templates read the connection through the reserved scope
-`{{ .historian.timescale.* }}`: `host`, `port`, `database`, `username`, `password`, `sslmode`,
-`sslrootcert`, `sslcert` and `sslkey`. A bridge variable named `historian` is ignored, because
-umh-core reserves the name. See [Variables](../../reference/variables.md).
-
-**Database requirements.** PostgreSQL 16 or newer with the `timescaledb` and `ltree` extensions, and a
-login role created before the first bridge starts. See [Connection](connection.md#requirements).
+Bridge templates read the connection through the reserved variable `{{ .historian.timescale.* }}`
+with the keys `host`, `port`, `database`, `username`, `password`, `sslmode`, `sslrootcert`, `sslcert`
+and `sslkey`. See [Variables](../../reference/variables.md).

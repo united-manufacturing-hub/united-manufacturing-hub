@@ -1,14 +1,10 @@
 # Database schema
 
-This page describes the tables the Historian writes in TimescaleDB, the queries the Topic Browser
-generates, and the Database Schema page in the Management Console. It is for readers who write their
-own SQL or check a generated query. The output reference's
-[Reading the data](https://docs.umh.app/benthos-umh/output/historian#reading-the-data) section has
-more example queries and the pitfalls of hand-written queries.
+The tables the Historian writes, and the queries the Topic Browser generates. More example queries are
+in the output reference under
+[Reading the data](https://docs.umh.app/benthos-umh/output/historian#reading-the-data).
 
 ## Tables
-
-Values are stored per data contract. Tag identity is shared across data contracts.
 
 ```mermaid
 erDiagram
@@ -54,24 +50,18 @@ erDiagram
 | `umh.tag` | no | Tag name, virtual path, data contract and `value_type`. `data_contract_name` holds the UNS form with a leading underscore, such as `_pump`. |
 | `umh.location` | no | The location path as an `ltree`. |
 
-`<contract>` is the bridge's `data_contract_name`, such as `pump`. `value_type` records whether a tag
-is numeric or text; see [Precision and datatypes](precision-and-datatypes.md).
-
-Location paths are canonicalized: characters outside `[A-Za-z0-9_-]` become `_`, so `line-1` and
-`line_1` are different locations. See
-[Location identity](https://docs.umh.app/benthos-umh/output/historian#location-identity).
+`<contract>` is the data contract without underscore and version, such as `pump`. In location paths,
+characters outside `[A-Za-z0-9_-]` become `_`, so `line-1` and `line_1` are different locations.
 
 ### Contract version
 
-All versions of a data contract write to the same tables and share one `umh.tag` row. No column holds
-the version. The version is stored in the metadata, read as `attribute->>'data_contract_version'`.
-An unversioned data contract such as `_historian` has no version key. See
-[Contracts, versions and tables](contracts-versions-and-tables.md).
+All versions of a data contract write to the same tables. The version is in the metadata, read as
+`attribute->>'data_contract_version'`.
 
 ## umh.get_topic_id
 
 `umh.get_topic_id(location_path, virtual_path, data_contract, tag_name)` returns the `topic_id` of one
-tag. The generated queries use it instead of joining the identity tables:
+tag:
 
 ```sql
 SELECT ts, value_num
@@ -81,33 +71,20 @@ WHERE  topic_id = umh.get_topic_id('enterprise.site.area.line', '', 'pump', 'tem
 ORDER  BY ts;
 ```
 
-- A tag without a virtual path has `virtual_path` as the empty string `''`. `NULL` matches nothing and
-  returns an empty result without an error.
-- `data_contract` accepts `pump`, `_pump` and `_pump_v1` for the same tag.
+For a tag without a virtual path, pass `''`, not `NULL`. `data_contract` accepts `pump`, `_pump` and
+`_pump_v1`.
 
 ## Queries in the SQL query tab
 
-The Topic Browser's **SQL query** tab generates the queries for one tag from its topic name. It shows
-them for every time-series tag, and they return rows only once the Historian stores the tag's data
-contract; see
+The **SQL query** tab shows queries for every time-series tag. They return rows once the Historian
+stores the tag's data contract; see
 [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-query-from-the-sql-query-tab-returns-no-rows).
-The Management Console runs none of these queries.
 
 | Control | Effect |
 |---|---|
-| **Grafana** / **TimescaleDB** | Grafana's query limits the time range with `$__timeFrom()` and `$__timeTo()`, which the dashboard fills in. The TimescaleDB query uses a fixed window ending at `now()`, sized to return about 60 intervals. |
-| **Aggregate** | On: one row per interval with the average, minimum and maximum of `value_num`. Off: every stored row in the range. Text tags cannot be aggregated, so their query always returns the stored rows. |
-| **Interval** | The width of each interval: **Automatic** (Grafana's `$__interval`, Grafana tab only), `1 second`, `10 seconds`, `1 minute` or `1 hour`. Grafana starts at **Automatic**, TimescaleDB at `1 minute`. |
-
-The fixed window of the TimescaleDB query per interval:
-
-| Interval | Window |
-|---|---|
-| `1 second` | 1 minute |
-| `10 seconds` | 10 minutes |
-| `1 minute` | 1 hour |
-| `1 hour` | 60 hours |
-| raw rows | 1 hour |
+| **Grafana** / **TimescaleDB** | The Grafana query takes the dashboard's time range. The TimescaleDB query covers a fixed window ending now, about 60 intervals long (1 hour for raw rows). |
+| **Aggregate** | On: average, minimum and maximum per interval. Off, and always for text tags: every stored row. |
+| **Interval** | **Automatic** (Grafana only), `1 second`, `10 seconds`, `1 minute` or `1 hour`. |
 
 The aggregated query for a numeric tag:
 
@@ -123,22 +100,13 @@ GROUP  BY 1
 ORDER  BY 1;
 ```
 
-The queries return only stored values. `time_bucket_gapfill` returns a row for every interval in the
-range, and an interval without a stored value has empty columns. Grafana shows it as a gap. A tag
-that stores a value only when it changes, for example behind the
-[downsampler](https://docs.umh.app/benthos-umh/processing/downsampler), shows empty intervals while
-its value stays constant.
-
-`avg` weights every stored row equally. It matches the average over time only for a tag that stores
-values at a fixed rate.
+An interval without a stored value stays empty and shows as a gap in Grafana. A tag that stores
+values only on change, for example behind the
+[downsampler](https://docs.umh.app/benthos-umh/processing/downsampler), shows gaps while its value is
+constant. `avg` weights every row equally, so it is a time average only at a fixed sample rate.
 
 ## Database Schema page
 
-The Database Schema page opens from **Database schema** on the **Database status** card of the
-Historian overview page, or from **Schema** in the menu of the Historian card in the **Plugins** tab.
-It lists the tables of the `umh` schema with their columns and contents, and the data contracts the
-database stores.
-
-**LLM Context** opens the schema, its rules and example queries as Markdown, to copy or download. An
-AI assistant that gets this text writes queries against your actual tables. The text describes empty
-intervals the same way as the generated queries.
+Opens from **Database schema** on the overview page or **Schema** in the Historian card's menu. It
+lists the tables of the `umh` schema with their columns. **LLM Context** gives the schema, its rules
+and example queries as Markdown for an AI assistant.

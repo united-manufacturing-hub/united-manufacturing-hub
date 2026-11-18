@@ -1,37 +1,26 @@
 # Historian bridge
 
-This page describes a Historian bridge: the topics it reads, the fields of its Destination, and the
-tables it writes. A Historian bridge reads one data contract from the Unified Namespace and writes it
-into TimescaleDB. It has a write flow only, with the Historian as its destination, and no read flow.
-The output plugin behind it is described in the
+A Historian bridge has only a write flow. It reads one data contract from the Unified Namespace and
+writes it into TimescaleDB. Its output is described in the
 [Historian output reference](https://docs.umh.app/benthos-umh/output/historian).
 
 ## Which topics the bridge reads
 
-A Historian bridge reads one data contract at its own location and the levels below it. In the
-Management Console, the topic table builds its source topic and picks the latest declared version
-of the data contract. The source topic does not follow later versions; see
-[Contracts, versions and tables](contracts-versions-and-tables.md).
-
-The source topic follows the topic rules of every write flow, described in
-[Topic validation](../data-flows/write-flow.md#topic-validation). A deploy that breaks them fails
-with a message that names the topic; see
-[Write Flow Topics Rejected](../data-flows/troubleshooting/write-flow-topics-rejected.md).
+The bridge reads one data contract at its location and the levels below it. The topic table picks the
+latest version of the data contract; later versions are not added on their own. The topic follows
+the rules in [Topic validation](../data-flows/write-flow.md#topic-validation).
 
 ## Data models with a dash in the name
 
-A Historian bridge stores the data contract picked in its topic table. A data model created before
-the Management Console rejected dashes in data model names, such as `pump-a`, cannot be stored: its
-name becomes part of the PostgreSQL table names, which allow no dashes. The **Historian** column on
-the **Data Models** page shows a dash (—) for such a data model, and its tooltip names the reason.
+A data model with a dash in its name, such as `pump-a`, cannot be stored, because its name becomes part
+of the PostgreSQL table names. Older data models can have one; new names reject dashes.
 
 ## Destination fields
 
-The **Destination** of the write flow shows these fields in Visual mode. Defaults and accepted
-values of each field are in the output reference's
+Defaults and accepted values are in the output reference's
 [Configuration](https://docs.umh.app/benthos-umh/output/historian#configuration) table.
 
-**Standard:**
+**Standard Settings:**
 
 | Field | Key | Notes |
 |---|---|---|
@@ -53,30 +42,22 @@ values of each field are in the output reference's
 | **Max In Flight** | `max_in_flight` |
 | **Write Timeout** | `write_timeout` |
 
-Durations are written in hours, minutes or seconds, such as `168h`. Days are not a unit. See
-[Duration values](https://docs.umh.app/benthos-umh/output/historian#duration-values).
+Durations take hours, minutes or seconds, such as `168h`, not days.
 
 ### Settings applied once
 
-`compress_after`, `retention`, `value_chunk_interval` and `attribute_chunk_interval` apply when the
-bridge creates the tables of its data contract. `retention` applies only before the first value is
-written. Advanced Settings shows a notice about this:
-
-| Notice | When |
-|---|---|
-| **Table settings apply once** | Before the first deployment. The values you set apply when the tables are created. |
-| **Table settings are fixed** | After the first deployment, or once the tables exist. The four fields are read-only. |
-
-The [Historian parameters](historian-parameters.md) page explains why.
+**Compress After**, **Retention** and the two chunk intervals apply only when the bridge creates its
+tables, and are read-only after that. Before the first deployment, Advanced Settings shows **Table
+settings apply once**; afterwards it shows **Table settings are fixed**. See
+[Historian parameters](historian-parameters.md).
 
 ## What the bridge writes
 
-For `data_contract_name: pump`, the bridge creates and fills two hypertables in the `umh` schema:
+For the data contract `pump`, the bridge writes two tables in the `umh` schema:
 
 | Table | Contents |
 |---|---|
 | `umh.value_pump` | One row per tag and timestamp. Numbers and booleans in `value_num`, strings and JSON in `value_text`. |
-| `umh.attribute_pump` | The message metadata as a JSON object. A new row is written only when the set of metadata keys of a tag changes. |
+| `umh.attribute_pump` | The message metadata as JSON, written when a tag's metadata keys change. |
 
-Tag identity is in the shared tables `umh.topic`, `umh.tag` and `umh.location`. All versions of the
-data contract write to the same two tables. See [Database schema](database-schema.md).
+All versions of the data contract write to these two tables. See [Database schema](database-schema.md).
