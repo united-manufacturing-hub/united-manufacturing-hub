@@ -30,6 +30,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/communicator/pkg/generator"
 	fsmv2historian "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
@@ -157,4 +158,35 @@ var _ = Describe("HistorianFromFSMv2", func() {
 		Expect(generator.HistorianFromFSMv2(context.Background(), log)).To(BeNil())
 		Expect(logs.Len()).To(Equal(1))
 	})
+
+	It("reports the database figures the monitor read, a job count of zero included", func() {
+		observation := observationAt(time.Now(), false)
+		observation.Status.Result.Summary = &timescalemetrics.Summary{TableNames: []string{"value_bench"}}
+		observation.Status.Result.DatabaseOccupiedDiskBytes = &readDatabaseBytes
+		useStore(&historianStore{obs: observation})
+
+		result := generator.HistorianFromFSMv2(context.Background(), log)
+
+		Expect(result).NotTo(BeNil())
+		Expect(result.Timescale.TableNames).To(ConsistOf("value_bench"))
+		Expect(result.Timescale.JobCount).To(HaveValue(BeZero()))
+		Expect(result.Timescale.FailedJobCount).To(HaveValue(BeZero()))
+		Expect(result.Timescale.DatabaseOccupiedDiskBytes).To(Equal(readDatabaseBytes))
+	})
+
+	It("omits the database figures the monitor has not read", func() {
+		useStore(&historianStore{obs: observationAt(time.Now(), false)})
+
+		result := generator.HistorianFromFSMv2(context.Background(), log)
+
+		Expect(result).NotTo(BeNil())
+		Expect(result.Timescale.TableNames).To(BeNil())
+		Expect(result.Timescale.Versions).To(BeNil())
+		Expect(result.Timescale.JobCount).To(BeNil(),
+			"a count nobody read is unknown, and sending it as 0 shows the user a number")
+		Expect(result.Timescale.FailedJobCount).To(BeNil())
+		Expect(result.Timescale.DatabaseOccupiedDiskBytes).To(BeZero())
+	})
 })
+
+var readDatabaseBytes int64 = 900_000_000

@@ -269,13 +269,13 @@ var _ = Describe("Poll on a connection fault", func() {
 			interval: time.Minute,
 			dsn:      dsn,
 			readAt:   time.Now(),
-			value:    timescalemetrics.Summary{TableNames: []string{"value_bench"}, JobCount: 2},
+			value:    &timescalemetrics.Summary{TableNames: []string{"value_bench"}, JobCount: 2},
 		}
 		d.databaseSize = &readCache[int64]{
 			interval: time.Minute,
 			dsn:      dsn,
 			readAt:   time.Now(),
-			value:    900_000_000,
+			value:    &cachedDatabaseBytes,
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -285,11 +285,14 @@ var _ = Describe("Poll on a connection fault", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.Reachable).To(BeFalse())
-		Expect(status.TableNames).To(ConsistOf("value_bench"))
-		Expect(status.JobCount).To(Equal(2))
-		Expect(status.DatabaseOccupiedDiskBytes).To(Equal(int64(900_000_000)))
+		Expect(status.Summary).NotTo(BeNil())
+		Expect(status.Summary.TableNames).To(ConsistOf("value_bench"))
+		Expect(status.Summary.JobCount).To(Equal(2))
+		Expect(status.DatabaseOccupiedDiskBytes).To(HaveValue(Equal(int64(900_000_000))))
 	})
 })
+
+var cachedDatabaseBytes int64 = 900_000_000
 
 var _ = Describe("Poll during shutdown", func() {
 	It("returns an error instead of reporting the endpoint unreachable", func() {
@@ -361,6 +364,7 @@ var _ = Describe("the summary cache", func() {
 		summary := cache.refresh(readAt.Add(time.Second), dsnA, reads([]string{"value_other"}, &second))
 
 		Expect(second).To(BeZero(), "the second poll answered from the cache")
+		Expect(summary).NotTo(BeNil())
 		Expect(summary.TableNames).To(ConsistOf("value_bench"))
 	})
 
@@ -373,6 +377,7 @@ var _ = Describe("the summary cache", func() {
 
 		Expect(second).To(Equal(1),
 			"a config edit repoints the pool at another database, and the tables of the one before it are not this one's")
+		Expect(summary).NotTo(BeNil())
 		Expect(summary.TableNames).To(ConsistOf("value_other"))
 	})
 
@@ -384,7 +389,7 @@ var _ = Describe("the summary cache", func() {
 		summary := cache.refresh(readAt.Add(time.Second), dsnB, failsToRead(&second))
 
 		Expect(second).To(Equal(1))
-		Expect(summary.TableNames).To(BeEmpty(),
+		Expect(summary).To(BeNil(),
 			"keeping the last value across a failed read must not carry one database's tables onto another")
 	})
 
@@ -394,8 +399,8 @@ var _ = Describe("the summary cache", func() {
 
 		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &calls))
 
-		Expect(cache.last(dsnA).TableNames).To(ConsistOf("value_bench"))
-		Expect(cache.last(dsnB).TableNames).To(BeEmpty())
+		Expect(cache.last(dsnA)).To(HaveValue(HaveField("TableNames", ConsistOf("value_bench"))))
+		Expect(cache.last(dsnB)).To(BeNil())
 	})
 })
 
