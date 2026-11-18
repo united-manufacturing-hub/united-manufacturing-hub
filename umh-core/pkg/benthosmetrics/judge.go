@@ -221,6 +221,7 @@ func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur o
 			LastErrorAt: lastRise(cur, c.name, f.Since),
 		})
 	}
+	v.Entries = append(v.Entries, heldPastTheWindow(fired, cur)...)
 	errorEntries := len(v.Entries)
 	for _, c := range connectionChecks {
 		n := cur.connections[c.name]
@@ -239,6 +240,56 @@ func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur o
 	sortEntriesByUrgency(v.Entries[errorEntries:])
 
 	return v
+}
+
+// heldPastTheWindow returns the error entries that are still inside their
+// window but whose signal is no longer fired.
+//
+// The engine measures a rise as "newest reading minus the oldest reading
+// still in the window". That oldest reading is the one from BEFORE the
+// error, and the window drops it once it is older than ErrorWindow. So when
+// successful scrapes are sparse — a Benthos unreachable for minutes, then
+// back with an error — the pre-error reading ages out first, the measured
+// increase falls to zero, and the entry would clear ErrorWindow after the
+// READING BEFORE the error rather than ten minutes after the error. The
+// closer that gap is to the window, the shorter the entry lives: a reading
+// 9m59s before the error left the entry alive for two seconds.
+//
+// The entry's own LastErrorAt is the thing the rule is written in terms of,
+// so the hold is decided from it. cur.prevEntries is set only when the
+// previous scrape is within the window and no restart intervened
+// (see observe), so this can never carry an error from before a restart or
+// across a gap the engine already rebuilt for.
+func heldPastTheWindow(fired []diagnosis.Fired, cur observation) []FailureEntry {
+	if len(cur.prevEntries) == 0 {
+		return nil
+	}
+
+	stillFiring := make(map[string]struct{}, len(fired))
+	for _, f := range fired {
+		stillFiring[f.Signal] = struct{}{}
+	}
+
+	var held []FailureEntry
+	for _, pe := range cur.prevEntries {
+		if pe.Connection {
+			// Connection entries are rebuilt from each scrape; they have no
+			// window to outlive.
+			continue
+		}
+
+		if _, firing := stillFiring[pe.Signal]; firing {
+			continue
+		}
+
+		if cur.at.Sub(pe.LastErrorAt) > ErrorWindow {
+			continue
+		}
+
+		held = append(held, pe)
+	}
+
+	return held
 }
 
 // lastRise returns when the error counter named signal last rose, for the
