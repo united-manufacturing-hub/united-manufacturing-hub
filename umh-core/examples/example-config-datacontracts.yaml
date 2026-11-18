@@ -1,0 +1,48 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# The dataContractsV2 section is the merged data contract concept: one entry
+# carries the structure and every version of a contract. It stands on its own,
+# so nothing here is read from the older dataModels and dataContracts sections,
+# and nothing declared there appears on the data contracts page.
+
+agent:
+  metricsPort: 8080
+  location:
+    0: test-enterprise
+    1: test-site
+
+dataContractsV2:
+  - name: pump
+    description: Pump telemetry
+    version:
+      v1:
+        structure:
+          pressure:
+            _payloadshape: timeseries-number
+      v2:
+        structure:
+          pressure:
+            _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+
+  - name: motor
+    description: Motor telemetry
+    version:
+      v1:
+        structure:
+          rpm:
+            _payloadshape: timeseries-number

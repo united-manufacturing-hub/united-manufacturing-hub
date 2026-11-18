@@ -96,6 +96,10 @@
 - An instance now runs up to its full bridge limit. Before, it stopped one bridge short
 - With `USE_FSMV2_CPU=true`, the bridge limit now uses the cores the container is allowed to use, not the host's cores. A container limited to 2 cores on a 32-core host now gets a limit of 5 bridges, not 155
 
+### Improvements
+
+- In the config editor, saving a config that gives a data contract the same name as a data model is now refused, because both would publish under the same contract address. A config that already holds such a pair still loads
+
 ## [0.44.42]
 
 ### New Features
