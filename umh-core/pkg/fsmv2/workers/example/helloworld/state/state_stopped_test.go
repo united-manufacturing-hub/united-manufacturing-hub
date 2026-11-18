@@ -84,6 +84,25 @@ var _ = Describe("StoppedState", func() {
 			})
 		})
 
+		Context("when shutdown is requested for a disabled worker", func() {
+			BeforeEach(func() {
+				snap = fsmv2.Snapshot{
+					Identity: deps.Identity{ID: "test", Name: "test", WorkerType: "helloworld"},
+					Observed: fsmv2.Observation[hello_world.HelloworldStatus]{},
+					Desired: &fsmv2.WrappedDesiredState[hello_world.HelloworldConfig]{
+						BaseDesiredState: config.BaseDesiredState{ShutdownRequested: true, Disabled: true},
+					},
+				}
+			})
+
+			It("should signal needs removal", func() {
+				result := stateObj.Next(snap)
+
+				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
+				Expect(result.Signal).To(Equal(fsmv2.SignalNeedsRemoval))
+			})
+		})
+
 		Context("when shutdown is requested", func() {
 			BeforeEach(func() {
 				snap = fsmv2.Snapshot{

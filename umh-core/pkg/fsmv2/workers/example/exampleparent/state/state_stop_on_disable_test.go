@@ -38,7 +38,7 @@ var _ = DescribeTable("an active state of a disabled parent moves to TryingToSto
 		Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStopState{}))
 		Expect(result.Signal).To(Equal(fsmv2.SignalNone))
 		Expect(result.Action).To(BeNil())
-		Expect(result.Children).To(BeEmpty())
+		Expect(result.Children).To(Equal([]config.ChildSpec{}))
 	},
 	Entry("TryingToStart", &state.TryingToStartState{}),
 	Entry("Running", &state.RunningState{}),
