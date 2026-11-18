@@ -60,29 +60,33 @@ var _ = Describe("The error window", func() {
 		ok, _ := seeded.Result.Sample.Failures.ErrorFree()
 		Expect(ok).To(BeTrue(), "the first scrape seeds an error-free window")
 
-		// The burst: five output errors arrive between the scrapes.
+		// The burst: five output errors arrive between the scrapes. The
+		// scrape that FINDS them is the error's own time, so every deadline
+		// below is measured from here and not from t0. Measuring from t0
+		// would be one scrape early, and would pass only against the old
+		// rule that timed the window from the reading before the error.
+		burstSeenAt := t0.Add(time.Second)
 		s.SetCounters(100, 80, 5)
-		clockNow = t0.Add(time.Second)
+		clockNow = burstSeenAt
 		fired := observeOneCycle(worker, spec)
 		ok, _ = fired.Result.Sample.Failures.ErrorFree()
 		Expect(ok).To(BeFalse(), "the error burst degrades the flow at once")
 		Expect(fired.Result.Sample.Failures.Entries).To(HaveLen(1))
 		Expect(fired.Result.Sample.Failures.Entries[0].Count).To(Equal(int64(5)))
 
-		// The counter stays flat. One scrape per second, up to the last
-		// scrape before the ten-minute window lets the burst go: still
-		// degraded.
-		for t := t0.Add(2 * time.Second); !t.After(t0.Add(10*time.Minute - time.Second)); t = t.Add(time.Second) {
+		// The counter stays flat. One scrape per second, up to and
+		// including ten minutes after the error itself: still degraded.
+		for t := t0.Add(2 * time.Second); !t.After(burstSeenAt.Add(10 * time.Minute)); t = t.Add(time.Second) {
 			clockNow = t
 			status := observeOneCycle(worker, spec)
 			ok, _ = status.Result.Sample.Failures.ErrorFree()
 			Expect(ok).To(BeFalse(),
-				"at T+%v the burst is still inside the window", t.Sub(t0))
+				"at %v after the error the burst is still inside the window", t.Sub(burstSeenAt))
 		}
 
 		// The next scrape is past the window: the flow cleared without a
 		// restart.
-		clockNow = t0.Add(10*time.Minute + time.Second)
+		clockNow = burstSeenAt.Add(10*time.Minute + time.Second)
 		cleared := observeOneCycle(worker, spec)
 		ok, _ = cleared.Result.Sample.Failures.ErrorFree()
 		Expect(ok).To(BeTrue(),
