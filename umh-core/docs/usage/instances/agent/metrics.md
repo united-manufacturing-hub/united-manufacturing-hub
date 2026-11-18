@@ -47,6 +47,7 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Bridge connection check | FSMv2 | none. `NMAP_BACKEND` is ignored |
 | CPU health | FSMv2 from v0.44.46. On v0.44.37 to v0.44.45, FSMv1 unless `USE_FSMV2_CPU=true` | `USE_FSMV2_CPU=false` switches to FSMv1 on v0.44.46 and later. See [CPU Health](../container/cpu-health/README.md#turn-the-check-on-or-off) |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
+| Metrics collection for bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the metrics collection to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
 | Container memory and disk | FSMv1 | none |
 
@@ -144,6 +145,10 @@ Components that run under FSMv1 report series named `umh_core_<name>`. They carr
 | `agent_monitor` | Agent |
 
 Other `component` values belong to internal layers of umh-core.
+
+Each running flow is watched by a monitoring service that reads the flow's Benthos metrics. That service reports its own state, errors and reconcile time under `component="benthos_monitor"`, one set of series per running flow.
+
+With `USE_FSMV2_BENTHOS_METRICS=true`, umh-core does that work inside its own process. The `component="benthos_monitor"` series stop appearing, and `umh_fsmv2_*` series whose `hierarchy_path` ends in `(benthos_metrics)` appear in their place. Select them by matching the end of the path, for example `hierarchy_path=~".*\\(benthos_metrics\\)"`. Neither set carries the flow's own message counts. See [Environment Variables](../../../reference/environment-variables.md) for the accepted values.
 
 ### State
 
