@@ -48,6 +48,7 @@ func connScrape(inputs, outputs map[string]conn) Metrics {
 			ConnectionFailed: c.failed,
 		}
 	}
+
 	for path, c := range outputs {
 		m.Outputs[path] = OutputMetrics{
 			Sent:             10,
@@ -65,6 +66,7 @@ func connScrape(inputs, outputs map[string]conn) Metrics {
 func connSteps(scrapes ...Metrics) ([]bool, []string) {
 	oks := make([]bool, 0, len(scrapes))
 	reasons := make([]string, 0, len(scrapes))
+
 	tr := NewTracker(func() time.Time { return failureT })
 	for i, m := range scrapes {
 		f := *tr.observe(testPort, m, failureT.Add(time.Duration(i)*time.Second)).Failures
@@ -92,6 +94,7 @@ var _ = Describe("The connection checks", func() {
 			if r.URL.Path != "/metrics" {
 				return false
 			}
+
 			_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} 10\n")
 			_, _ = fmt.Fprintf(w, "input_connection_failed{label=\"\",path=\"root.input\"} %d\n", failed)
 
@@ -136,6 +139,7 @@ var _ = Describe("The connection checks", func() {
 			} else {
 				gap = 993 * time.Millisecond
 			}
+
 			f := *tr.observe(testPort, m, at).Failures
 			ok, _ := f.ErrorFree()
 
@@ -143,6 +147,7 @@ var _ = Describe("The connection checks", func() {
 		}
 
 		jittered(connScrape(in(conn{}), nil))
+
 		for i := 1; i <= 20; i++ {
 			Expect(jittered(connScrape(in(conn{failed: int64(i)}), nil))).To(BeFalse(),
 				"setup: scrape %d while down reads error-free", i)
@@ -152,6 +157,7 @@ var _ = Describe("The connection checks", func() {
 		for i := 21; i <= 23; i++ {
 			ok = jittered(connScrape(in(conn{up: 1, failed: 20}), nil))
 		}
+
 		Expect(ok).To(BeTrue(), "three jittered scrapes after the reconnect")
 
 		// A 30 s scrape pause during the outage does not change the answer:
@@ -167,9 +173,11 @@ var _ = Describe("The connection checks", func() {
 		}
 
 		withGap(0, connScrape(in(conn{}), nil))
+
 		for i := 1; i <= 5; i++ {
 			withGap(time.Second, connScrape(in(conn{failed: int64(i)}), nil))
 		}
+
 		Expect(withGap(30*time.Second, connScrape(in(conn{failed: 6}), nil))).To(BeFalse(),
 			"setup: still down after the pause")
 
@@ -177,6 +185,7 @@ var _ = Describe("The connection checks", func() {
 		for i := 0; i < 11 && !resumed; i++ {
 			resumed = withGap(time.Second, connScrape(in(conn{up: 1, failed: 6}), nil))
 		}
+
 		Expect(resumed).To(BeTrue(), "11 scrapes after the reconnect")
 	})
 
@@ -207,16 +216,19 @@ var _ = Describe("The connection checks", func() {
 
 		// A drop four seconds after a reconnect is reported at once.
 		obs(connScrape(in(conn{up: 1}), nil))
-		for i := 0; i < 15; i++ {
+
+		for range 15 {
 			obs(connScrape(in(conn{up: 1, lost: 1}), nil))
 		}
-		for i := 0; i < 3; i++ {
+
+		for i := range 3 {
 			f := obs(connScrape(in(conn{up: 2, lost: 1}), nil))
 			if i == 2 {
 				ok, _ := f.ErrorFree()
 				Expect(ok).To(BeTrue(), "setup: three scrapes after the reconnect")
 			}
 		}
+
 		f := obs(connScrape(in(conn{up: 2, lost: 2}), nil))
 		Expect(f.Entries).To(HaveLen(1))
 		Expect(f.Entries[0].Count).To(Equal(int64(1)))
@@ -225,11 +237,13 @@ var _ = Describe("The connection checks", func() {
 		Expect(reason).To(Equal("benthos reports 1 input not connected"))
 
 		// The second outage's entry starts at the second drop, not the first.
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			obs(connScrape(in(conn{up: 3, lost: 2}), nil))
 		}
+
 		second := obs(connScrape(in(conn{up: 3, lost: 3}), nil))
 		secondDrop := at
+
 		Expect(second.Entries).To(HaveLen(1))
 		Expect(second.Entries[0].Since).To(Equal(secondDrop),
 			"the second outage is reported from its own start")
@@ -256,11 +270,13 @@ var _ = Describe("The connection checks", func() {
 		}
 
 		after(connScrape(in(conn{}), nil))
+
 		for k := 1; k <= 3; k++ {
 			after(connScrape(in(conn{failed: int64(k)}), nil))
 		}
 
 		after(restarted(conn{failed: 1}, 1))
+
 		restartAt := at2
 		downSince := after(restarted(conn{failed: 2}, 2))
 		Expect(downSince.Entries).To(HaveLen(1), "still down after the restart")
@@ -272,6 +288,7 @@ var _ = Describe("The connection checks", func() {
 	// not reported.
 	It("does not count a slow first connect as down", func() {
 		startup := connScrape(in(conn{}), nil)
+
 		oks, reasons := connSteps(startup, startup, startup, startup)
 		for i, ok := range oks {
 			Expect(ok).To(BeTrue(), "scrape %d of a first connect in progress: %q", i, reasons[i])

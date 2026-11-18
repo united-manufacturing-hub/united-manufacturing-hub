@@ -50,8 +50,8 @@ type observation struct {
 	before map[string]int64
 
 	// prevEntries holds the previous scrape's failure entries, for carrying
-	// an open episode's LastErrorAt forward. It is nil on the first scrape
-	// and after a restart.
+	// an open entry's LastErrorAt forward. It is nil on the first scrape,
+	// after a restart and after a gap longer than ErrorWindow.
 	prevEntries []FailureEntry
 
 	sample Sample
@@ -76,6 +76,7 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 	// prevNotConnectedSince carries an outage's start forward only from a
 	// scrape of the same Benthos with no long gap, as the error signals do.
 	var prevNotConnectedSince map[string]time.Time
+
 	switch {
 	case prev == nil:
 	case !at.After(prev.at):
@@ -90,7 +91,7 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 		t.engine = mustNewEngine(table())
 		t.offsets = offsets{}
 		rebuildErrors(t, nil, at)
-	case counterSeriesChanged(prev, &cur):
+	case restarted(prev, &cur):
 		// A restart (a Benthos restart resets every counter to 0): a counter
 		// that reads lower than before adds its previous value to its
 		// offset, so the series the engine is fed never goes down and both
@@ -141,14 +142,11 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 	return s
 }
 
-// counterSeriesChanged reports whether Benthos restarted between prev and
-// cur, so their counters cannot be compared: any one counter (input, output
-// or error) went down. umh-core recognises a restart only this way, so
-// failures between the restart and the first scrape after it still count: a
-// new instance that has already counted as many messages and errors as the
-// old one by then shows no drop, and only the errors above the old count
-// count as new.
-func counterSeriesChanged(prev, cur *observation) bool {
+// restarted reports whether any counter of cur (input, output or error) is
+// lower than in prev, which is how umh-core detects a Benthos restart.
+// Errors the new instance counted before its first scrape count only above
+// the old instance's count.
+func restarted(prev, cur *observation) bool {
 	if cur.inputReceived < prev.inputReceived ||
 		cur.outputSent < prev.outputSent {
 		return true

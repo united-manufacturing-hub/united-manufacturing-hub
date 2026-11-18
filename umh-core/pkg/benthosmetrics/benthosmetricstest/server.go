@@ -206,7 +206,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input, output, errors := s.input, s.output, s.errors
-	conn := [3]int64{s.inputUp, s.inputLost, s.inputFailed}
+	conn := inputConnection{up: s.inputUp, lost: s.inputLost, failed: s.inputFailed}
 	version, metricsBody := s.version, s.metricsBody
 	s.mu.Unlock()
 
@@ -238,20 +238,32 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// inputConnection is the input's connection counters as /metrics serves them.
+type inputConnection struct {
+	up, lost, failed int64
+}
+
 // writeCounters writes the counters in Benthos's exposition shape: one series
 // per leaf with a path label and no top-level aggregate, so a parser has to
-// add up the two output brokers. conn is the input's connection up, lost and
-// failed counters.
-func writeCounters(w http.ResponseWriter, input, output, errors int64, conn [3]int64) {
+// add up the two output brokers.
+func writeCounters(w http.ResponseWriter, input, output, errors int64, conn inputConnection) {
 	_, _ = fmt.Fprintf(w, "# HELP input_received Benthos Counter metric\n")
 	_, _ = fmt.Fprintf(w, "# TYPE input_received counter\n")
 	_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
 
-	for i, name := range []string{"input_connection_up", "input_connection_lost", "input_connection_failed"} {
-		_, _ = fmt.Fprintf(w, "# HELP %s Benthos Counter metric\n", name)
-		_, _ = fmt.Fprintf(w, "# TYPE %s counter\n", name)
-		_, _ = fmt.Fprintf(w, "%s{label=\"\",path=\"root.input\"} %d\n", name, conn[i])
+	for _, c := range []struct {
+		name  string
+		value int64
+	}{
+		{"input_connection_up", conn.up},
+		{"input_connection_lost", conn.lost},
+		{"input_connection_failed", conn.failed},
+	} {
+		_, _ = fmt.Fprintf(w, "# HELP %s Benthos Counter metric\n", c.name)
+		_, _ = fmt.Fprintf(w, "# TYPE %s counter\n", c.name)
+		_, _ = fmt.Fprintf(w, "%s{label=\"\",path=\"root.input\"} %d\n", c.name, c.value)
 	}
+
 	_, _ = fmt.Fprintf(w, "# HELP output_sent Benthos Counter metric\n")
 	_, _ = fmt.Fprintf(w, "# TYPE output_sent counter\n")
 	_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output.broker.0\"} %d\n", output/2)

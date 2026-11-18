@@ -58,6 +58,32 @@ var _ = Describe("NotCleared after a wall-clock step", func() {
 
 		raw, err := json.Marshal(f)
 		Expect(err).NotTo(HaveOccurred())
+
+		var stored Failures
+		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
+
+		Expect(stored.NotCleared(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
+	})
+})
+
+var _ = Describe("NotCleared on a held entry after a wall-clock step", func() {
+	// The reading before the error is 9m59s old, so 5s after the error the
+	// engine no longer fires and the entry is only held. NTP steps the wall
+	// clock forward 15 minutes in those 5s.
+	It("re-dates the held entry's LastErrorAt", func() {
+		t0 := time.Now()
+
+		tr := NewTracker(time.Now)
+		tr.observe(testPort, outputErrors(0), t0.Add(-9*time.Minute-59*time.Second))
+		tr.observe(testPort, outputErrors(2), t0)
+		f := *tr.observe(testPort, outputErrors(2), wallStepped(t0, 5*time.Second, 15*time.Minute)).Failures
+
+		ok, _ := f.ErrorFree()
+		Expect(ok).To(BeFalse(), "5 real seconds after the error, the entry is held")
+
+		raw, err := json.Marshal(f)
+		Expect(err).NotTo(HaveOccurred())
+
 		var stored Failures
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 

@@ -79,6 +79,7 @@ func (f *Failures) ErrorFree() (ok bool, reason string) {
 	}
 
 	e := f.Entries[0]
+
 	label := e.Label
 	if e.Count != 1 {
 		label += "s"
@@ -98,23 +99,10 @@ func (f *Failures) ErrorFree() (ok bool, reason string) {
 		e.Count, label, short(ErrorWindow), when)
 }
 
-// lastErrorAgo words how long before at this entry's error counter last
-// rose; at is the Failures' ObservedAt, the scrape they came from, so a mock
-// clock decides the wording in the specs exactly as a scrape does in
-// production. The caller's own clock is never read.
-//
-// This counts up, and the reason names ErrorWindow beside it so the number
-// has a denominator. The obvious improvement is to count down to the moment
-// the entry clears instead; that was decided against, and the record is
-// artifacts/2026-11-17_benthos-split/DECISIONS-degraded-reason-wording.md.
-// The short of it: remaining time jumps backwards the moment a new error
-// arrives, which is exactly when a user is watching, and a number that moves
-// backwards reads as a broken console. Elapsed time only grows, and its
-// reset to "just now" is the signal that a new error landed.
-//
-// Anything under a second reads "just now" rather than "0s ago". A scrape
-// stamped before the error it carries cannot happen on one clock, but it
-// lands in the same branch, so a reader never meets a negative duration.
+// lastErrorAgo words how long before at, the Failures' ObservedAt, this
+// entry's error counter last rose, e.g. "4m ago". It counts up rather than
+// down to the clear, because a countdown jumps backwards on each new error.
+// Anything under a second, including a negative duration, reads "just now".
 func (e FailureEntry) lastErrorAgo(at time.Time) string {
 	ago := at.Sub(e.LastErrorAt)
 	if ago < time.Second {

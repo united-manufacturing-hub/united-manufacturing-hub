@@ -17,8 +17,9 @@
 package benthosmetrics
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
@@ -98,6 +99,7 @@ func endpointDown(up, lost, failed int64) bool {
 // inputsNotConnected counts the inputs of m that are not connected.
 func inputsNotConnected(m Metrics) int64 {
 	var n int64
+
 	for _, in := range m.Inputs {
 		if endpointDown(in.ConnectionUp, in.ConnectionLost, in.ConnectionFailed) {
 			n++
@@ -110,6 +112,7 @@ func inputsNotConnected(m Metrics) int64 {
 // outputsNotConnected counts the outputs of m that are not connected.
 func outputsNotConnected(m Metrics) int64 {
 	var n int64
+
 	for _, out := range m.Outputs {
 		if endpointDown(out.ConnectionUp, out.ConnectionLost, out.ConnectionFailed) {
 			n++
@@ -198,6 +201,7 @@ func firstNotConnectedSince(prev map[string]time.Time, counts map[string]int64, 
 		if !ok {
 			since = at
 		}
+
 		out[name] = since
 	}
 
@@ -205,15 +209,30 @@ func firstNotConnectedSince(prev map[string]time.Time, counts map[string]int64, 
 }
 
 // judgeFailures builds the Failures for one scrape: error entries first, then
-// connection entries, each group with the larger Count first. An error
-// entry's Count is how much its counter went up within ErrorWindow, and its
-// LastErrorAt is the last scrape at which that counter rose.
+// connection entries, each group with the larger Count first.
 func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur observation) Failures {
-	v := Failures{ObservedAt: cur.at}
+	errorEntries := append(firedErrorEntries(e, fired, cur), heldErrorEntries(fired, cur)...)
+	connectionEntries := notConnectedEntries(cur)
+
+	sortByCountDesc(errorEntries)
+	sortByCountDesc(connectionEntries)
+
+	return Failures{
+		Entries:    append(errorEntries, connectionEntries...),
+		ObservedAt: cur.at,
+	}
+}
+
+// firedErrorEntries returns one error entry per fired error signal. Its
+// Count is how much the counter went up within ErrorWindow, and its
+// LastErrorAt is the last scrape at which the counter rose.
+func firedErrorEntries(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur observation) []FailureEntry {
+	var entries []FailureEntry
+
 	for _, f := range fired {
 		c := errorCounterOf(f.Signal)
 		n, _ := e.Reduction(f.Signal, f.Signal).Get() // 0 until the window holds 2 readings
-		v.Entries = append(v.Entries, FailureEntry{
+		entries = append(entries, FailureEntry{
 			Signal:      c.name,
 			Label:       c.label,
 			Count:       int64(n),
@@ -221,14 +240,22 @@ func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur o
 			LastErrorAt: lastRise(cur, c.name, f.Since),
 		})
 	}
-	v.Entries = append(v.Entries, heldPastTheWindow(fired, cur)...)
-	errorEntries := len(v.Entries)
+
+	return entries
+}
+
+// notConnectedEntries returns one connection entry per connection check with
+// an input or output that is not connected.
+func notConnectedEntries(cur observation) []FailureEntry {
+	var entries []FailureEntry
+
 	for _, c := range connectionChecks {
 		n := cur.connections[c.name]
 		if n == 0 {
 			continue
 		}
-		v.Entries = append(v.Entries, FailureEntry{
+
+		entries = append(entries, FailureEntry{
 			Signal:     c.name,
 			Label:      c.label,
 			Count:      n,
@@ -236,49 +263,21 @@ func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur o
 			Connection: true,
 		})
 	}
-	sortEntriesByUrgency(v.Entries[:errorEntries])
-	sortEntriesByUrgency(v.Entries[errorEntries:])
 
-	return v
+	return entries
 }
 
-// heldPastTheWindow returns the error entries that are still inside their
-// window but whose signal is no longer fired.
-//
-// The engine measures a rise as "newest reading minus the oldest reading
-// still in the window". That oldest reading is the one from BEFORE the
-// error, and the window drops it once it is older than ErrorWindow. So when
-// successful scrapes are sparse — a Benthos unreachable for minutes, then
-// back with an error — the pre-error reading ages out first, the measured
-// increase falls to zero, and the entry would clear ErrorWindow after the
-// READING BEFORE the error rather than ten minutes after the error. The
-// closer that gap is to the window, the shorter the entry lives: a reading
-// 9m59s before the error left the entry alive for two seconds.
-//
-// The entry's own LastErrorAt is the thing the rule is written in terms of,
-// so the hold is decided from it. cur.prevEntries is set only when the
-// previous scrape is within the window and no restart intervened
-// (see observe), so this can never carry an error from before a restart or
-// across a gap the engine already rebuilt for.
-func heldPastTheWindow(fired []diagnosis.Fired, cur observation) []FailureEntry {
-	if len(cur.prevEntries) == 0 {
-		return nil
-	}
-
-	stillFiring := make(map[string]struct{}, len(fired))
-	for _, f := range fired {
-		stillFiring[f.Signal] = struct{}{}
-	}
-
+// heldErrorEntries returns the previous scrape's error entries whose signal no
+// longer fires but whose LastErrorAt is still within ErrorWindow. The engine
+// measures a rise from the oldest reading in its window, the one before the
+// error, so after sparse scrapes it stops firing before ErrorWindow has
+// passed since the error itself. cur.prevEntries is nil after a restart or a
+// gap longer than ErrorWindow, so nothing is held across those.
+func heldErrorEntries(fired []diagnosis.Fired, cur observation) []FailureEntry {
 	var held []FailureEntry
-	for _, pe := range cur.prevEntries {
-		if pe.Connection {
-			// Connection entries are rebuilt from each scrape; they have no
-			// window to outlive.
-			continue
-		}
 
-		if _, firing := stillFiring[pe.Signal]; firing {
+	for _, pe := range cur.prevEntries {
+		if pe.Connection || isFiring(fired, pe.Signal) {
 			continue
 		}
 
@@ -286,36 +285,45 @@ func heldPastTheWindow(fired []diagnosis.Fired, cur observation) []FailureEntry 
 			continue
 		}
 
+		pe.LastErrorAt = redate(cur.at, pe.LastErrorAt)
 		held = append(held, pe)
 	}
 
 	return held
 }
 
+// isFiring reports whether fired holds the signal named signal.
+func isFiring(fired []diagnosis.Fired, signal string) bool {
+	return slices.ContainsFunc(fired, func(f diagnosis.Fired) bool { return f.Signal == signal })
+}
+
 // lastRise returns when the error counter named signal last rose, for the
-// entry that opened at since: cur.at when it rose this scrape (a counter
-// missing from cur.before counts as 0, so after a restart every non-zero
-// counter rose), the previous scrape's entry for the same episode when it
-// did not, and the episode's first rise when there is no previous entry.
+// entry that opened at since.
 func lastRise(cur observation, signal string, since time.Time) time.Time {
+	// A counter missing from cur.before reads as 0, so after a restart every
+	// non-zero counter rose.
 	if cur.errors[signal] > cur.before[signal] {
 		return cur.at
 	}
 
-	pe, ok := prevEpisode(cur.prevEntries, signal, since)
+	pe, ok := prevEntry(cur.prevEntries, signal, since)
 	if !ok {
 		return since
 	}
 
-	// Re-dated from cur.at by the monotonic elapsed time, so NotCleared
-	// measures real time even after a wall-clock step and the store's JSON
-	// round-trip, which drops monotonic readings.
-	return cur.at.Add(-cur.at.Sub(pe.LastErrorAt))
+	return redate(cur.at, pe.LastErrorAt)
 }
 
-// prevEpisode returns the previous scrape's entry for the same episode: the
-// entry with the same signal and the same Since.
-func prevEpisode(prevEntries []FailureEntry, signal string, since time.Time) (FailureEntry, bool) {
+// redate returns t re-dated from at by the monotonic time elapsed between
+// them, so the result's wall clock matches at's even after a wall-clock step.
+// NotCleared on Failures that went through JSON, which drops monotonic
+// readings, then still measures real time.
+func redate(at, t time.Time) time.Time {
+	return at.Add(-at.Sub(t))
+}
+
+// prevEntry returns the entry in prevEntries with the same signal and Since.
+func prevEntry(prevEntries []FailureEntry, signal string, since time.Time) (FailureEntry, bool) {
 	for _, pe := range prevEntries {
 		if pe.Signal == signal && pe.Since.Equal(since) {
 			return pe, true
@@ -325,10 +333,10 @@ func prevEpisode(prevEntries []FailureEntry, signal string, since time.Time) (Fa
 	return FailureEntry{}, false
 }
 
-// sortEntriesByUrgency sorts entries in place by the larger Count first,
-// keeping equals in list order.
-func sortEntriesByUrgency(entries []FailureEntry) {
-	sort.SliceStable(entries, func(i, j int) bool {
-		return entries[i].Count > entries[j].Count
+// sortByCountDesc sorts entries in place by the larger Count first, keeping
+// equals in list order.
+func sortByCountDesc(entries []FailureEntry) {
+	slices.SortStableFunc(entries, func(a, b FailureEntry) int {
+		return cmp.Compare(b.Count, a.Count)
 	})
 }

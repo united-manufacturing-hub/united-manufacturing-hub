@@ -45,15 +45,19 @@ var _ = Describe("A signal that just cleared", func() {
 		// which the flow is error-free again. It must come between T+10m and
 		// T+11m.
 		tl.runTo(failureT.Add(10*time.Minute - time.Second))
+
 		var released time.Time
+
 		for at := failureT.Add(10 * time.Minute); !at.After(failureT.Add(11 * time.Minute)); at = at.Add(time.Second) {
 			tl.runTo(at)
+
 			if ok, _ := tl.failures.ErrorFree(); ok {
 				released = at
 
 				break
 			}
 		}
+
 		Expect(released).NotTo(BeZero(), "the signal did not release between T+10m and T+11m")
 
 		secondAt = released.Add(time.Second)

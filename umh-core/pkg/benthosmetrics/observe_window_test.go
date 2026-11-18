@@ -132,7 +132,7 @@ var _ = Describe("The error window", func() {
 	It("does not backfill on the first scrape", func() {
 		tl := newErrorTimeline(failureT, func(time.Time) int64 { return 5 })
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			tl.runTo(failureT.Add(time.Duration(i) * time.Second))
 			ok, _ := tl.failures.ErrorFree()
 			Expect(ok).To(BeTrue(), "scrape %d with a constant output error total of 5", i)
@@ -166,10 +166,12 @@ var _ = Describe("The error window", func() {
 
 		srv := benthosmetricstest.NewServer()
 		port := int(srv.Port())
+
 		srv.SetHandler(func(w http.ResponseWriter, r *http.Request) bool {
 			if r.URL.Path != "/metrics" {
 				return false
 			}
+
 			_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output\"} 10\n")
 			_, _ = fmt.Fprintf(w, "output_error{label=\"\",path=\"root.output\"} %d\n", outputError)
 
@@ -204,17 +206,20 @@ var _ = Describe("The error window", func() {
 			diagnosis.CasePostOutageDip: diagnosis.NoneReady,
 			diagnosis.CaseBelowFloor:    diagnosis.NoneReady,
 		}
+
 		want := map[string]map[diagnosis.Case]diagnosis.Availability{}
 		for _, c := range errorCounters {
 			want[c.name] = errorWant
 		}
 
 		outcomes := diagnosis.Run(errorTable(), diagnosis.NewEnvironment(), failureFeed{})
+
 		seen := map[string]map[diagnosis.Case]bool{}
 		for _, o := range outcomes {
 			if seen[o.Signal] == nil {
 				seen[o.Signal] = map[diagnosis.Case]bool{}
 			}
+
 			seen[o.Signal][o.Case] = true
 			w, ok := want[o.Signal]
 			Expect(ok).To(BeTrue(), "signal %q is not an errorCounters entry", o.Signal)
