@@ -49,11 +49,17 @@ type Tracker struct {
 	// scrapes.
 	engine *diagnosis.Engine[readings]
 
+	// errorEngine holds the windows that turn error counters into failure
+	// entries across scrapes. It is separate from engine so a Benthos
+	// restart can clear the error state on its own, without wiping the
+	// throughput windows (see observe).
+	errorEngine *diagnosis.Engine[readings]
+
 	// prev is the previous observed scrape, nil before the first.
 	prev *observation
 
 	// offsets folds counter restarts into the series the engine is fed, one
-	// per direction; see adjustForRestart.
+	// per direction; see observe.
 	offsets offsets
 
 	now func() time.Time
@@ -79,8 +85,9 @@ func NewTracker(now func() time.Time) *Tracker {
 			// response itself is returned.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		engine: mustNewEngine(),
-		now:    now,
+		engine:      mustNewEngine(table()),
+		errorEngine: mustNewEngine(errorTable()),
+		now:         now,
 	}
 }
 
@@ -111,8 +118,9 @@ func (t *Tracker) Scrape(ctx context.Context, port int) (Probes, Sample, error) 
 		return probes, Sample{}, err
 	}
 
-	// The port is passed because a config update can change it without a
-	// restart.
+	// The port is passed because a config change can set a new one; S6
+	// recreates the service on any config change, so observe reads a new
+	// port as a restart and a new counter series.
 	return probes, t.observe(port, metrics, readAt), nil
 }
 
