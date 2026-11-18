@@ -260,9 +260,17 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 				// The window lets the entry go at ten minutes: still present
 				// past that is the bug this scenario pins, not a state to wait
 				// out.
-				if e != nil && fake.now().After(lastErrorAt.Add(benthosmetrics.ErrorWindow+45*time.Second)) {
+				//
+				// Judge the entry against ITS OWN scrape, not the clock as it
+				// reads now. This callback can be handed a sample taken
+				// before later scrapes advanced the clock, and measuring a
+				// retained entry against a newer now would report late
+				// clearing that never happened — a failure that depends on
+				// goroutine scheduling rather than on the code under test.
+				seenAt := s.Result.Sample.At
+				if e != nil && seenAt.After(lastErrorAt.Add(benthosmetrics.ErrorWindow+45*time.Second)) {
 					return false, "", fmt.Errorf("the entry is still present %v after the last error, past the %v window",
-						fake.now().Sub(lastErrorAt).Round(time.Second), benthosmetrics.ErrorWindow)
+						seenAt.Sub(lastErrorAt).Round(time.Second), benthosmetrics.ErrorWindow)
 				}
 
 				if e != nil {

@@ -206,23 +206,28 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 		// enough that the spec waits it out in a second or two.
 		const margin = 2 * time.Second
 
+		// Its own worker name. The hold is process-wide and keeps the
+		// newest sample it has seen per name, so a spec that backdates its
+		// sample must not reuse a name another spec stamped with time.Now().
+		const agingName = "benthos-dataflow-hold-aging"
+
 		// A sample with margin to spare is fresh; the read after it fails,
 		// so only the hold answers.
-		reader := stubFailuresLookup(name, &benthosmetrics.Failures{},
+		reader := stubFailuresLookup(agingName, &benthosmetrics.Failures{},
 			time.Now().Add(margin-constants.BenthosMaxMetricsAndConfigAge))
 
-		ok, _ := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
+		ok, _ := fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeTrue(), "a sample inside the health age is fresh")
 
 		reader.err = context.DeadlineExceeded
-		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
+		ok, reason := fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeTrue(), "the failed read answers from the fresh held Failures")
 		Expect(reason).To(BeEmpty())
 
 		// The read errors are sustained while the held sample ages past
 		// the health age.
 		time.Sleep(margin + 200*time.Millisecond)
-		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
+		ok, reason = fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "held Failures past the health age fail closed")
 		Expect(reason).To(Equal("no fresh Benthos metrics"),
 			"the freshness rule ages the held answer out on its own")
