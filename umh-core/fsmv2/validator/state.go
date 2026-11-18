@@ -133,15 +133,15 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 	return violations
 }
 
-// ValidateShutdownCheckFirst checks that the first conditional in an active
+// ValidateStopCheckFirst checks that the first conditional in an active
 // state's Next() reacts to both stop reasons: a shutdown and a disable.
-func ValidateShutdownCheckFirst(baseDir string) []Violation {
+func ValidateStopCheckFirst(baseDir string) []Violation {
 	var violations []Violation
 
 	stateFiles := FindStateFiles(baseDir)
 
 	for _, file := range stateFiles {
-		fileViolations := checkShutdownCheckFirst(file)
+		fileViolations := checkStopCheckFirst(file)
 		violations = append(violations, fileViolations...)
 	}
 
@@ -257,9 +257,9 @@ func isStopCondition(cond ast.Expr) bool {
 	return left == "IsDisabled" && right == "IsShutdownRequested"
 }
 
-// checkShutdownCheckFirst parses a state file and checks that the first
+// checkStopCheckFirst parses a state file and checks that the first
 // conditional of every active state's Next() is a stop condition.
-func checkShutdownCheckFirst(filename string) []Violation {
+func checkStopCheckFirst(filename string) []Violation {
 	var violations []Violation
 
 	fset := token.NewFileSet()
@@ -306,7 +306,7 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		violations = append(violations, Violation{
 			File:    filename,
 			Line:    pos.Line,
-			Type:    "SHUTDOWN_CHECK_NOT_FIRST",
+			Type:    "STOP_CHECK_NOT_FIRST",
 			Message: "First conditional in Next() is not snap.ShouldStop()",
 		})
 

@@ -139,15 +139,15 @@ func stoppedState(body string) string {
 	return fmt.Sprintf(stoppedStateTemplate, body)
 }
 
-var _ = Describe("ValidateShutdownCheckFirst", func() {
+var _ = Describe("ValidateStopCheckFirst", func() {
 	DescribeTable("rejects an active state whose first condition does not stop on both reasons",
 		func(condition string) {
 			baseDir := writeStateFile("state_running.go", activeState(condition))
 
-			violations := validator.ValidateShutdownCheckFirst(baseDir)
+			violations := validator.ValidateStopCheckFirst(baseDir)
 
 			Expect(violations).To(HaveLen(1))
-			Expect(violations[0].Type).To(Equal("SHUTDOWN_CHECK_NOT_FIRST"))
+			Expect(violations[0].Type).To(Equal("STOP_CHECK_NOT_FIRST"))
 		},
 		Entry("shutdown only", "snap.IsShutdownRequested"),
 		Entry("shutdown and disable joined with &&", "snap.IsShutdownRequested && snap.IsDisabled"),
@@ -159,7 +159,7 @@ var _ = Describe("ValidateShutdownCheckFirst", func() {
 		func(condition string) {
 			baseDir := writeStateFile("state_running.go", activeState(condition))
 
-			Expect(validator.ValidateShutdownCheckFirst(baseDir)).To(BeEmpty())
+			Expect(validator.ValidateStopCheckFirst(baseDir)).To(BeEmpty())
 		},
 		Entry("ShouldStop()", "snap.ShouldStop()"),
 		Entry("shutdown or disable", "snap.IsShutdownRequested || snap.IsDisabled"),
@@ -169,13 +169,13 @@ var _ = Describe("ValidateShutdownCheckFirst", func() {
 	It("exempts a state that embeds StoppingBase", func() {
 		baseDir := writeStateFile("state_trying_to_stop.go", stoppingStateCheckingNothing)
 
-		Expect(validator.ValidateShutdownCheckFirst(baseDir)).To(BeEmpty())
+		Expect(validator.ValidateStopCheckFirst(baseDir)).To(BeEmpty())
 	})
 
 	It("checks an active state whose file name contains stopping", func() {
 		baseDir := writeStateFile("state_stopping_children.go", activeState("snap.IsShutdownRequested"))
 
-		Expect(validator.ValidateShutdownCheckFirst(baseDir)).To(HaveLen(1))
+		Expect(validator.ValidateStopCheckFirst(baseDir)).To(HaveLen(1))
 	})
 })
 

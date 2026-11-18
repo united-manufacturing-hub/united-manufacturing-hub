@@ -90,7 +90,7 @@ deterministic. Dependencies are for actions and observation, not derivation.`,
 }`,
 		ReferenceFile: "example-child/worker.go",
 	},
-	"SHUTDOWN_CHECK_NOT_FIRST": {
+	"STOP_CHECK_NOT_FIRST": {
 		Name: "Stop Check First",
 		Why: `Every active state's Next() must check snap.ShouldStop() as the FIRST conditional.
 WHY: A worker stops for two reasons: a shutdown and a disable by its parent.
