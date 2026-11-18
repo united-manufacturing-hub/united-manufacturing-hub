@@ -11,8 +11,6 @@ You need:
   which the Management Console calls the Getting Started Stack, starts UMH Core, TimescaleDB,
   PgBouncer and Grafana together. For a database you run yourself, check the
   [requirements](connection.md#requirements).
-- Write flows enabled in the Management Console. See
-  [Historian bridges are write flows](README.md#write-flows-must-be-enabled).
 
 ## Step 1: Add the Historian plugin
 

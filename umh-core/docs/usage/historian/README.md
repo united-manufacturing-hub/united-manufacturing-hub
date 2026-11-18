@@ -13,17 +13,6 @@ To set it up step by step, follow [Use the Historian](use-the-historian.md).
 
 ## In the Management Console
 
-### Write flows must be enabled
-
-A Historian bridge is a bridge with only a write flow, which moves data from the Unified Namespace to
-the database. Write flows must be enabled in the Management Console before you can save a data model
-to the Historian. While they are disabled, **Save to Historian** stays greyed out and says so. This
-is part of the early-access setup.
-
-The write flow shows the warning "Write flows do not guarantee delivery yet". A message can be lost
-when the destination rejects it or is unreachable. Do not use the Historian for critical data
-infrastructure yet.
-
 ### Plugins tab
 
 The instance's **Plugins** tab shows the Historian card once a connection is configured. It shows
@@ -94,7 +83,7 @@ The **Data Models** page has a **Historian** column:
 |---|---|---|
 | **add** | The data model is not stored, and it can be. | Click it to open a new Historian bridge for the data model, as in [Use the Historian](use-the-historian.md#step-3-save-the-data-model-to-the-historian). |
 | The bridge's health | A Historian bridge stores the data model. The tooltip names the bridge and the versions it stores. | Click it to open the bridge. When it is degraded, see [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md). |
-| Greyed out | The data model cannot be stored. The tooltip says why, for example that the instance is offline or that write flows are disabled. | Fix the cause the tooltip names. |
+| Greyed out | The data model cannot be stored. The tooltip says why, for example that the instance is offline. | Fix the cause the tooltip names. |
 
 ### SQL query tab in the Topic Browser
 
