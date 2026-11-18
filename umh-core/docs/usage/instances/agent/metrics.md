@@ -47,7 +47,7 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Bridge connection check | FSMv2 | none. `NMAP_BACKEND` is ignored |
 | CPU health | FSMv2 from v0.44.46. On v0.44.37 to v0.44.45, FSMv1 unless `USE_FSMV2_CPU=true` | `USE_FSMV2_CPU=false` switches to FSMv1 on v0.44.46 and later. See [CPU Health](../container/cpu-health/README.md#turn-the-check-on-or-off) |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
-| Metrics collection for bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the metrics collection to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
+| Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
 | Container memory and disk | FSMv1 | none |
 
@@ -146,11 +146,18 @@ Components that run under FSMv1 report series named `umh_core_<name>`. They carr
 
 Other `component` values belong to internal layers of umh-core.
 
-Each running flow is watched by a monitoring service that reads the flow's Benthos metrics. Benthos is the engine that moves the data. That service reports its own errors and reconcile time under `component="benthos_monitor"`, one set of series per running flow.
+Each bridge, stand-alone flow and stream processor runs in Benthos, the engine that moves the data. A bridge runs two flows, a read flow and a write flow. A stand-alone flow and a stream processor run one each. By default, umh-core starts a separate monitoring service for each running flow to read the flow's Benthos metrics. Each of these services reports its own errors and reconcile time under `component="benthos_monitor"`.
 
-With `USE_FSMV2_BENTHOS_METRICS=true`, umh-core does that work inside its own process. The `component="benthos_monitor"` series stop appearing, and `umh_fsmv2_*` series whose `hierarchy_path` ends in `(benthos_metrics)` appear in their place. Select them by matching the end of the path, for example `hierarchy_path=~".*\\(benthos_metrics\\)"`. See [Environment Variables](../../../reference/environment-variables.md) for the accepted values.
+With `USE_FSMV2_BENTHOS_METRICS=true`, the umh-core process reads the metrics itself, through one FSMv2 component of type `benthos_metrics` per running flow. The `component="benthos_monitor"` series stop appearing, and these components report the standard FSMv2 series instead. To move an alert:
 
-The new component reports the standard FSMv2 series. An alert on the reconcile time of `benthos_monitor` ports to `umh_fsmv2_reconciliation_duration_seconds` with that selector. FSMv2 has no counter matching `umh_core_errors_total`, so alert on the state instead. Neither set carries the flow's own message counts.
+- **Reconcile time**: use `umh_fsmv2_reconciliation_duration_seconds`, a histogram in seconds rather than milliseconds, for example `histogram_quantile(0.99, rate(umh_fsmv2_reconciliation_duration_seconds_bucket{hierarchy_path=~".*\\(benthos_metrics\\)"}[5m]))`.
+- **Errors**: FSMv2 has no counter that matches `umh_core_errors_total`. Alert on the time in state `degraded` instead. A `benthos_metrics` component is `degraded` while it cannot read the metrics. It also starts in `degraded`, each time a flow starts, so the threshold must cover the first read:
+
+```promql
+umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(benthos_metrics\\)", state="degraded"} > 60
+```
+
+Neither the `benthos_monitor` series nor the `benthos_metrics` series carries the flow's message counts. See [Metrics by component](#metrics-by-component).
 
 ### State
 
