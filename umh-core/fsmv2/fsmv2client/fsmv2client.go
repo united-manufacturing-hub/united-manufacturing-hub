@@ -40,6 +40,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -210,6 +211,28 @@ func Get[TStatus any](ctx context.Context, c *FSMv2Client, ref dynamicchildren.R
 	}
 
 	return obs, nil
+}
+
+// Refs returns the refs of the registered workers of one worker type: the
+// same refs Get and GetDesired read. It lists the registry's current
+// entries, so a worker that was never upserted, or one already deleted, is
+// absent. The refs are ordered by name, so callers iterate them
+// deterministically.
+func (c *FSMv2Client) Refs(workerType string) []dynamicchildren.Ref {
+	if c == nil || c.w == nil {
+		return nil
+	}
+
+	refs := make([]dynamicchildren.Ref, 0)
+	for ref := range c.w.Registry().Snapshot() {
+		if ref.WorkerType == workerType {
+			refs = append(refs, ref)
+		}
+	}
+
+	sort.Slice(refs, func(i, j int) bool { return refs[i].Name < refs[j].Name })
+
+	return refs
 }
 
 // GetDesired reads the desired state the supervisor saved for ref's spawned
