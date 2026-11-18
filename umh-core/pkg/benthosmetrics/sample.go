@@ -39,8 +39,9 @@ type Probes struct {
 	Version string
 }
 
-// Sample is the measurement of one successful scrape: the parsed /metrics and
-// the message throughput computed over throughputWindow (60 s).
+// Sample is the measurement of one successful scrape: the parsed /metrics,
+// the message throughput computed over throughputWindow (60 s), and the
+// Failures.
 type Sample struct {
 	// At is when /metrics was read.
 	At time.Time
@@ -57,4 +58,8 @@ type Sample struct {
 	// IsActive is whether InputMessagesPerSecond is known and above 0.
 	// Output traffic does not count.
 	IsActive bool
+
+	// Failures is what is wrong as of this scrape. It is nil only in a zero
+	// Sample, which no successful scrape produced.
+	Failures *Failures
 }
