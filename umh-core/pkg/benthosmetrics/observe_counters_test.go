@@ -86,6 +86,7 @@ var _ = Describe("The error counters", func() {
 	// below cover every counter.
 	It("covers every counter with a label", func() {
 		Expect(errorLabels).To(HaveLen(len(errorCounters)))
+
 		for _, c := range errorCounters {
 			Expect(errorLabels[c.name]).To(Equal(c.label),
 				"counter %q", c.name)
@@ -144,7 +145,7 @@ var _ = Describe("The error counters", func() {
 	// counter as 0 and nothing fires.
 	It("reads empty metrics as error-free", func() {
 		tr := NewTracker(func() time.Time { return failureT })
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			f := *tr.observe(testPort, Metrics{}, failureT.Add(time.Duration(i)*time.Second)).Failures
 			ok, _ := f.ErrorFree()
 			Expect(ok).To(BeTrue(), "scrape %d of empty Metrics", i)
@@ -188,6 +189,7 @@ var _ = Describe("The error counters", func() {
 				if r.URL.Path != "/metrics" {
 					return false
 				}
+
 				_, _ = fmt.Fprintf(w, lines[name]+"\n", value)
 
 				return true

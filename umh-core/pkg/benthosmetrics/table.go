@@ -78,6 +78,7 @@ func table() diagnosis.Table[readings] {
 // ErrorWindow passes without one, and comes back at once on the next error.
 func errorTable() diagnosis.Table[readings] {
 	increase := newIncrease()
+
 	signals := make([]diagnosis.Signal[readings], 0, len(errorCounters))
 	for _, counter := range errorCounters {
 		signals = append(signals, diagnosis.Signal[readings]{
@@ -87,7 +88,7 @@ func errorTable() diagnosis.Table[readings] {
 					Name:    counter.name,
 					Extract: func(s readings) diagnosis.Reading { return s.errors[counter.name] },
 					// Counter is false: observe restarts the error engine
-					// whenever a counter drops (see counterSeriesChanged), so
+					// whenever a counter drops (see restarted), so
 					// this window never sees a counter reset.
 					Reduction: increase,
 					Span:      ErrorWindow,
