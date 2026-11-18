@@ -18,25 +18,12 @@ The source topic follows the topic rules of every write flow, described in
 with a message that names the topic; see
 [Write Flow Topics Rejected](../data-flows/troubleshooting/write-flow-topics-rejected.md).
 
-## Data contract name
+## Data models with a dash in the name
 
-`data_contract_name` is the bare name of the data contract the bridge stores:
-
-- no leading underscore and no `_vN` suffix: for the UNS contract `_pump_v1`, it is `pump`.
-- lowercase letters, digits and underscores only, so no dashes.
-- 53 characters or fewer.
-
-The name becomes part of the PostgreSQL table names, which allow no dashes. A data model created
-before the Management Console rejected dashes in data model names still declares a contract such as
-`_pump-a_v1`. That contract works everywhere else, but a Historian bridge cannot store it.
-
-The Management Console keeps `data_contract_name` equal to the data contract in the source topic,
-and shows it read-only. A bridge edited outside the Management Console can name another data
-contract in its source topics. Deploying does not check this, and the output then refuses the data;
-see [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#the-bridge-is-running-but-the-data-of-its-data-contract-is-lost).
-
-The [Contracts, versions and tables](contracts-versions-and-tables.md) page explains why the name has
-no version and no dashes.
+A Historian bridge stores the data contract picked in its topic table. A data model created before
+the Management Console rejected dashes in data model names, such as `pump-a`, cannot be stored: its
+name becomes part of the PostgreSQL table names, which allow no dashes. The **Historian** column on
+the **Data Models** page shows a dash (—) for such a data model, and its tooltip names the reason.
 
 ## Destination fields
 

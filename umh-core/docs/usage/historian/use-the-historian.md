@@ -32,7 +32,7 @@ Click **Save & Deploy**. The Plugins tab now shows the Historian card with the c
 
 The Historian stores data models you choose. Pick a data model whose data already arrives in the
 Unified Namespace. Its name must contain no dashes; see
-[Historian bridge](bridge.md#data-contract-name).
+[Historian bridge](bridge.md#data-models-with-a-dash-in-the-name).
 
 ### No data yet: the pump example
 

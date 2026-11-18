@@ -17,15 +17,6 @@ This design keeps a tag's history in one place across versions. A query for the 
 returns its values from before and after the new version, and a Grafana panel does not change when the
 data model gets a new version.
 
-## Why data_contract_name has no version and no dashes
-
-`data_contract_name` names the tables, and the tables hold all versions. A version suffix in the name
-would tie the tables to one version, so the name is the bare data contract: `pump`, not `pump_v1`.
-
-The name becomes part of a PostgreSQL table identifier. An unquoted identifier allows only letters,
-digits and underscores, so a data contract with a dash in its name cannot be stored. The Management
-Console therefore rejects dashes in new data model names.
-
 ## A bridge reads chosen versions
 
 A Historian bridge reads only the versions listed in its source topic. umh-core rejects a source

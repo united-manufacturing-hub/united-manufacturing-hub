@@ -83,7 +83,7 @@ The **Data Models** page has a **Historian** column:
 |---|---|---|
 | **add** | The data model is not stored, and it can be. | Click it to open a new Historian bridge for the data model, as in [Use the Historian](use-the-historian.md#step-3-save-the-data-model-to-the-historian). |
 | The bridge's health | A Historian bridge stores the data model. The tooltip names the bridge and the versions it stores. | Click it to open the bridge. When it is degraded, see [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md). |
-| Greyed out | The data model cannot be stored. The tooltip says why, for example that the instance is offline. | Fix the cause the tooltip names. |
+| A dash (—) | The data model cannot be stored. Hover over it to see why, for example that the instance is offline or that the name contains a dash. | Fix the cause the tooltip names. |
 
 ### SQL query tab in the Topic Browser
 
