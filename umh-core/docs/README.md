@@ -116,7 +116,7 @@ For deeper understanding of the concepts behind UMH Core:
 
 ## Community & Support
 
-* [**Discord Community**](https://discord.gg/F9mqkZnm8U) - Get help and connect with other users
+* [**Discord Community**](https://discord.com/invite/F9mqkZnm9d) - Get help and connect with other users
 * [**GitHub Repository**](https://github.com/united-manufacturing-hub/united-manufacturing-hub) - Source code and issue tracking
 * [**Management Console**](https://management.umh.app) - Web-based configuration and monitoring
 * [**UMH Website**](https://www.umh.app/) - Company and product information
