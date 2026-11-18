@@ -266,20 +266,48 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 // s6ServiceName. A name new to the hold first sweeps it: entries whose
 // worker is no longer registered are dropped, so the hold cannot outgrow
 // the fleet it serves.
+//
+// Two readers of the same name race here. The health path reads on its own
+// tick and the telemetry count reads on the notify loop, so one can read a
+// sample, be descheduled, and arrive here after the other has already
+// stored a NEWER one. Writing unconditionally would put the older sample
+// back and a later unknown read would answer from it, so the write is
+// skipped unless f is strictly newer than what the hold has. ObservedAt is
+// the scrape's own time, which only moves forward for a given worker.
 func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, f *benthosmetrics.Failures) {
-	lastGoodMu.Lock()
-	defer lastGoodMu.Unlock()
-
-	if _, known := lastGoodFailures[s6ServiceName]; !known {
-		registered := make(map[string]struct{})
+	// Snapshot the registry BEFORE taking the mutex: Refs clones every
+	// registered spec, and holding lastGoodMu across it would block every
+	// other flow's lookup for the length of a full registry copy.
+	var registered map[string]struct{}
+	if !heldFor(s6ServiceName) {
+		registered = make(map[string]struct{})
 		for _, ref := range c.Refs(WorkerType) {
 			registered[ref.Name] = struct{}{}
 		}
+	}
+
+	lastGoodMu.Lock()
+	defer lastGoodMu.Unlock()
+
+	if registered != nil {
 		for name := range lastGoodFailures {
 			if _, ok := registered[name]; !ok {
 				delete(lastGoodFailures, name)
 			}
 		}
+	}
+
+	// Strictly older only. Two samples sharing an ObservedAt are the same
+	// scrape, so letting a tie through costs nothing and keeps the hold
+	// writable for callers that do not stamp the field.
+	//
+	// A wall-clock step backwards would stall the hold until the clock
+	// catches up. That fails in the safe direction: the held answer carries
+	// its own ObservedAt, so the health path reads it as "no fresh Benthos
+	// metrics" rather than reporting a stale verdict as current.
+	if prev, known := lastGoodFailures[s6ServiceName]; known &&
+		f.ObservedAt.Before(prev.ObservedAt) {
+		return
 	}
 
 	// The hold keeps its own copy, so it never shares a pointer with the
@@ -288,6 +316,16 @@ func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, 
 	cp.Entries = make([]benthosmetrics.FailureEntry, len(f.Entries))
 	copy(cp.Entries, f.Entries)
 	lastGoodFailures[s6ServiceName] = cp
+}
+
+// heldFor reports whether the hold already has an entry for s6ServiceName.
+func heldFor(s6ServiceName string) bool {
+	lastGoodMu.Lock()
+	defer lastGoodMu.Unlock()
+
+	_, known := lastGoodFailures[s6ServiceName]
+
+	return known
 }
 
 // forgetLastGoodFailures drops s6ServiceName's entry from the hold.
@@ -302,6 +340,15 @@ func forgetLastGoodFailures(s6ServiceName string) {
 // last good Failures the hold has for it, when its worker is still
 // registered and the hold has an entry; otherwise the read stays without
 // an answer.
+//
+// The check is by name, so a worker deleted and recreated under the same
+// name could in principle be answered from its predecessor's Failures. Two
+// things bound that. Any read between the two lives returns ErrNotFound or
+// ErrWorkerDeleted, which drops the hold, and the successor's first good
+// read replaces it. And the answer carries its own ObservedAt, so the
+// health path rejects it as "no fresh Benthos metrics" once it is older
+// than constants.BenthosMaxMetricsAndConfigAge. Both would have to miss for
+// a predecessor's errors to reach a user.
 func holdLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmetrics.Failures, bool) {
 	registered := false
 	for _, ref := range c.Refs(WorkerType) {
