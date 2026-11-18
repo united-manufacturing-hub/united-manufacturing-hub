@@ -133,7 +133,8 @@ func checkSingleEntryPointPattern(filename string) []Violation {
 	return violations
 }
 
-// ValidateShutdownCheckFirst checks that Next() methods check IsShutdownRequested as first conditional.
+// ValidateShutdownCheckFirst checks that the first conditional in an active
+// state's Next() reacts to both stop reasons: a shutdown and a disable.
 func ValidateShutdownCheckFirst(baseDir string) []Violation {
 	var violations []Violation
 
@@ -147,9 +148,55 @@ func ValidateShutdownCheckFirst(baseDir string) []Violation {
 	return violations
 }
 
-// checkShutdownCheckFirst parses a state file and checks if shutdown is checked first.
+// isStopStateFile reports whether a state file belongs to the stop path, which
+// reacts to a stop request by finishing the stop, not by starting one.
+func isStopStateFile(filename string) bool {
+	baseName := filepath.Base(filename)
+
+	return strings.Contains(baseName, "stopped") ||
+		strings.Contains(baseName, "trying_to_stop") ||
+		strings.Contains(baseName, "stopping")
+}
+
+// stopChecksIn lists which stop checks an expression reads.
+type stopChecksIn struct {
+	shouldStop bool
+	shutdown   bool
+	disabled   bool
+}
+
+func findStopChecks(expr ast.Node) stopChecksIn {
+	var found stopChecksIn
+
+	ast.Inspect(expr, func(node ast.Node) bool {
+		selExpr, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		switch selExpr.Sel.Name {
+		case "ShouldStop":
+			found.shouldStop = true
+		case "IsShutdownRequested":
+			found.shutdown = true
+		case "IsDisabled":
+			found.disabled = true
+		}
+
+		return true
+	})
+
+	return found
+}
+
+// checkShutdownCheckFirst parses a state file and checks that its first
+// conditional reacts to a shutdown and to a disable.
 func checkShutdownCheckFirst(filename string) []Violation {
 	var violations []Violation
+
+	if isStopStateFile(filename) {
+		return violations
+	}
 
 	fset := token.NewFileSet()
 
@@ -158,7 +205,6 @@ func checkShutdownCheckFirst(filename string) []Violation {
 		return violations
 	}
 
-	// Look for Next() method
 	ast.Inspect(node, func(n ast.Node) bool {
 		funcDecl, ok := n.(*ast.FuncDecl)
 		if !ok || funcDecl.Name.Name != "Next" {
@@ -182,45 +228,18 @@ func checkShutdownCheckFirst(filename string) []Violation {
 			return true
 		}
 
-		isShutdownCheck := false
-
-		ast.Inspect(firstIfStmt.Cond, func(condNode ast.Node) bool {
-			if callExpr, ok := condNode.(*ast.CallExpr); ok {
-				if selExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
-					if selExpr.Sel.Name == "IsShutdownRequested" || selExpr.Sel.Name == "ShouldStop" {
-						isShutdownCheck = true
-
-						return false
-					}
-				}
-			}
-
-			// Also accept direct field access: snap.IsShutdownRequested (bool field on WorkerSnapshot).
-			if selExpr, ok := condNode.(*ast.SelectorExpr); ok {
-				if selExpr.Sel.Name == "IsShutdownRequested" {
-					isShutdownCheck = true
-
-					return false
-				}
-			}
-
+		checks := findStopChecks(firstIfStmt.Cond)
+		if checks.shouldStop || (checks.shutdown && checks.disabled) {
 			return true
-		})
-
-		if !isShutdownCheck {
-			baseName := filepath.Base(filename)
-			if strings.Contains(baseName, "stopped") || strings.Contains(baseName, "trying_to_stop") || strings.Contains(baseName, "stopping") {
-				return true
-			}
-
-			pos := fset.Position(firstIfStmt.Pos())
-			violations = append(violations, Violation{
-				File:    filename,
-				Line:    pos.Line,
-				Type:    "SHUTDOWN_CHECK_NOT_FIRST",
-				Message: "First conditional in Next() is not IsShutdownRequested check",
-			})
 		}
+
+		pos := fset.Position(firstIfStmt.Pos())
+		violations = append(violations, Violation{
+			File:    filename,
+			Line:    pos.Line,
+			Type:    "SHUTDOWN_CHECK_NOT_FIRST",
+			Message: "First conditional in Next() is not snap.ShouldStop()",
+		})
 
 		return true
 	})

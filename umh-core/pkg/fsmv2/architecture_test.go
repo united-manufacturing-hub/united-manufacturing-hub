@@ -87,7 +87,7 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 		})
 
 		Describe("Shutdown Check First in Next() (Invariant: Lifecycle Overrides Operational)", func() {
-			It("should check IsShutdownRequested as first conditional after type assertion", func() {
+			It("should check ShouldStop() as first conditional after type assertion", func() {
 				violations := validator.ValidateShutdownCheckFirst(getFsmv2Dir())
 
 				if len(violations) > 0 {

@@ -349,7 +349,8 @@
 // ShouldStop() is true when shutdown is requested and when the parent disabled
 // the worker. Stopped states check snap.IsShutdownRequested first and return
 // SignalNeedsRemoval, then check snap.IsDisabled and stay stopped. The
-// architecture test rejects a Next() whose first conditional checks neither.
+// architecture test rejects an active state whose first conditional is not
+// snap.ShouldStop().
 // See workers/example/examplechild/state/ for examples.
 //
 // ## Type-safe dependencies

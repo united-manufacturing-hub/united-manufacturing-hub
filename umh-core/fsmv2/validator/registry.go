@@ -91,16 +91,16 @@ deterministic. Dependencies are for actions and observation, not derivation.`,
 		ReferenceFile: "example-child/worker.go",
 	},
 	"SHUTDOWN_CHECK_NOT_FIRST": {
-		Name: "Shutdown Check First",
-		Why: `Every state's Next() must check IsShutdownRequested() as the FIRST conditional.
-WHY: Lifecycle states (stopping, shutdown) must ALWAYS override operational logic.
-If a worker is being stopped, it should not try to reconnect, process data, or
-perform any actions. Checking shutdown first prevents race conditions where a
-worker starts an operation right before shutdown is requested.`,
-		CorrectCode: `func (s *MyState) Next(snapAny any) (...) {
+		Name: "Stop Check First",
+		Why: `Every active state's Next() must check snap.ShouldStop() as the FIRST conditional.
+WHY: A worker stops for two reasons: a shutdown and a disable by its parent.
+ShouldStop() is true for both. A state that checks only IsShutdownRequested
+keeps running, and keeps its children running, after its parent disabled it.
+Stopped and stopping state files are exempt.`,
+		CorrectCode: `func (s *MyState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
-    if snap.IsShutdownRequested {  // MUST be first conditional
-        return fsmv2.Result[any, any](&TryingToStopState{}, fsmv2.SignalNone, nil, "shutdown requested")
+    if snap.ShouldStop() {  // MUST be first conditional
+        return fsmv2.Transition(&TryingToStopState{}, fsmv2.SignalNone, nil, "stop required: "+snap.StopReason(), nil)
     }
     // Then other logic...
 }`,
