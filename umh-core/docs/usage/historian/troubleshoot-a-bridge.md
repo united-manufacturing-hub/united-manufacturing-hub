@@ -1,0 +1,115 @@
+# Troubleshoot a Historian bridge
+
+This page lists what can go wrong with a Historian bridge, why, and how to fix it. Most fixes need the
+bridge's logs: open the bridge and select **Logs** (see [View Logs](../data-flows/bridges.md#view-logs)).
+
+## The bridge fails right after deploying
+
+**Cause.** The Historian output checks the database when it starts, instead of failing later on the
+first write. It stops with an error that names the cause:
+
+- The host is unreachable.
+- The server runs PostgreSQL older than 16.
+- The `timescaledb` or `ltree` extension is missing.
+- The login role can connect but cannot `INSERT` into the data contract's tables.
+
+**Fix.** Open the Historian overview page (**Plugins** → Historian card → **Open plugin**). If
+**Reachable** is `No` or **Auth** is not valid, fix the [connection](connection.md) first. Otherwise
+fix the cause the error names; the [requirements](connection.md#requirements) list what the database
+needs.
+
+## The bridge stopped saving after updating umh-core
+
+**Cause.** This happens after an update to umh-core 0.45.0 or newer. Historian bridges created before umh-core 0.45.0 read the whole Unified Namespace.
+umh-core 0.45.0 rejects such source topics, so the write flow of these bridges does not start. The
+bridge shows degraded, and its status names each rejected topic and the reason.
+
+**Fix.** Open the bridge. Its topic opens in Code mode. Pick one data contract in the topic table
+and save the bridge. The rules for source topics are in
+[Which topics the bridge reads](bridge.md#which-topics-the-bridge-reads).
+
+{% hint style="warning" %}
+**Don't copy the topics umh-core suggests.** The degraded status and the contract error in the logs
+each suggest a topic. The topic in the status may name a different data contract than this bridge
+stores, and matches only data published at the bridge location itself. The topic in the logs is
+rejected when you deploy. Write the source topic from the pattern in
+[Which topics the bridge reads](bridge.md#which-topics-the-bridge-reads), with this bridge's location,
+data contract and versions.
+{% endhint %}
+
+## The bridge is degraded and the output logs nothing
+
+**Cause.** umh-core rejected the bridge's source topics. The bridge stays connected, but its write
+flow does not start, so the output logs nothing. A topic is rejected when it reads outside the bridge
+location, names no single data contract, or matches versions that are not declared.
+
+**Fix.** The bridge status names the rejected topics. Correct them as in
+[Which topics the bridge reads](bridge.md#which-topics-the-bridge-reads).
+
+## The bridge is running, but the data of its data contract is lost
+
+**Cause.** The data contract in the source topics differs from `data_contract_name`. The output
+refuses every batch that holds a message of another data contract, and does not retry it. All
+messages in the batch are lost, including those of the right contract. The output logs an error at
+most every two minutes that names the data contracts that arrived.
+
+This happens only with a bridge edited outside the Management Console, for example in `config.yaml`,
+or saved before the Management Console kept the two equal. Deploying does not check it.
+
+**Fix.** Decide which data contract the bridge stores.
+
+- In the Management Console, pick the data contract in the topic table. `data_contract_name` follows
+  it.
+- In `config.yaml`, correct the source topics or `data_contract_name`, whichever names the other data
+  contract. Write `data_contract_name` without the version.
+
+Do not use the source topic the error suggests: umh-core rejects it. Data refused before the fix
+stays lost.
+
+## A new version of the data model is not stored
+
+**Cause.** The source topic lists the versions that were declared when the bridge was saved. It does
+not include later versions. Devices that publish a newer version, such as `_pump_v3`, write data the
+bridge does not read.
+
+**Fix.** Check in the Topic Browser which versions your devices publish. Hover over the data model's
+**Historian** column on the **Data Models** page to see the versions the bridge stores. Add the new
+version to the source topic in Code mode, for example `_pump_v[1-3]\.`. See
+[Contracts, versions and tables](contracts-versions-and-tables.md) for why a new version is not
+stored on its own.
+
+## The SQL query tab has no query
+
+The Topic Browser's **SQL query** tab shows queries only when the Historian stores the tag's data
+contract.
+
+| What the tab shows | Cause | Fix |
+|---|---|---|
+| The tab is greyed out, and its tooltip says the instance has no historian. | The instance has no Historian connection. | Click **Configure Historian** and add the connection, as in [Use the Historian](use-the-historian.md#step-1-add-the-historian-plugin). |
+| "This data contract isn't saved to the historian yet" | No Historian bridge stores the data contract. | Click **Save to Historian**, as in [Use the Historian](use-the-historian.md#step-3-save-the-data-model-to-the-historian). Without the button, the data contract cannot be saved from the Management Console, for example because its name contains a dash. |
+| "The historian bridge for this data contract hasn't stored any data yet" | The bridge exists, but its tables do not exist yet. | Click **Open historian bridge** and check its status and logs against the sections above. |
+
+![The SQL query tab for a data contract that is not saved to the Historian](./images/historian-sql-query-not-saved.png)
+
+The tab counts a tag as stored when its data contract is stored. A query for a tag the bridge does not
+read, for example a tag of a version outside the source topic, returns no rows.
+
+## Rows are dropped
+
+**Cause.** Some rows can never be written. The output drops them and writes the rest of the batch:
+
+- A tag whose datatype changes between number and text. See
+  [Precision and datatypes](precision-and-datatypes.md).
+- Two different values of one tag at the same millisecond.
+
+The output logs each dropped row with its tag and counts it on `historian_rows_poisoned`. Messages
+dropped before the write, such as a payload without `timestamp_ms`, are counted on
+`messages_dropped` with a `reason` label. Both counters belong to the bridge's Benthos process, not to
+umh-core's port 8080. See [Historian output counters](README.md#historian-output-counters).
+
+**Fix.** Follow
+[Runbook: poisoned tags](https://docs.umh.app/benthos-umh/output/historian#runbook-poisoned-tags) in
+the Historian output reference.
+
+Connection loss, deadlocks, a missing grant and a full disk do not drop rows. The output retries them
+until the cause is fixed.
