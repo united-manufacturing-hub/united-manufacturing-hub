@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -188,10 +189,15 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 					return false, failuresSeen(obs), nil
 				}
 
+				// The elapsed tail ("just now", "4m ago") moves with the
+				// scrape this check happens to see, so pin everything up to
+				// it: the count, the plural, the window as the user reads it
+				// and the "last one" clause. pkg/benthosmetrics pins the
+				// elapsed wording itself on a controlled clock.
 				ok, reason := flowErrorFree(s.Result.Sample.Failures)
-				want := fmt.Sprintf("benthos reported %d output errors in the last 10 minutes", e.Count)
-				if !ok && reason != want {
-					return false, "", fmt.Errorf("the entry's reason is %q, want %q", reason, want)
+				want := fmt.Sprintf("benthos reported %d output errors in the last 10m, last one ", e.Count)
+				if !ok && !strings.HasPrefix(reason, want) {
+					return false, "", fmt.Errorf("the entry's reason is %q, want it to start %q", reason, want)
 				}
 
 				// The entry's count is the whole burst: the window reaches
