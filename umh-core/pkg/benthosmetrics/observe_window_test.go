@@ -80,7 +80,8 @@ var _ = Describe("The error window", func() {
 		tl.runTo(failureT.Add(time.Second))
 		ok, reason := tl.failures.ErrorFree()
 		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 1 output error in the last 10 minutes"))
+		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, 1s ago"),
+			"the error rose at T and this scrape is at T+1s")
 
 		Expect(tl.failures.Entries).To(HaveLen(1))
 		e := tl.failures.Entries[0]
@@ -155,7 +156,7 @@ var _ = Describe("The error window", func() {
 		tl.runTo(failureT.Add(3 * time.Second))
 		ok, reason := tl.failures.ErrorFree()
 		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 5 output errors in the last 10 minutes"))
+		Expect(reason).To(Equal("benthos reported 5 output errors in the last 10m, last one just now"))
 	})
 
 	// Scrape stores observe's Failures on the sample, so a rise between two

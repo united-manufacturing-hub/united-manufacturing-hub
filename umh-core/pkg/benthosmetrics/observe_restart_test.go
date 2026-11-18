@@ -59,18 +59,25 @@ func (s *scrapes) wantReason(when, want string) {
 // signal fired at failureT.
 func firedAt(n int64) *scrapes {
 	s := newScrapes().at(failureT.Add(-time.Second), testPort, 0).at(failureT, testPort, n)
-	s.wantFailure("setup, at T", n)
+	s.wantFailure("setup, at T", n, "just now")
 
 	return s
 }
 
-// wantFailure fails the spec unless the latest failures name n output errors.
-func (s *scrapes) wantFailure(when string, n int64) {
+// wantFailure fails the spec unless the latest failures name n output errors
+// whose newest rose ago before the scrape just observed, worded as the
+// reason words it ("just now", "9m58s ago").
+func (s *scrapes) wantFailure(when string, n int64, ago string) {
 	label := "output errors"
+	lastOne := "last one "
+
 	if n == 1 {
 		label = "output error"
+		lastOne = ""
 	}
-	s.wantReason(when, "benthos reported "+strconv.FormatInt(n, 10)+" "+label+" in the last 10 minutes")
+
+	s.wantReason(when, "benthos reported "+strconv.FormatInt(n, 10)+" "+label+
+		" in the last 10m, "+lastOne+ago)
 }
 
 var _ = Describe("Benthos restarts and scrape gaps", func() {
@@ -85,19 +92,19 @@ var _ = Describe("Benthos restarts and scrape gaps", func() {
 	It("counts errors before the first scrape after a restart", func() {
 		s := newScrapes().at(failureT.Add(-time.Second), testPort, 7).at(failureT, testPort, 7)
 		s.wantErrorFree("before the restart, counter flat at 7")
-		s.at(failureT.Add(time.Second), testPort, 3).wantFailure("first scrape after a restart, counter 3", 3)
+		s.at(failureT.Add(time.Second), testPort, 3).wantFailure("first scrape after a restart, counter 3", 3, "just now")
 	})
 
 	// Benthos restarts and counts 3 errors before the first scrape after the
 	// restart, and that first scrape comes 15 minutes after the last one.
 	It("counts errors before the first scrape after a restart and a long gap", func() {
 		s := newScrapes().at(failureT.Add(-time.Second), testPort, 7).at(failureT, testPort, 7)
-		s.at(failureT.Add(15*time.Minute), testPort, 3).wantFailure("first scrape 15m later, after a restart, counter 3", 3)
+		s.at(failureT.Add(15*time.Minute), testPort, 3).wantFailure("first scrape 15m later, after a restart, counter 3", 3, "just now")
 	})
 
 	// Scrapes fail for 15 minutes while Benthos keeps counting errors.
 	It("counts a rise during a long outage", func() {
-		firedAt(5).at(failureT.Add(15*time.Minute), testPort, 8).wantFailure("first scrape after a 15m outage, counter 5 -> 8", 3)
+		firedAt(5).at(failureT.Add(15*time.Minute), testPort, 8).wantFailure("first scrape after a 15m outage, counter 5 -> 8", 3, "just now")
 	})
 
 	// Scrapes fail for 15 minutes while Benthos counts no new error.
@@ -109,7 +116,7 @@ var _ = Describe("Benthos restarts and scrape gaps", func() {
 	// no new error. The window still holds the rise, so the signal stays
 	// fired. A rebuild on a shorter gap would release it.
 	It("keeps the signal across a gap shorter than the window", func() {
-		firedAt(5).at(failureT.Add(10*time.Minute-2*time.Second), testPort, 5).wantFailure("first scrape after a 9m58s outage, counter still 5", 5)
+		firedAt(5).at(failureT.Add(10*time.Minute-2*time.Second), testPort, 5).wantFailure("first scrape after a 9m58s outage, counter still 5", 5, "9m58s ago")
 	})
 
 	// The metrics port changes without a worker restart, and the Benthos on
@@ -123,15 +130,15 @@ var _ = Describe("Benthos restarts and scrape gaps", func() {
 	// they count, as the errors before a restart's first scrape do.
 	It("counts errors the new port's Benthos already reported", func() {
 		s := firedAt(3).at(failureT.Add(time.Second), testPort+1, 2)
-		s.wantFailure("first scrape on a new port, counter 2", 2)
-		s.at(failureT.Add(2*time.Second), testPort+1, 2).wantFailure("next scrape on the new port, counter still 2", 2)
+		s.wantFailure("first scrape on a new port, counter 2", 2, "just now")
+		s.at(failureT.Add(2*time.Second), testPort+1, 2).wantFailure("next scrape on the new port, counter still 2", 2, "1s ago")
 	})
 
 	// A scrape stamped at the same instant as the previous one shows a dropped
 	// counter; the next scrape, one second later, shows the same drop.
 	It("waits for the next scrape on a drop on a same-instant scrape", func() {
 		s := firedAt(3)
-		s.at(failureT, testPort, 0).wantFailure("same-instant scrape with a dropped counter", 3)
+		s.at(failureT, testPort, 0).wantFailure("same-instant scrape with a dropped counter", 3, "just now")
 		s.at(failureT.Add(time.Second), testPort, 0).wantErrorFree("next scrape, counter still 0")
 	})
 })
