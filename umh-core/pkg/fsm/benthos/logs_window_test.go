@@ -91,3 +91,85 @@ var _ = Describe("IsBenthosLogsFine log window", func() {
 		Expect(fine).To(BeTrue())
 	})
 })
+
+var _ = Describe("IsBenthosLogsFine countdown", func() {
+	const (
+		oldestError = `level=error msg="failed to connect to broker" @service=benthos`
+		middleError = `level=error msg="failed to dispatch message" @service=benthos`
+		newestError = `level=error msg="failed to flush batch" @service=benthos`
+	)
+
+	var (
+		instance *BenthosInstance
+		start    time.Time
+	)
+
+	BeforeEach(func() {
+		cfg := config.BenthosConfig{FSMInstanceConfig: config.FSMInstanceConfig{Name: "logs-countdown-test"}}
+		instance = NewBenthosInstanceWithService(cfg, benthos_service.NewDefaultBenthosService(cfg.Name))
+		start = time.Date(2026, 11, 13, 10, 22, 18, 500_000_000, time.UTC)
+	})
+
+	setProcess := func(info s6service.ServiceInfo, logs ...s6service.LogEntry) {
+		instance.ObservedState.ServiceInfo.S6ObservedState.ServiceInfo = info
+		instance.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs = logs
+	}
+
+	// The process has been up for longer than the log window, so the scan
+	// window is the full log window and the clamp on the process lifetime
+	// plays no part in the result.
+	runningLongerThanTheWindow := func(now time.Time) s6service.ServiceInfo {
+		return s6service.ServiceInfo{
+			Status:        s6service.ServiceUp,
+			LastChangedAt: start,
+			Uptime:        int64(now.Sub(start).Seconds()),
+		}
+	}
+
+	// A flow stays degraded until the last offending line has aged out of
+	// the window, so the countdown belongs to the newest entry. The message
+	// still names the oldest one, because that is the root error.
+	It("counts down to the newest offending entry, and names the oldest", func() {
+		now := start.Add(15 * time.Minute)
+		setProcess(
+			runningLongerThanTheWindow(now),
+			s6service.LogEntry{Timestamp: start.Add(6 * time.Minute), Content: oldestError},
+			s6service.LogEntry{Timestamp: start.Add(8 * time.Minute), Content: middleError},
+			s6service.LogEntry{Timestamp: start.Add(11 * time.Minute), Content: newestError},
+		)
+
+		fine, reason := instance.IsBenthosLogsFine(now, constants.BenthosLogWindow)
+		Expect(fine).To(BeFalse())
+		// start+11m + 10m window - now = 6m. From the oldest entry it would
+		// be 1m, from the process start 1m as well.
+		Expect(reason).To(Equal("found error (clears in 6m0s): " + oldestError))
+	})
+
+	It("counts down from the single entry when there is only one", func() {
+		now := start.Add(15 * time.Minute)
+		setProcess(
+			runningLongerThanTheWindow(now),
+			s6service.LogEntry{Timestamp: start.Add(8 * time.Minute), Content: oldestError},
+		)
+
+		fine, reason := instance.IsBenthosLogsFine(now, constants.BenthosLogWindow)
+		Expect(fine).To(BeFalse())
+		Expect(reason).To(Equal("found error (clears in 3m0s): " + oldestError))
+	})
+
+	// Entries older than the window are not offending entries at all, so
+	// they must not drag the countdown back.
+	It("ignores offending entries that have already aged out", func() {
+		now := start.Add(15 * time.Minute)
+		setProcess(
+			runningLongerThanTheWindow(now),
+			s6service.LogEntry{Timestamp: start.Add(1 * time.Minute), Content: middleError},
+			s6service.LogEntry{Timestamp: start.Add(7 * time.Minute), Content: oldestError},
+			s6service.LogEntry{Timestamp: start.Add(9 * time.Minute), Content: newestError},
+		)
+
+		fine, reason := instance.IsBenthosLogsFine(now, constants.BenthosLogWindow)
+		Expect(fine).To(BeFalse())
+		Expect(reason).To(Equal("found error (clears in 4m0s): " + oldestError))
+	})
+})
