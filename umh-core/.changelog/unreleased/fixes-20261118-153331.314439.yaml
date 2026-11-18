@@ -1,0 +1,3 @@
+kind: fixes
+body: The Historian database figures, such as disk usage, versions, table names and job counts, are no longer shown as current while umh-core cannot read the database. Before, the Management Console showed the figures read last until the database answered again or umh-core restarted, also after the Historian was removed and added again, and after a restart it showed 0 failing jobs although nobody had counted them
+time: 2026-11-18T15:33:31.314439+01:00
