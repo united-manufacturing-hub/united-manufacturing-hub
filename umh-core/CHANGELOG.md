@@ -31,6 +31,7 @@
 ### Improvements
 
 - Improved validation of the Historian output's duration fields (`retention`, `compress_after`, `value_chunk_interval`, `attribute_chunk_interval` and `write_timeout`). An invalid value, such as `168` without a unit, now shows up as a config lint error that names the field
+- With `USE_FSMV2_BENTHOS_METRICS` on, Benthos output and processor errors stop counting 10 minutes after the last error, without a restart; the flow then leaves degraded when the log check passes too, and is idle until it processes data again. Its status also names inputs and outputs that are not connected. See [Why a Data Flow Is Degraded](https://docs.umh.app/usage/data-flows/why-a-flow-is-degraded).
 
 ### Fixes
 
