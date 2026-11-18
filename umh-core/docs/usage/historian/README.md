@@ -9,12 +9,6 @@ You connect the database once per instance. Then you choose which data models to
 data model gets its own Historian bridge, which writes that model's data contract into the database.
 Data models you do not choose are not stored, so the disk holds only data someone needs.
 
-{% hint style="info" %}
-**Early access.** The Historian is not switched on by default. If you want to use it, get in touch
-with us on [Discord](https://discord.com/invite/F9mqkZnm9d) or through your usual UMH contact, and we will
-show you how to get started.
-{% endhint %}
-
 To set it up step by step, follow [Use the Historian](use-the-historian.md).
 
 ## In the Management Console

@@ -2,10 +2,6 @@
 
 This page tells you what to add to a machine for the Historian and how much disk it needs per year. The figures assume the Historian output's standard settings and no downsampling.
 
-{% hint style="info" %}
-**Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
-{% endhint %}
-
 ## Extra CPU and memory
 
 The Historian's database can run on the same machine as UMH Core. As a starting point, add this to the machine in the [Sizing Guide](../../production/sizing-guide.md):
