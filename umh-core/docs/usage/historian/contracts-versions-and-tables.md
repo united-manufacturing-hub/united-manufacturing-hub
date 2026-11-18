@@ -19,13 +19,6 @@ data model gets a new version.
 
 ## A bridge reads chosen versions
 
-A Historian bridge reads only the versions listed in its source topic. umh-core rejects a source
-topic that also matches versions that are not declared yet, such as `_pump_v\d+`. A bridge therefore
-cannot read a version that did not exist when it was saved.
-
-When you add version 3 to the `pump` data model, devices that publish `_pump_v3` write data the
-existing bridge does not read. The bridge does not change on its own, because umh-core accepts only
-versions that were declared when the bridge was saved. To store the new version, add it to the
-bridge's source topic; see
+A Historian bridge stores only the versions listed in its source topic, so a new version of the data
+model is stored once you add it to the bridge; see
 [Troubleshoot a Historian bridge](troubleshoot-a-bridge.md#a-new-version-of-the-data-model-is-not-stored).
-The new version's values then go to the same tables as the older versions.
