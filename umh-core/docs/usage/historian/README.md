@@ -150,7 +150,7 @@ The Historian output inside each Historian bridge counts its own writes. The bri
 
 ### Database figures
 
-The connection check also exports the figures the Management Console shows for the Historian as `umh_fsmv2_worker_historian_*` series. They tell you whether TimescaleDB answers and accepts the credentials, how fast the disk fills, and whether TimescaleDB keeps compressing and deleting old data on schedule. The figures read from the database refresh once a minute, the database size every 15 minutes. While the database cannot be read, the figures keep their last value, and `umh_fsmv2_worker_historian_summary_ready` or `umh_fsmv2_worker_historian_database_size_ready` is 0. All series disappear when you remove the `historian:` section.
+The connection check also exports the figures the Management Console shows for the Historian as `umh_fsmv2_worker_historian_*` series. They tell you whether TimescaleDB answers and accepts the credentials, how fast the disk fills, and whether TimescaleDB keeps compressing and deleting old data on schedule. The figures read from the database refresh once a minute, the database size every 15 minutes. While the database cannot be read, the figures keep their last value, and `umh_fsmv2_worker_historian_summary_ready` or `umh_fsmv2_worker_historian_database_size_ready` is 0. The query latency is current only while `umh_fsmv2_worker_historian_auth_valid` is 1. All series disappear when you remove the `historian:` section.
 
 This alert fires when TimescaleDB stops answering:
 
