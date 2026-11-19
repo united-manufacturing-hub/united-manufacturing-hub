@@ -61,6 +61,7 @@ func (s *stubFailuresReader) LoadObservedTyped(_ context.Context, _, id string, 
 	if !ok {
 		return nil
 	}
+
 	*out = *obs
 
 	return nil
@@ -174,9 +175,10 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 	const name = "benthos-dataflow-hold"
 
 	// One failed store read is an unknown read, not a missing worker, so a
-	// healthy flow stays healthy: good, read error, good reads ok, ok, ok.
+	// healthy flow stays healthy: each of good, read error, good reads ok.
 	It("holds a healthy flow error-free through one failed read", func() {
 		setBenthosMetricsFlag("true")
+
 		reader := stubFailuresLookup(name, &benthosmetrics.Failures{}, time.Now())
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
@@ -227,6 +229,7 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 		// The read errors are sustained while the held sample ages past
 		// the health age.
 		time.Sleep(margin + 200*time.Millisecond)
+
 		ok, reason = fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "held Failures past the health age fail closed")
 		Expect(reason).To(Equal("no fresh Benthos metrics"),
@@ -237,6 +240,7 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 	// fail-closed, hold or no hold.
 	It("still fails closed on a not-found read", func() {
 		setBenthosMetricsFlag("true")
+
 		reader := stubFailuresLookup(name, &benthosmetrics.Failures{}, time.Now())
 
 		ok, _ := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
@@ -257,6 +261,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	// counters hold no error.
 	It("asks the Failures lookup with the flag on", func() {
 		setBenthosMetricsFlag("true")
+
 		at := time.Now()
 		stubStoredFailures(name, &benthosmetrics.Failures{
 			ObservedAt: at,
