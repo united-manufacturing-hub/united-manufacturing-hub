@@ -1,14 +1,22 @@
 # Topic does not appear in the Topic Browser
 
-The Topic Browser can show an empty tree — `No topics found. Ensure your UMH instance is connected and generating topics.` — while the instance is connected and producing data. A single topic can also stay missing while its bridge keeps sending it. This page explains what to try and how to check that your data is still flowing. The last step needs access to the Docker host of the instance.
+The Topic Browser can show an empty tree, **No topics have arrived yet.**, while the instance is connected and producing data. A single topic can also stay missing while its bridge keeps sending it. This page explains what to try and how to check that your data is still flowing. The last step needs access to the Docker host of the instance.
 
 An empty tree does not mean your data stopped. The Topic Browser is a view the instance builds from the messages it receives (see [Topic Browser](topic-browser.md)); the messages themselves keep flowing through your bridges into [Redpanda](redpanda.md). If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration). Otherwise, the steps below recover the view when it stops showing what the instance has.
+
+![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
 
 ## What to try first
 
 1. Wait a minute. A new topic can take a moment to show.
 2. Reload the page in your browser.
 3. Check the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the instance's detail page. If its badge is not **Active**, hover it to see the reason. For `redpanda degraded`, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+
+## When the instance is offline
+
+If the instance that reports the topic has gone offline, the browser says so above the value and keeps showing what arrived before it went. The values are real, but they stop at that moment, and the age under the value says how long ago that was.
+
+![A topic whose instance went offline, with the last values it reported](../../generated/topic-browser-instance-offline.png)
 
 ## Check whether the data is still flowing
 
