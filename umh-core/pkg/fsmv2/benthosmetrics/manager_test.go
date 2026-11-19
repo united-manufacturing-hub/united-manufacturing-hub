@@ -443,24 +443,27 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 		Expect(f).NotTo(BeNil())
 
 		var wg sync.WaitGroup
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for j := 0; j < 50; j++ {
+
+				for range 50 {
 					_, _ = Failures(context.Background(), name)
 				}
 			}()
 		}
 
 		// While the readers read, the store keeps failing and recovering.
-		for j := 0; j < 50; j++ {
+		for j := range 50 {
 			reader.setFail(j%2 == 0)
 		}
+
 		wg.Wait()
 
 		// A failed read of a registered worker answers from the hold.
 		reader.setFail(true)
+
 		f, ok = Failures(context.Background(), name)
 		Expect(ok).To(BeTrue(), "a failed read answers from the last good Failures")
 		Expect(f).NotTo(BeNil())
@@ -491,12 +494,14 @@ var _ = Describe("The Failures hold across a failing store read", func() {
 		// Failures that read returned must not reach the hold's copy.
 		f, ok := Failures(context.Background(), name)
 		Expect(ok).To(BeTrue(), "the good read answers")
+
 		f.Entries[0] = benthosmetrics.FailureEntry{Signal: "mutated", Count: 99}
 
 		// From here on the store read fails, so every read answers from the
 		// hold; changing the Failures a held read returned must not reach
 		// the hold's copy either.
 		reader.setFail(true)
+
 		held, ok := Failures(context.Background(), name)
 		Expect(ok).To(BeTrue(), "a failed read answers from the last good Failures")
 		Expect(held.Entries).To(Equal(want), "the hold kept its own copy of the good read's entries")
@@ -526,6 +531,7 @@ var _ = Describe("The Failures hold's sweep and forget", func() {
 		defer lastGoodMu.Unlock()
 
 		_, held := lastGoodFailures[name]
+
 		return held
 	}
 
@@ -720,6 +726,7 @@ var _ = Describe("ErrorsNotClearedCount", func() {
 			}},
 		}
 		reader.obsByID[fsmv2config.ChildID("benthos-standalone-1")] = sampleWith(fresh)
+
 		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(4),
 			"the stand-alone flow cleared in time")
 

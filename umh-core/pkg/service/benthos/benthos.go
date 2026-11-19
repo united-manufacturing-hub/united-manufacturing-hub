@@ -1139,20 +1139,12 @@ func (s *BenthosService) usesFsmv2Metrics() bool {
 }
 
 // fsmv2MetricsErrorFree answers IsMetricsErrorFree from the stored
-// Failures of this instance's FSMv2 worker. Failures too old to trust
-// answer "no fresh Benthos metrics"; fsmv2benthosmetrics.Failures explains
-// how an unknown read still answers from the last good one.
-//
-// Two separate questions ask how old a scrape may be, and they get
-// different answers. Three scrape intervals is the worker's liveness rule:
-// is the scraper still running?
-// Below is the health rule: may this sample still say whether a customer's
-// flow is degraded? A scrape that lands a second or two late on a loaded
-// instance comes from a scraper that is working fine, and a flow must not
-// flip to degraded and back over it, so health allows the wider
-// constants.BenthosMaxMetricsAndConfigAge - the age at which the FSMv1
-// monitor path also stops trusting Benthos metrics (see
-// benthos_monitor.isMonitorHealthy).
+// Failures of this instance's FSMv2 worker. Failures older than
+// constants.BenthosMaxMetricsAndConfigAge, the age at which the FSMv1
+// monitor also stops trusting Benthos metrics, answer "no fresh Benthos
+// metrics". That is wider than the worker's three-scrape liveness rule, so a
+// scrape a second late on a loaded instance does not flip the flow to
+// degraded.
 func (s *BenthosService) fsmv2MetricsErrorFree() (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), fsmv2FailuresTimeout)
 	defer cancel()
