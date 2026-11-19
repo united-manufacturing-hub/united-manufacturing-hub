@@ -2,7 +2,7 @@
 
 In this example you'll learn how to add Grafana to a umh-core Docker Compose stack. If you're not sure about umh-core and Docker Compose stacks, start with [Setup](../setup.md).
 
-[Grafana](https://grafana.com/) is an open-source visualization platform. It allows you to build dashboards showing real-time and historical data based on your umh-core configuration.
+[Grafana](https://grafana.com/) is an open-source visualization platform. It draws charts and dashboards from a data source, such as the TimescaleDB database that the Historian writes umh-core data to.
 
 Grafana's admin account defaults to `admin` / `admin`. Port 3000 is published to the host, so set both values before you start the stack. The variable names follow Grafana's `GF_<SECTION>_<KEY>` convention, documented in the [Grafana configuration reference](https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana/).
 
@@ -107,5 +107,13 @@ Once the stack is running, Grafana is reachable at `http://localhost:3000`.
 
 To log into Grafana, use the credentials that you defined in `docker-compose.yaml`.
 
-> 💡 Without a persistent database behind it there is nothing to query, 
-> so most deployments run Grafana together with TimescaleDB. We call it the **[Recommended UMH Stack](recommended-umh-stack.md)**.
+## Add the Historian database as a data source
+
+These steps need the [TimescaleDB](timescaledb.md) services in the same stack, as in the [Recommended UMH Stack](recommended-umh-stack.md). Without a database, Grafana has nothing to query.
+
+1. In Grafana, open **Connections** → **Data sources**, click **Add data source** and choose **PostgreSQL**.
+2. Enter host URL `pgbouncer:5432`, database name `umh`, the username and password from `POSTGRES_USER` and `POSTGRES_PASSWORD`, and TLS/SSL mode `disable`.
+3. Under **Additional settings** → **PostgreSQL Options**, turn on **TimescaleDB**.
+4. Click **Save & test**. Grafana shows "Database Connection OK".
+
+To get a query for a tag, see [Use the Historian](../../../../usage/historian/use-the-historian.md#step-6-get-a-query-for-a-tag).

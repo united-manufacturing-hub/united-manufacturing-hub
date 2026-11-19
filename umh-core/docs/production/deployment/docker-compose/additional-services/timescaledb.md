@@ -172,10 +172,12 @@ See [Starting the Stack](../setup.md#starting-the-stack) for the other compose c
 
 ## What this declares
 
-- 2 Services called `pgbouncer` and `timescaledb`: PgBouncer acts as a proxy to TimescaleDB. This means the Credentials have to match between these two Services. The `depends_on` entry with `condition: service_healthy` on `pgbouncer` enforces the startup order; the Healthchecks only report whether a Service is healthy. `timescaledb` is isolated in the Network `timescaledb-network`. `pgbouncer` is both in the `default` and the `timescaledb-network`. This makes PgBouncer the only Service which can talk to TimescaleDB directly.
-- 2 Networks called `timescaledb-network` and `default`: Without the Network section the Network `default` is always created by default. Services use the Network `default` if no explicit Network configuration is provided. The `timescaledb-network` is configured to be internal which means Services can't reach the internet or any Service outside this Network if they are only connected through this Network.
-- 1 Volume called `timescaledb-data`: This is where TimescaleDB stores its data.
+- 2 services called `pgbouncer` and `timescaledb`: PgBouncer acts as a proxy to TimescaleDB, so the credentials have to match between these two services. The `depends_on` entry with `condition: service_healthy` on `pgbouncer` enforces the startup order; the healthchecks only report whether a service is healthy. `timescaledb` is isolated in the network `timescaledb-network`. `pgbouncer` is in both `default` and `timescaledb-network`, which makes PgBouncer the only service that can talk to TimescaleDB directly.
+- 2 networks called `timescaledb-network` and `default`: Docker Compose always creates the network `default`, and services without their own network configuration use it. `timescaledb-network` is internal, so a service connected only to it can't reach the internet or any service outside it.
+- 1 volume called `timescaledb-data`: this is where TimescaleDB stores its data.
 
 Once the stack is running, PostgreSQL is reachable through PgBouncer at `localhost:5432`.
 
-A database on its own has nothing to show you. Most deployments add [Grafana](grafana.md) on top of it, which is why both are part of the **[Recommended UMH Stack](recommended-umh-stack.md)**.
+umh-core does not write to the database by itself. To store data in it, add the Historian plugin to the instance with host `pgbouncer`, port `5432`, the credentials from `POSTGRES_USER` and `POSTGRES_PASSWORD`, and SSL Mode `disable`, then save the data models you want to keep. See [Use the Historian](../../../../usage/historian/use-the-historian.md).
+
+To chart the stored data, add [Grafana](grafana.md). The [Recommended UMH Stack](recommended-umh-stack.md) runs both.

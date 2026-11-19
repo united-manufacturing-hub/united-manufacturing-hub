@@ -129,7 +129,8 @@ The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 vCPU,
 
 ## What's next
 
-Starting the stack gives you four running containers. Two things still need configuring before a dashboard shows anything:
+Starting the stack gives you four running containers. umh-core does not write to the database by itself, so three steps remain before a dashboard shows anything. [Use the Historian](../../../../usage/historian/use-the-historian.md) describes each of them.
 
-1. **Get data into TimescaleDB.** umh-core does not write to the database by itself. Add the Historian plugin to the instance and save the data models you want to keep. See [Use the Historian](../../../../usage/historian/use-the-historian.md).
-2. **Point Grafana at the database.** Add a PostgreSQL data source in Grafana using host `pgbouncer:5432`, database `umh`, and the credentials you set above. See Grafana's [PostgreSQL data source documentation](https://grafana.com/docs/grafana/latest/datasources/postgres/).
+1. **Connect the Historian.** In the Management Console, open the instance's **Plugins** tab, click **Add plugin** → **Historian** and enter host `pgbouncer`, port `5432`, database `umh`, the user and password from `POSTGRES_USER` and `POSTGRES_PASSWORD`, and SSL Mode `disable`. PgBouncer in this stack has no TLS.
+2. **Save data models to the Historian.** On the **Data Models** page, click **add** in the **Historian** column of each data model you want to keep.
+3. **Query the data in Grafana.** Add the database as a data source, as described in [Grafana](grafana.md#add-the-historian-database-as-a-data-source), and paste a query from the **SQL query** tab of the Topic Browser.
