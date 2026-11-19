@@ -25,17 +25,7 @@ UMH Core has no health or readiness endpoint. Port 8080 serves `/metrics` and an
 
 ## The Agent card
 
-The Agent card on the instance details page shows the identity and the version of the instance.
-
-| Field | Shows |
-|---|---|
-| Status badge | The health of the agent. Hover over it to see the reason. See [When the Agent shows Degraded](#when-the-agent-shows-degraded). |
-| Name | The name of the instance. The **Rename** button changes it. |
-| Location | The location path of the instance, one level per line. It is set when you create the instance and cannot be changed on the card. |
-| Core Version | The version of UMH Core. Hover over it to see the versions of S6 Overlay, Benthos and Redpanda. A marker next to the version shows when the release channel has a newer version. |
-| Release Channel | The release channel the instance follows, from `agent.releaseChannel` in the config file: `stable`, `nightly` or `enterprise`. It shows `n/a` when `agent.releaseChannel` is missing or has another value. |
-
-The **Logs** button opens the logs of the agent. The agent writes them to `/data/logs/umh-core/`. See [Container Layout](../../../reference/container-layout.md#logs). The **Metrics** button is not available yet.
+The Agent card on the instance details page shows the name, the location path, the UMH Core version and the release channel of the instance. [Instance Details Page: Agent](../instance-details-page.md#agent) lists every field.
 
 ## When the Agent shows Degraded
 

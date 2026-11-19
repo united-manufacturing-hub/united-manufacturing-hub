@@ -34,7 +34,7 @@ On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full phys
 
 All CPU figures in these docs assume vCPUs as fast as those of the [example instances](#recommended-machine), not overcommitted, with no other software on the machine. Each of these reduces what UMH Core can do:
 
-- **Overcommitted virtual machines.** Set a CPU reservation for UMH Core's VM. If [CPU Health](../usage/instances/container/how-cpu-health-is-judged.md#thresholds) shows Steal above 10% (status "CPU taken by the server"), the host is giving the VM's cores to other VMs. VMware shows the same on the host as CPU Ready. Even an idle-looking VM can wait for its cores, see [CPU contention while cores are free](../usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md).
+- **Overcommitted virtual machines.** Set a CPU reservation for UMH Core's VM. If [CPU Health](../usage/instances/instance-details-page.md#cpu-thresholds) shows Steal above 10% (status "CPU taken by the server"), the host is giving the VM's cores to other VMs. VMware shows the same on the host as CPU Ready. Even an idle-looking VM can wait for its cores, see [CPU contention while cores are free](../usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md).
 - **Older or slower CPUs.** Each flow takes a larger share of an older or slower core.
 - **Other software on the machine.** Antivirus, compliance agents and other containers use CPU, memory and disk on top of UMH Core. Exclude the host directory behind the `/data` volume from real-time antivirus scanning.
 

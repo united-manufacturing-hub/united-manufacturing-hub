@@ -1,35 +1,14 @@
 # Metrics
 
-This page explains how to collect UMH Core metrics with Prometheus and how to read them. The steps need access to port 8080 on the Docker host and to your Prometheus setup.
-
-Every UMH Core instance serves Prometheus metrics in the Prometheus text format on port 8080, at the path `/metrics`. The metrics come from umh-core, the process inside the UMH Core container. Use them to monitor an instance with Prometheus and Grafana. Because the endpoint runs inside the container, you can read it when the Management Console cannot reach the instance.
+This page lists the Prometheus metrics that a UMH Core instance serves on port 8080, and explains how to read them. The metrics come from umh-core, the process inside the UMH Core container. [Collect Metrics with Prometheus](collect-with-prometheus.md) explains how to reach the endpoint.
 
 The component pages explain what one component reports and give alert queries for it. See [Metrics by component](#metrics-by-component).
 
 ## Read the metrics
 
-To read the metrics once, run this on the machine that runs the container:
+[Collect Metrics with Prometheus](collect-with-prometheus.md) explains how to read the endpoint once and how to set up a Prometheus scrape job.
 
-```bash
-docker exec <container name> wget -qO- http://localhost:8080/metrics
-```
-
-To collect the metrics with Prometheus, publish port 8080 when you start the container. Add `-p <host-ip>:8080:8080` to your `docker run` command, where `<host-ip>` is an address of the host that Prometheus can reach, for example `127.0.0.1` when Prometheus runs on the same host. The install command from the Management Console does not publish this port. For a running container, remove the container and start it again with the same `docker run` command plus `-p <host-ip>:8080:8080`. `docker restart` keeps the old port mappings.
-
-The endpoint has no authentication. Without `<host-ip>`, Docker publishes the port on every interface of the host, so always give an address on a trusted network.
-
-Then add a scrape job to your Prometheus configuration:
-
-```yaml
-scrape_configs:
-  - job_name: umh-core
-    static_configs:
-      - targets: ["<device-ip>:8080"]
-```
-
-Prometheus sets its own `instance` label on every scrape. With the default `honor_labels: false`, it renames umh-core's `instance` label to `exported_instance`. In Prometheus queries, write `exported_instance="Core"` where the component pages write `instance="Core"`. Alternatively, set `honor_labels: true` in the scrape job.
-
-The port inside the container is always 8080. umh-core sets `agent.metricsPort` in `config.yaml` back to 8080 on every start. To use another port on the host, change the host side of the mapping, for example `-p <host-ip>:9100:8080`.
+Prometheus renames umh-core's `instance` label to `exported_instance`, unless the scrape job sets `honor_labels: true`. In Prometheus queries, write `exported_instance="Core"` where these pages write `instance="Core"`.
 
 Most series appear only after umh-core records their first value. The FSMv2 counters, for example, appear after their first count. A missing series therefore does not mean the component is missing. `umh_core_errors_total` is the exception. It exists at 0 from the moment umh-core creates the component.
 
@@ -45,11 +24,12 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
 | Bridge connection check | FSMv2 | none. `NMAP_BACKEND` is ignored |
-| CPU health | FSMv2 from v0.44.46. On v0.44.37 to v0.44.45, FSMv1 unless `USE_FSMV2_CPU=true` | `USE_FSMV2_CPU=false` switches to FSMv1 on v0.44.46 and later. See [CPU Health](../container/how-cpu-health-is-judged.md#turn-the-check-on-or-off) |
+| CPU health | FSMv2 from v0.44.46. On v0.44.37 to v0.44.45, FSMv1 unless `USE_FSMV2_CPU=true` | `USE_FSMV2_CPU=false` switches to FSMv1 on v0.44.46 and later. See [Container: Configuration](../container/README.md#configuration) |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
 | Container memory and disk | FSMv1 | none |
+| Memory health (preview) | FSMv2 | off unless `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](../container/README.md#configuration) |
 
 A switch is an environment variable of the container. umh-core reads it once at startup. To change it, remove the container and start it again with the same `docker run` command plus the variable. `docker restart` keeps the old environment. See [Environment Variables](../../../reference/environment-variables.md).
 
@@ -200,7 +180,8 @@ Each component page has a Metrics section. It explains what the component report
 |---|---|
 | Agent | [Agent](../agent/README.md#metrics) |
 | Container | [Container](../container/README.md#metrics) |
-| CPU health | [CPU Health](../container/how-cpu-health-is-judged.md) |
+| CPU health | [CPU gauges](#cpu-gauges) |
+| Memory health (preview) | [Memory gauges](#memory-gauges) |
 | Communicator | [Communicator](../communicator/README.md#metrics) |
 | Redpanda | [Redpanda](../../unified-namespace/redpanda.md#metrics) |
 | Topic Browser | [Topic Browser](../../unified-namespace/topic-browser.md#metrics) |
@@ -210,6 +191,94 @@ Each component page has a Metrics section. It explains what the component report
 | Historian | [Historian](../../historian/README.md#metrics) |
 
 Each bridge, stand-alone flow and stream processor runs in Benthos. Benthos and Redpanda keep their own metrics. umh-core does not copy them to port 8080. Per-bridge message counts are therefore not on port 8080. The Metrics view of a bridge in the Management Console shows them.
+
+## CPU gauges
+
+With the CPU health check on, UMH Core publishes the gauges below on the Prometheus endpoint on port 8080. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+
+When UMH Core cannot read a file it needs for the CPU usage or capacity (the `CPU not measured` message on the [Instance Details Page](../instance-details-page.md#cpu-status)), every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
+
+### CPU measurements
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_cpu_avg_usage_cores` | gauge | This container's mean usage over 60 seconds, in cores |
+| `umh_fsmv2_worker_cpu_avg_usage_fraction` | gauge | That mean as a fraction (0 to 1) of the CPUs this container may run on |
+| `umh_fsmv2_worker_cpu_throttle_ratio` | gauge | The share of scheduling periods in the last 60 seconds that were throttled, 0 to 1 |
+| `umh_fsmv2_worker_cpu_pressure_avg60_ratio` | gauge | The kernel's PSI cpu-some avg60, as a fraction from 0 to 1 |
+| `umh_fsmv2_worker_cpu_host_headroom_cores` | gauge | Cores free on the machine after the reserve, in cores. Negative on a full machine. |
+| `umh_fsmv2_worker_cpu_avg_host_busy_cores` | gauge | The whole machine's mean busy time over 60 seconds, in cores |
+| `umh_fsmv2_worker_cpu_capacity_cores` | gauge | The ceiling that CPU health judges against, in cores |
+| `umh_fsmv2_worker_cpu_reserve_cores` | gauge | The part of that ceiling held back, in cores |
+| `umh_fsmv2_worker_cpu_host_cpus` | gauge | The machine's CPU count |
+| `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The Unix time, in seconds, of the last successful measurement |
+
+### CPU flags
+
+Each flag reads 1 or 0. A 0 means the gauge it covers is not worth acting on right now. That happens in two cases: the gauge is a mean over too few samples, or the gauge reads 0 because this machine has no source for it or the reading failed. Both cases set the flag to 0, and nothing in the metrics tells them apart.
+
+| Name | Type | Covers |
+|---|---|---|
+| `umh_fsmv2_worker_cpu_usage_ring_active` | gauge | `cpu_avg_usage_cores` |
+| `umh_fsmv2_worker_cpu_host_busy_ring_active` | gauge | `cpu_avg_host_busy_cores` |
+| `umh_fsmv2_worker_cpu_host_busy_cores_available` | gauge | `cpu_avg_host_busy_cores` and `cpu_host_headroom_cores` |
+| `umh_fsmv2_worker_cpu_throttle_signal_ready` | gauge | `cpu_throttle_ratio` |
+| `umh_fsmv2_worker_cpu_pressure_signal_ready` | gauge | `cpu_pressure_avg60_ratio` |
+| `umh_fsmv2_worker_cpu_host_headroom_available` | gauge | `cpu_host_headroom_cores` |
+
+The flags come in three kinds:
+
+- A `_ring_active` flag covers one 60-second window. It reads 0 until that window holds enough samples to trust.
+- A `_signal_ready` flag covers a whole signal. It reads 0 while the window fills and when the signal could not be read. It also reads 0 for as long as the container runs on a machine with no source for that signal, such as a bare-metal host without cgroup throttle counters.
+- An `_available` flag reads 0 when the latest measurement could not supply the figure. `cpu_host_headroom_available` reads 0 when the container is pinned to a subset of the machine's CPUs. It also reads 0 when the machine's CPU count could not be read. The first is a deployment choice. The second is a read failure worth investigating.
+
+`cpu_host_headroom_cores` has no flag of its own. Trust it only when `cpu_host_headroom_available`, `cpu_host_busy_cores_available` and `cpu_host_busy_ring_active` all read 1.
+
+## Memory gauges
+
+With the [memory monitor preview](../container/how-memory-health-is-judged.md) on, umh-core publishes the gauges below. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges, with a `hierarchy_path` that ends in `(memory)`, and they also keep their previous value on a tick that could not measure. On such a tick, the age of `memory_last_sample_unix` is the only thing that reveals the freeze.
+
+### Memory measurements
+
+| Gauge | Reports |
+|---|---|
+| `memory_avg_used_bytes` | the 60s mean of the container's memory in use, in bytes |
+| `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
+| `memory_avg_used_fraction` | the 60s mean of the memory in use as a 0..1 fraction of `memory_total_bytes` |
+| `memory_avg_host_used_bytes` | the whole machine's 60s mean used memory, in bytes. It works like `cpu_avg_host_busy_cores` in [CPU Health](#cpu-measurements) |
+| `memory_host_total_bytes` | the machine's total memory, in bytes |
+| `memory_pressure_avg60_ratio` | the kernel's PSI memory-some avg60 as a 0..1 fraction |
+| `memory_oom_kills_last_hour` | the OOM kills in the container within the last hour |
+| `memory_last_sample_unix` | the unix seconds of the last tick that measured |
+
+### Memory flags
+
+| Flag | Applies to |
+|---|---|
+| `memory_used_ring_active` | `memory_avg_used_bytes` and `memory_avg_used_fraction` |
+| `memory_host_ring_active` | `memory_avg_host_used_bytes` |
+| `memory_pressure_signal_ready` | `memory_pressure_avg60_ratio` |
+| `memory_oom_signal_ready` | `memory_oom_kills_last_hour` |
+| `memory_used_from_cgroup` | `memory_avg_used_bytes` |
+| `memory_total_is_cgroup_limit` | `memory_total_bytes` and `memory_avg_used_fraction` |
+
+The `_ring_active` and `_signal_ready` flags work like the [CPU flags](#cpu-flags). `memory_host_ring_active` also reads 0 while the machine's memory is unreadable. `memory_pressure_signal_ready` stays 0 on cgroup v1 and without PSI. `memory_oom_signal_ready` reads 0 before the second read of the OOM counter and while that counter is unreadable.
+
+The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
+
+## Communicator error counters
+
+The communicator counts each failed request to the Management Console once, under its cause. The series carry a `hierarchy_path`. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. A counter appears only after its first count. [Communicator: Metrics](../communicator/README.md#metrics) gives the alert query.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_network_errors_total` | counter | Requests without an answer that umh-core can classify. This includes a refused connection, a timeout and a rejected certificate. It also counts answers with a status no other counter takes, such as 400 or a proxy's 407 Proxy Authentication Required. |
+| `umh_fsmv2_worker_proxy_block_errors_total` | counter | Error answers that look like the block page of a proxy. Ask your IT department to allow `management.umh.app` on the proxy. |
+| `umh_fsmv2_worker_auth_failures_total` | counter | Answers with status 401 or 403. Under the transport series, a rise usually means the Management Console did not accept the `AUTH_TOKEN`. A firewall, a proxy or Cloudflare that answers 403 also counts here. |
+| `umh_fsmv2_worker_instance_deleted_total` | counter | Answers with status 404. Usually the instance was deleted in the Management Console. A wrong `API_URL` or a 404 from a proxy also counts here. |
+| `umh_fsmv2_worker_server_errors_total` | counter | Requests the Management Console answered with a status of 500 or higher. |
+| `umh_fsmv2_worker_backend_rate_limit_errors_total` | counter | Requests the Management Console rejected with status 429, because the instance sent too many in a short time. |
+| `umh_fsmv2_worker_cloudflare_errors_total` | counter | Answers with status 429 that carry a Cloudflare challenge page. |
 
 ## Where the metrics are defined
 
