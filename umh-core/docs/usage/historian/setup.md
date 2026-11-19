@@ -22,23 +22,39 @@ called Getting Started Stack in the Management Console, meets these requirements
 `postgres` user. To add only the database to a running instance, see
 [TimescaleDB](../../production/deployment/docker-compose/additional-services/timescaledb.md).
 
-## Connection fields
+## Connection form
 
 The form opens from **Plugins** → **Add plugin** → **Historian**, or from **Edit Config** on the
-Historian overview page.
+Historian overview page. **Save & Deploy** stores the form in the `historian:` section of
+`config.yaml`. With the values for the Getting Started Stack, the section is:
 
-| Field | Default | Notes |
-|---|---|---|
-| **Host** | required | Hostname or IP address, resolved from inside the umh-core container. The Getting Started Stack uses `pgbouncer`. |
-| **Port** | `5432` | Point this at PgBouncer if you use one. |
-| **Database** | `umh` | Must already exist. |
-| **User** | `umh_owner` | The login role from the requirements. The Getting Started Stack uses `postgres`. |
-| **Password** | required | Stored in `config.yaml`, hidden in the UI and redacted in logs. |
-| **SSL Mode** | `require` | `require` or `disable`. |
+```yaml
+historian:
+  timescale:
+    host: pgbouncer
+    port: 5432
+    database: umh
+    username: postgres
+    password: change-me
+    sslmode: disable
+```
+
+| Field | Key under `historian.timescale` | Default | Notes |
+|---|---|---|---|
+| **Host** | `host` | required | Hostname or IP address, resolved from inside the umh-core container. |
+| **Port** | `port` | `5432` | Point this at PgBouncer if you use one. |
+| **Database** | `database` | `umh` | Must already exist. |
+| **User** | `username` | `umh_owner` | The login role from the requirements. |
+| **Password** | `password` | required | Hidden in the UI and redacted in logs. A literal value: environment variable references such as `${PGPASSWORD}` are not supported. |
+| **SSL Mode** | `sslmode` | `require` | `require` or `disable` in the form. |
 
 `require` encrypts the connection without verifying the server certificate. Use `disable` only when
-the database or PgBouncer has no TLS, as in the Getting Started Stack. `verify-full` can only be set
-in `config.yaml`; see [Configuration](README.md#configuration).
+the database or PgBouncer has no TLS, as in the Getting Started Stack. To verify the certificate, set
+`sslmode: verify-full` in `config.yaml` and give the certificate paths inside the container in
+`sslrootcert`, `sslcert` and `sslkey`. These three keys are allowed only with `verify-full`.
+
+A change applies without a restart: umh-core reloads `config.yaml` and restarts every Historian bridge
+with the new values. Removing the section stops the Historian bridges.
 
 ## PgBouncer
 

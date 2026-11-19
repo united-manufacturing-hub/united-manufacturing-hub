@@ -14,11 +14,11 @@ To set it up, follow [Use the Historian](use-the-historian.md).
 Once a connection is configured, the **Plugins** tab shows the Historian card with the connection
 settings, the latency and the connection health.
 
-- **Add plugin** → **Historian** opens the connection form. The fields are described in
-  [Connection](setup.md#connection-fields).
+- **Add plugin** → **Historian** opens the connection form. **Save & Deploy** stores it in the
+  `historian:` section of `config.yaml`; see [Setup](setup.md#connection-form).
 - **Open plugin** opens the overview page.
 - The card's menu has **Monitor**, **Edit**, **Schema** and **Delete**. **Delete** removes the
-  connection; see [Connection](setup.md#editing-and-removing).
+  connection; see [Setup](setup.md#editing-and-removing).
 
 ### Overview page
 
@@ -78,34 +78,6 @@ The **Data Models** page has a **Historian** column:
 For every time-series tag, the **SQL query** tab gives a query for Grafana and one for TimescaleDB.
 The queries return rows once the Historian stores the tag's data contract; see
 [Database schema](database-schema.md#queries-in-the-sql-query-tab).
-
-## Configuration
-
-The connection form writes the `historian:` section of `config.yaml`:
-
-```yaml
-historian:
-  timescale:
-    host: timescaledb.example.com
-    port: 5432
-    database: umh
-    username: umh_owner
-    password: change-me
-    sslmode: require
-```
-
-| Key | Default | Notes |
-|---|---|---|
-| `timescale.host` | required | Hostname or IP address, resolved from inside the umh-core container. |
-| `timescale.port` | `5432` | |
-| `timescale.database` | `umh` | |
-| `timescale.username` | `umh_owner` | |
-| `timescale.password` | required | A literal value. Environment variable references such as `${PGPASSWORD}` are not supported. |
-| `timescale.sslmode` | `require` | `require`, `disable` or `verify-full`. The Management Console offers only `require` and `disable`. |
-| `timescale.sslrootcert`, `timescale.sslcert`, `timescale.sslkey` | empty | Certificate paths inside the container. Allowed only with `sslmode: verify-full`. |
-
-A change applies without a restart: umh-core reloads `config.yaml` and restarts every Historian bridge
-with the new values. Removing the section stops the Historian bridges.
 
 ## Metrics
 

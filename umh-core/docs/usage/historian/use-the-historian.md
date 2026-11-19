@@ -16,7 +16,7 @@ Open your instance, go to the **Plugins** tab, click **Add plugin** and choose *
 ![The plugin list with the Historian plugin](./images/historian-select-plugin.png)
 
 Enter the connection of your database. The **Setup Guide** next to the form lists the values for the
-Getting Started Stack; the fields are described in [Connection](setup.md#connection-fields).
+Getting Started Stack; the fields are described in [Setup](setup.md#connection-form).
 
 ![The connection form with the Historian Setup Guide](./images/historian-connection-form.png)
 
