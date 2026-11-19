@@ -439,18 +439,11 @@ func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
 	return simple.Degraded("TimescaleDB answered, but the connection check failed")
 }
 
-// A malformed USE_HISTORIAN_METRICS reads as off; cmd/main.go logs the warning.
-var metricsEnabled = sync.OnceValues(MetricsEnabled)
-
-// pollAndRecord runs Poll and, when USE_HISTORIAN_METRICS is on, records its
-// status as umh_historian_* gauges, also when Poll returns an error.
+// pollAndRecord runs Poll and records its status as umh_historian_* gauges,
+// also when Poll returns an error.
 func pollAndRecord(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	status, err := Poll(ctx, d, cfg)
-
-	enabled, _ := metricsEnabled()
-	if enabled {
-		RecordHistorianStatus(d.GetHierarchyPath(), status)
-	}
+	RecordHistorianStatus(d.GetHierarchyPath(), status)
 
 	return status, err
 }

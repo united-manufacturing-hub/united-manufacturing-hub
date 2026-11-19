@@ -17,18 +17,9 @@ package fsmv2timescale
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
-
-const envUseHistorianMetrics = "USE_HISTORIAN_METRICS"
-
-// MetricsEnabled reads USE_HISTORIAN_METRICS. A value that is not a boolean
-// returns an error naming the variable, together with false.
-func MetricsEnabled() (bool, error) {
-	return env.LookupBool(envUseHistorianMetrics, false)
-}
 
 const (
 	metricsNamespace = "umh"

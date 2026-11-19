@@ -170,13 +170,6 @@ var _ = Describe("pollAndRecord", func() {
 		}
 	}
 
-	setMetricsEnabled := func(enabled bool) {
-		original := metricsEnabled
-		metricsEnabled = func() (bool, error) { return enabled, nil }
-
-		DeferCleanup(func() { metricsEnabled = original })
-	}
-
 	historianConfig := config.HistorianConfig{Timescale: config.TimescaleConfig{Host: "db", Password: "secret"}}
 
 	BeforeEach(func() {
@@ -189,19 +182,7 @@ var _ = Describe("pollAndRecord", func() {
 		})
 	})
 
-	It("records nothing while the flag is off", func() {
-		setMetricsEnabled(false)
-
-		status, err := pollAndRecord(context.Background(), pollDeps(), historianConfig)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(status.Reachable).To(BeTrue(), "the poll reached the database, so a recording would have happened with the flag on")
-		Expect(seriesCount(historianGauges)).To(BeZero())
-	})
-
-	It("records the status Poll returned while the flag is on", func() {
-		setMetricsEnabled(true)
-
+	It("records the status Poll returned", func() {
 		status, err := pollAndRecord(context.Background(), pollDeps(), historianConfig)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -210,8 +191,7 @@ var _ = Describe("pollAndRecord", func() {
 		Expect(gaugeValue(historianDatabaseOccupiedDiskBytes, metricsHierarchyPath)).To(Equal(float64(*status.DatabaseOccupiedDiskBytes)))
 	})
 
-	It("records a failed connection check while the flag is on", func() {
-		setMetricsEnabled(true)
+	It("records a failed connection check", func() {
 		fakeDatabase.SetErr(timescalemetrics.ErrFakeConnectionRefused)
 
 		_, _ = pollAndRecord(context.Background(), pollDeps(), historianConfig)
