@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | CPU | 4 vCPU | 8 vCPU |
 | Memory | 8 GB | 16 GB |
-| Disk | 250 GB free on top of the OS, about 2,500 messages per second at the default retention | 250 GB free on top of the OS, about 2,500 messages per second at the default retention, plus the Historian's disk for your retention |
+| Disk | 250 GB free on top of the OS, about 2,000 messages per second at the default retention | 250 GB free on top of the OS, about 2,000 messages per second at the default retention, plus the Historian's disk for your retention |
 | Example cloud instance | AWS `c8i.xlarge`, Azure `D4ls_v6` | AWS `c8i.2xlarge`, Azure `D8ls_v6` |
 | Architecture | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) |
 
@@ -48,7 +48,7 @@ UMH Core needs 3.5 GB for the Unified Namespace and 150 MB for the agent. Each r
 
 ## Disk
 
-Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that. At seven days' retention, plan about 0.08–0.11 GB per message per second.
+Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. A new instance keeps seven days of messages for replay, and you can change that. An older `config.yaml` that has no `defaultTopicCleanupPolicy` uses `compact` instead, which keeps only the latest message per key, so the figures below do not describe it. [Topic retention on new instances](../reference/configuration-reference.md#topic-retention-on-new-instances) explains how to check yours and move it to seven-day replay. At seven days' retention, plan about 0.08–0.11 GB per message per second.
 
 ```text
 disk = (messages per second × bytes per message × retention in seconds + what the partition already holds) ÷ 0.75
