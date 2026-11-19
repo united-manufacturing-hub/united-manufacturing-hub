@@ -561,7 +561,24 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 
 	workerCtx.mu.RUnlock()
 
-	metrics.CleanupWorkerMetrics(workerCtx.identity.HierarchyPath)
+	cleanupWorkerMetricsOnceStopped(workerCtx.collector.Stopped(), workerCtx.identity.HierarchyPath)
+}
+
+// cleanupWorkerMetricsOnceStopped deletes the worker-metric series after the
+// collector goroutine exits, because a collection that outlived Stop can still
+// export them.
+func cleanupWorkerMetricsOnceStopped(collectorStopped <-chan struct{}, hierarchyPath string) {
+	select {
+	case <-collectorStopped:
+		metrics.CleanupWorkerMetrics(hierarchyPath)
+	default:
+		go waitThenCleanupWorkerMetrics(collectorStopped, hierarchyPath)
+	}
+}
+
+func waitThenCleanupWorkerMetrics(collectorStopped <-chan struct{}, hierarchyPath string) {
+	<-collectorStopped
+	metrics.CleanupWorkerMetrics(hierarchyPath)
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without

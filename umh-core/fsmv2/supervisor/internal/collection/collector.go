@@ -172,6 +172,28 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
+// Stopped returns a channel that closes when the observation loop has exited.
+// Stop can return before that, after its timeout.
+func (c *Collector[TObserved]) Stopped() <-chan struct{} {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.goroutineDone == nil {
+		return closedChannel
+	}
+
+	return c.goroutineDone
+}
+
+var closedChannel = newClosedChannel()
+
+func newClosedChannel() chan struct{} {
+	closed := make(chan struct{})
+	close(closed)
+
+	return closed
+}
+
 // TriggerNow signals the observation loop to collect immediately.
 // This does NOT restart the collector goroutine - it just triggers an early collection.
 // Use Restart() for emergency recovery when the collector goroutine is hung.
