@@ -212,6 +212,8 @@ func (w *ConfigworkerWorker) reconcileHistorian(ctx context.Context) {
 func syncHistorian(client *fsmv2client.FSMv2Client, cfg config.FullConfig) error {
 	if cfg.Historian == nil {
 		client.Delete(fsmv2timescale.Ref)
+		// runs every tick, so it also removes gauges a poll in flight set after the Delete
+		fsmv2timescale.CleanupHistorianMetrics()
 
 		return nil
 	}
