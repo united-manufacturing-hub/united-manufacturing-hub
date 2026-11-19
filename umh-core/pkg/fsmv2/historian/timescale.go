@@ -99,10 +99,11 @@ type TimescaleStatus struct {
 	// server returned an error. It is false when nothing answered (a network or
 	// timeout fault) and when the connection pool could not be built.
 	Reachable bool `json:"reachable"`
-	// Read on a slower schedule than the connection check, keeping its last value
-	// between reads, so it is empty only until the first one completes.
-	timescalemetrics.Summary
-	DatabaseOccupiedDiskBytes int64 `json:"databaseOccupiedDiskBytes"`
+	// Summary and DatabaseOccupiedDiskBytes are read on a slower schedule than the
+	// connection check. Each is nil until a read succeeds, and nil again after a
+	// failed connection check.
+	Summary                   *timescalemetrics.Summary `json:"summary,omitempty"`
+	DatabaseOccupiedDiskBytes *int64                    `json:"databaseOccupiedDiskBytes,omitempty"`
 }
 
 // sharedPool is the one holder every worker instance polls through. The
@@ -309,13 +310,12 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			deps.Bool("reachable", false),
 			deps.Err(err))
 		d.report(ctx, tagPoolFailed, host, err)
+		d.forgetDatabaseFigures()
 
 		return TimescaleStatus{
-			Host:                      host,
-			Port:                      port,
-			Auth:                      models.TimescaleAuthUnknown,
-			Summary:                   d.summary.last(dsn),
-			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+			Host: host,
+			Port: port,
+			Auth: models.TimescaleAuthUnknown,
 		}, fmt.Errorf("timescale pool: %w", err)
 	}
 
@@ -325,11 +325,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 	if err := db.QueryRow(ctx, "SELECT 1").Scan(&one); err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
 			return TimescaleStatus{
-				Host:                      host,
-				Port:                      port,
-				Auth:                      models.TimescaleAuthUnknown,
-				Summary:                   d.summary.last(dsn),
-				DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+				Host: host,
+				Port: port,
+				Auth: models.TimescaleAuthUnknown,
 			}, fmt.Errorf("timescale query %s cancelled: %w", host, ctx.Err())
 		}
 
@@ -352,13 +350,13 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 			d.report(ctx, tagQueryFailed, host, err)
 		}
 
+		d.forgetDatabaseFigures()
+
 		return TimescaleStatus{
-			Host:                      host,
-			Port:                      port,
-			Reachable:                 reachable,
-			Auth:                      auth,
-			Summary:                   d.summary.last(dsn),
-			DatabaseOccupiedDiskBytes: d.databaseSize.last(dsn),
+			Host:      host,
+			Port:      port,
+			Reachable: reachable,
+			Auth:      auth,
 		}, nil
 	}
 
@@ -380,6 +378,14 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, db, host)),
 		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, db, host)),
 	}, nil
+}
+
+// forgetDatabaseFigures drops the cached figures after a failed connection
+// check, so the first successful check after it reads them again instead of
+// sending figures from before the fault.
+func (d Deps) forgetDatabaseFigures() {
+	d.summary.clear()
+	d.databaseSize.clear()
 }
 
 // The error is logged and reported, not returned: a summary that cannot be
@@ -460,7 +466,7 @@ var (
 
 type readCache[T any] struct {
 	readAt time.Time
-	value  T
+	value  *T
 	// A config edit repoints the pool at another database; holding the value across
 	// that would report one database's figures beside the other's host.
 	dsn      string
@@ -469,44 +475,41 @@ type readCache[T any] struct {
 }
 
 // refresh reads again once the interval has elapsed or the database changed. A
-// failed read keeps the previous value and waits its turn rather than retrying
+// failed read drops the previous value and waits its turn rather than retrying
 // every poll.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
 	read func() (T, bool),
-) T {
+) *T {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if dsn != c.dsn {
-		var empty T
-
 		c.dsn = dsn
-		c.value = empty
+		c.value = nil
 	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
 		return c.value
 	}
 
 	c.readAt = now
 
-	if value, ok := read(); ok {
-		c.value = value
+	value, ok := read()
+	if !ok {
+		c.value = nil
+
+		return nil
 	}
+
+	c.value = &value
 
 	return c.value
 }
 
-// The framework persists a failed Poll's status too, so it carries the last value.
-func (c *readCache[T]) last(dsn string) T {
+func (c *readCache[T]) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if dsn != c.dsn {
-		var empty T
-
-		return empty
-	}
-
-	return c.value
+	c.readAt = time.Time{}
+	c.value = nil
 }

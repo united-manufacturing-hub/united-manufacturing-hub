@@ -1,0 +1,3 @@
+kind: fixes
+body: The Management Console no longer shows old Historian database figures, such as disk usage and job counts, as current while umh-core cannot read the database
+time: 2026-11-18T15:33:31.314439+01:00
