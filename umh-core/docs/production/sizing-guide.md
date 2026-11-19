@@ -22,7 +22,7 @@ The CPU figures assume vCPUs as fast as those of the example instances, not over
 
 ## CPU
 
-UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and its own services. Its overhead for your flows is 0.2 vCPU per running flow, so 0.4 vCPU for a bridge with a read and write flow both configured and running. A flow that logs heavily costs more than one that logs little, because UMH Core analyses every log line, and debug logging raises it further, so leave it off outside troubleshooting.
+UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and its own services. Its overhead for your flows is 0.2 vCPU per running flow, so 0.4 vCPU for a bridge with a read and write flow both configured and running. A flow that logs heavily costs more than one that logs little, because UMH Core analyses every log line. Debug logging raises it further; leave it off outside troubleshooting.
 
 Part of the 0.2 vCPU monitoring overhead goes to reading each flow's metrics. By default, a separate monitoring service does this for each flow. Adding `-e USE_FSMV2_BENTHOS_METRICS=true` to the `docker run` command moves this work into the UMH Core process, where it costs less CPU. Remove and recreate the container for the change to apply, because `docker restart` keeps the old environment. Still plan 0.2 vCPU per flow: it is a conservative budget that also covers the log analysis, which this variable does not change.
 
