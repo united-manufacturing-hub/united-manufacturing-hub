@@ -35,6 +35,7 @@ var _ = Describe("The error window", func() {
 	It("degrades on an error burst and clears ten minutes after the last error", func() {
 		s := benthosmetricstest.NewServer()
 		defer s.Close()
+
 		s.SetCounters(100, 80, 0)
 
 		spec := userSpecFor("error-window", s.Port())
@@ -43,6 +44,7 @@ var _ = Describe("The error window", func() {
 		// window runs in seconds, not in sleeps.
 		t0 := time.Now().Truncate(time.Second)
 		clockNow := t0
+
 		defer swapScrapeClock(func() time.Time { return clockNow })()
 
 		worker, err := factory.NewWorkerByType(
@@ -61,12 +63,12 @@ var _ = Describe("The error window", func() {
 		Expect(ok).To(BeTrue(), "the first scrape seeds an error-free window")
 
 		// The burst: five output errors arrive between the scrapes. The
-		// scrape that FINDS them is the error's own time, so every deadline
-		// below is measured from here and not from t0. Measuring from t0
-		// would be one scrape early, and would pass only against the old
-		// rule that timed the window from the reading before the error.
+		// window runs from the scrape that finds them, so every deadline
+		// below is measured from burstSeenAt, not t0.
 		burstSeenAt := t0.Add(time.Second)
+
 		s.SetCounters(100, 80, 5)
+
 		clockNow = burstSeenAt
 		fired := observeOneCycle(worker, spec)
 		ok, _ = fired.Result.Sample.Failures.ErrorFree()
