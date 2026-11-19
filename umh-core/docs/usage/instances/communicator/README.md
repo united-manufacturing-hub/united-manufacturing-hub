@@ -2,7 +2,7 @@
 
 The communicator connects your instance to the Management Console. Use this page when the instance shows as offline or its Communicator card is degraded.
 
-If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md).
+If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](../troubleshooting/instance-offline-behind-corporate-firewall.md).
 
 ## The Communicator card
 
@@ -32,7 +32,7 @@ The Usage and Peak Usage rows appear while the badge is Active or Degraded. Each
 
 ## Metrics
 
-The communicator reports on port 8080 how many of its requests to the Management Console failed, by cause. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint, and [FSMv2 metrics](../agent/metrics.md#fsmv2-metrics) explains the `hierarchy_path` label. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. A counter appears only after its first count.
+The communicator reports on port 8080 how many of its requests to the Management Console failed, by cause. [Read the metrics](../metrics/README.md#read-the-metrics) explains how to reach the endpoint, and [FSMv2 metrics](../metrics/README.md#fsmv2-metrics) explains the `hierarchy_path` label. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. A counter appears only after its first count.
 
 ### Errors
 
@@ -56,6 +56,6 @@ The `offset 5m` part also fires without a new error after a failed scrape, a sho
 | `umh_fsmv2_worker_backend_rate_limit_errors_total` | counter | Requests the Management Console rejected with status 429, because the instance sent too many in a short time. |
 | `umh_fsmv2_worker_cloudflare_errors_total` | counter | Answers with status 429 that carry a Cloudflare challenge page. |
 
-The communicator also reports the standard [FSMv2 series](../agent/metrics.md#fsmv2-metrics). To alert when the communicator stays in a bad state, compare `umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(communicator\\)"}` for that state with a threshold.
+The communicator also reports the standard [FSMv2 series](../metrics/README.md#fsmv2-metrics). To alert when the communicator stays in a bad state, compare `umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(communicator\\)"}` for that state with a threshold.
 
 The communicator is part of the Management Console connection module, which is not in this repository. Its exact series names come from that module, so check the `/metrics` output of your version.

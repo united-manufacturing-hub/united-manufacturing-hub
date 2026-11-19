@@ -113,7 +113,7 @@ The **Topic Browser** card on the instance details page shows one value. **Topic
 
 The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
-On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
+On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). [Metrics](../instances/metrics/README.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
 
 To alert when the Benthos process of the Topic Browser is degraded, use:
 

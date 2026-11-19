@@ -157,9 +157,9 @@ dataFlow:
 
 ## Metrics
 
-The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts. It carries the flow's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stand-alone flows and what the labels and the state values mean.
+The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts. It carries the flow's state and error counts. [Metrics](../instances/metrics/README.md) explains how to read them, which framework runs stand-alone flows and what the labels and the state values mean.
 
-Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a flow named `<flow>`, the series carry these labels:
+Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). For a flow named `<flow>`, the series carry these labels:
 
 | Part of the flow | `component` | `instance` |
 |---|---|---|

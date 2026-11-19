@@ -6,7 +6,7 @@ The cause is usually one of three. The firewall blocks the connection, the netwo
 
 ## Which error the instance reports
 
-The Management Console does not show why the connection fails (see [Communicator](README.md#the-communicator-card)). The error counters of the communicator do. [Metrics](../agent/metrics.md#read-the-metrics) explains how to collect them with Prometheus, and [Communicator](README.md#errors) explains each counter. To read them once, run this on the Docker host, wait a minute and run it again. A counter that rose between the two runs is the cause. The `-Y off` keeps `wget` from sending the request through the proxy of the container, which cannot reach `localhost`:
+The Management Console does not show why the connection fails (see [Communicator](../communicator/README.md#the-communicator-card)). The error counters of the communicator do. [Metrics](../metrics/README.md#read-the-metrics) explains how to collect them with Prometheus, and [Communicator](../communicator/README.md#errors) explains each counter. To read them once, run this on the Docker host, wait a minute and run it again. A counter that rose between the two runs is the cause. The `-Y off` keeps `wget` from sending the request through the proxy of the container, which cannot reach `localhost`:
 
 ```bash
 docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics | grep -E 'network_errors_total|proxy_block_errors_total|auth_failures_total|instance_deleted_total|server_errors_total|rate_limit_errors_total|cloudflare_errors_total'
@@ -17,7 +17,7 @@ docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics | gr
 | `umh_fsmv2_worker_network_errors_total` | Continue with [Find the cause](#find-the-cause). |
 | `umh_fsmv2_worker_proxy_block_errors_total` | Ask your IT department to allow `management.umh.app` on the proxy. |
 | `umh_fsmv2_worker_auth_failures_total` | Check the `AUTH_TOKEN` of your `docker run` command. If the token is correct, continue with [Find the cause](#find-the-cause). |
-| Any other counter | See [Communicator](README.md#errors). |
+| Any other counter | See [Communicator](../communicator/README.md#errors). |
 
 If no counter rises, read the full `/metrics` output.
 

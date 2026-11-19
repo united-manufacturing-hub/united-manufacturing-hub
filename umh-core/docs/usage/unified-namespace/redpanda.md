@@ -28,7 +28,7 @@ The badge tooltip starts with `degraded:`, a space and the reason. umh-core runs
 | `s6 is not running, current state: <state>` | The Redpanda process is not running. umh-core restarts it, and the reason changes to `degraded: restarting service`. | Select **Logs** on the Redpanda card to see why the process stopped. |
 | `healthchecks did not pass, live: false, ready: false` | Redpanda does not report itself as ready. Both values come from the same readiness check. They are therefore always equal. | Read the Redpanda logs. |
 | `found error (clears in <time>): <log line>` with `Address already in use` | Another process holds a port that Redpanda needs, such as 9092 or 9644. | Stop the other process. If the container shares the host network, check which host process uses the port. |
-| `found error (clears in <time>): <log line>` with `Reactor stalled for <n> ms` | Redpanda was blocked for more than 500 milliseconds and processed nothing in that time. | Check [CPU Health](../instances/container/cpu-health/README.md). Give the container more CPU or a faster disk. |
+| `found error (clears in <time>): <log line>` with `Reactor stalled for <n> ms` | Redpanda was blocked for more than 500 milliseconds and processed nothing in that time. | Check [CPU Health](../instances/container/how-cpu-health-is-judged.md). Give the container more CPU or a faster disk. |
 | `Redpanda storage free space alert: <free> free bytes (total: <total> bytes)` | Redpanda reports that its disk is nearly full. | Free disk space, enlarge the disk, or shorten the retention. See [Disk](../../production/sizing-guide.md#disk). |
 | `Redpanda unavailable topics: <n>` | Redpanda cannot serve `<n>` partitions. A partition is one part of a Kafka topic. | Read the Redpanda logs to find the cause. |
 | `unexpected restarts within the last hour: [<exit codes>]` | The Redpanda process exited with an error at least once in the last hour. The reason stays for one hour after the last exit. | Read the Redpanda logs around the time of the exit. |
@@ -63,7 +63,7 @@ The Redpanda Metrics page shows a table with the columns Path, Name and Value. S
 
 ## Settings
 
-Redpanda's settings are under `internal.redpanda` in the [config file](../instances/config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk](../../production/sizing-guide.md#disk) in the sizing guide.
+Redpanda's settings are under `internal.redpanda` in the [config file](../instances/edit-the-config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk](../../production/sizing-guide.md#disk) in the sizing guide.
 
 When umh-core starts without a config file, it creates one with the two settings in this table. Both are under `internal.redpanda.redpandaServiceConfig.topic`.
 
@@ -76,7 +76,7 @@ If your config file was created before umh-core started to write `defaultTopicCl
 
 ## Metrics
 
-Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them.
+Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). [Metrics](../instances/metrics/README.md) explains how to read them.
 
 Redpanda has `component="redpanda_instance"` with `instance="redpanda"`. Its monitor, a separate process in the container that reads Redpanda's status once per second, has `component="redpanda_monitor"` with `instance="redpanda-redpanda"`. In Prometheus, write `exported_instance` for `instance`.
 

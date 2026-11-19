@@ -1,10 +1,10 @@
 # Agent
 
-The agent is the `umh-core` process inside the UMH Core container. It starts, watches and restarts the components inside the container. These components are the bridges, the stand-alone flows, the stream processors and Redpanda. Two frameworks inside the agent do this work: FSMv1, the older one, and FSMv2, the newer one. See [Which framework runs a component](metrics.md#which-framework-runs-a-component).
+The agent is the `umh-core` process inside the UMH Core container. It starts, watches and restarts the components inside the container. These components are the bridges, the stand-alone flows, the stream processors and Redpanda. Two frameworks inside the agent do this work: FSMv1, the older one, and FSMv2, the newer one. See [Which framework runs a component](../metrics/README.md#which-framework-runs-a-component).
 
 ## What the agent does
 
-The agent works in a control loop. Every 100 milliseconds, one cycle of the loop compares each component with the [config file](../config-file.md). The agent then starts, stops or restarts the component until it matches the config file. A Kubernetes controller and the scan cycle of a PLC work the same way.
+The agent works in a control loop. Every 100 milliseconds, one cycle of the loop compares each component with the [config file](../edit-the-config-file.md). The agent then starts, stops or restarts the component until it matches the config file. A Kubernetes controller and the scan cycle of a PLC work the same way.
 
 The agent also checks the health of each component:
 
@@ -47,7 +47,7 @@ A degraded Agent also marks the whole instance as degraded. In the instance list
 
 ## Metrics
 
-The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. In Prometheus, `instance` usually arrives as `exported_instance`.
+The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](../metrics/README.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](../metrics/README.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. In Prometheus, `instance` usually arrives as `exported_instance`.
 
 To alert when the control loop stalls, alert on any increase of the starved counter:
 

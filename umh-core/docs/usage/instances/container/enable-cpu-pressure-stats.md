@@ -2,7 +2,7 @@
 
 {% hint style="info" %}
 UMH Core reads CPU pressure only while the CPU health check is on. It is on by default from
-v0.44.46. See [CPU Health](README.md).
+v0.44.46. See [CPU Health](how-cpu-health-is-judged.md).
 {% endhint %}
 
 Follow this page when the Technical Details `Pressure` line reads `Pressure not measured (this
