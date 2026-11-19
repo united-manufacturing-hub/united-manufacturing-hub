@@ -17,32 +17,10 @@ of the PostgreSQL table names. Older data models can have one; new names reject 
 
 ## Destination fields
 
-Defaults and accepted values are in the output reference's
-[Configuration](https://docs.umh.app/benthos-umh/output/historian#configuration) table.
-
-**Standard Settings:**
-
-| Field | Key | Notes |
-|---|---|---|
-| **Historian Connection** | `host`, `port`, `database`, `username`, `password`, `sslmode` | Read-only. Taken from the instance's [connection](setup.md) through `{{ .historian.timescale.* }}`. |
-| **Data Contract** | `data_contract_name` | Read-only. Follows the source topic. |
-
-**Advanced Settings:**
-
-| Field | Key |
-|---|---|
-| **Allow Datatype Changes** | `allow_datatype_changes` |
-| **Store All Metadata Keys** | `metadata_keys_all` |
-| **Metadata Keys to Store** | `metadata_keys`, shown when **Store All Metadata Keys** is off |
-| **Metadata Keys to Drop** | `metadata_keys_exclude`, shown when **Store All Metadata Keys** is on |
-| **Compress After** | `compress_after` |
-| **Retention** | `retention` |
-| **Value Chunk Interval** | `value_chunk_interval` |
-| **Attribute Chunk Interval** | `attribute_chunk_interval` |
-| **Max In Flight** | `max_in_flight` |
-| **Write Timeout** | `write_timeout` |
-
-Durations take hours, minutes or seconds, such as `168h`, not days.
+The fields in **Destination** are the settings of the
+[Historian output](https://docs.umh.app/benthos-umh/output/historian#configuration), which lists
+their defaults and accepted values. Two fields are read-only: **Historian Connection** comes from the
+instance's [connection](setup.md), and **Data Contract** follows the source topic.
 
 ### Settings applied once
 
