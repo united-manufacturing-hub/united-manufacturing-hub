@@ -27,18 +27,25 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/metrics"
 )
 
-const stateDurationMetric = "umh_fsmv2_state_duration_seconds"
+const (
+	stateDurationMetric = "umh_fsmv2_state_duration_seconds"
 
-// stateDurationStates returns the states that have a state-duration series
-// for hierarchyPath in the default Prometheus registry.
-func stateDurationStates(hierarchyPath string) []string {
+	removalTestGauge         = "removal_test_gauge"
+	removalTestGaugeMetric   = "umh_fsmv2_worker_" + removalTestGauge
+	removalTestCounter       = "removal_test_counter"
+	removalTestCounterMetric = "umh_fsmv2_worker_" + removalTestCounter
+)
+
+// seriesLabels returns the label sets of every series of metricName for
+// hierarchyPath in the default Prometheus registry.
+func seriesLabels(metricName, hierarchyPath string) []map[string]string {
 	families, err := prometheus.DefaultGatherer.Gather()
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(2, err).NotTo(HaveOccurred())
 
-	var states []string
+	var matches []map[string]string
 
 	for _, family := range families {
-		if family.GetName() != stateDurationMetric {
+		if family.GetName() != metricName {
 			continue
 		}
 
@@ -49,12 +56,36 @@ func stateDurationStates(hierarchyPath string) []string {
 			}
 
 			if labels["hierarchy_path"] == hierarchyPath {
-				states = append(states, labels["state"])
+				matches = append(matches, labels)
 			}
 		}
 	}
 
+	return matches
+}
+
+// stateDurationStates returns the states that have a state-duration series
+// for hierarchyPath in the default Prometheus registry.
+func stateDurationStates(hierarchyPath string) []string {
+	var states []string
+
+	for _, labels := range seriesLabels(stateDurationMetric, hierarchyPath) {
+		states = append(states, labels["state"])
+	}
+
 	return states
+}
+
+// exportTestWorkerMetrics exports one worker gauge and one worker counter for
+// hierarchyPath, as the collector does after it saves an observation.
+func exportTestWorkerMetrics(hierarchyPath string) {
+	workerMetrics := deps.Metrics{
+		Counters: map[string]int64{removalTestCounter: 3},
+		Gauges:   map[string]float64{removalTestGauge: 1},
+	}
+	observed := fsmv2.Observation[struct{}]{}.SetWorkerMetrics(workerMetrics)
+
+	metrics.ExportWorkerMetrics(hierarchyPath, observed)
 }
 
 // supervisorWithState builds a supervisor whose one worker stays in state.
@@ -88,5 +119,25 @@ var _ = Describe("The state-duration metric of a worker", func() {
 		Expect(s.TestTick(context.Background())).To(Succeed())
 		Expect(s.ListWorkers()).To(BeEmpty())
 		Expect(stateDurationStates(hierarchyPath)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("The worker metrics of a worker", func() {
+	It("are gone after the worker is removed for good", func() {
+		state := &mockState{signal: fsmv2.SignalNone}
+		s := supervisorWithState(state)
+		hierarchyPath := s.GetHierarchyPath()
+
+		Expect(s.TestTick(context.Background())).To(Succeed())
+		exportTestWorkerMetrics(hierarchyPath)
+		Expect(seriesLabels(removalTestGaugeMetric, hierarchyPath)).To(HaveLen(1))
+		Expect(seriesLabels(removalTestCounterMetric, hierarchyPath)).To(HaveLen(1))
+
+		state.signal = fsmv2.SignalNeedsRemoval
+
+		Expect(s.TestTick(context.Background())).To(Succeed())
+		Expect(s.ListWorkers()).To(BeEmpty())
+		Expect(seriesLabels(removalTestGaugeMetric, hierarchyPath)).To(BeEmpty())
+		Expect(seriesLabels(removalTestCounterMetric, hierarchyPath)).To(BeEmpty())
 	})
 })

@@ -544,7 +544,8 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 }
 
 // stopWorker tears down a worker that just left the registry, deleting the
-// state-duration series of the worker's current state.
+// state-duration series of the worker's current state and its worker-metric
+// series.
 func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	ctx context.Context,
 	workerCtx *WorkerContext[TObserved, TDesired],
@@ -559,6 +560,8 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	}
 
 	workerCtx.mu.RUnlock()
+
+	metrics.CleanupWorkerMetrics(workerCtx.identity.HierarchyPath)
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without

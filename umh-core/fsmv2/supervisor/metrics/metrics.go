@@ -524,6 +524,29 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metri
 	}
 }
 
+// CleanupWorkerMetrics deletes the worker-metric series of one worker.
+func CleanupWorkerMetrics(hierarchyPath string) {
+	workerMetricsExporter.cleanup(hierarchyPath)
+}
+
+func (e *WorkerMetricsExporter) cleanup(hierarchyPath string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	labels := prometheus.Labels{
+		"hierarchy_path": hierarchyPath,
+	}
+
+	for name, counter := range e.counters {
+		counter.Delete(labels)
+		delete(e.prevCounters, hierarchyPath+":"+name)
+	}
+
+	for _, gauge := range e.gauges {
+		gauge.Delete(labels)
+	}
+}
+
 func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.CounterVec {
 	if counter, exists := e.counters[name]; exists {
 		return counter
