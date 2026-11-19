@@ -6,7 +6,7 @@ Write and review pages with the `writing-standards:umh-documentation` skill. It 
 
 ## Page types
 
-Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, reference or explanation. Getting Started is tutorials, Reference is reference, and Production is how-to and explanation. A usage page is the one deliberate mix, the skill's troubleshooting/feature shape, so a reader in the middle of a problem needs to open only one page. Child pages under a usage page have a single type, usually how-to or troubleshooting.
+Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, reference or explanation. Getting Started is tutorials, Reference is reference, and Production is how-to and explanation. A usage page is the one deliberate mix, the skill's troubleshooting/feature shape, so a reader in the middle of a problem needs to open only one page. Child pages under a usage page have a single type, usually how-to or explanation. A troubleshooting page, named after the symptom, goes in the section's `troubleshooting/` folder and is listed under that section's **Troubleshooting** entry in `SUMMARY.md`, not under the usage page it belongs to. The usage page links to it.
 
 ## Readers
 
@@ -14,7 +14,7 @@ Unless a page says otherwise, its primary reader is the person who installed and
 
 ## Usage pages
 
-The usage pages mirror the instance details page in the Management Console. That page shows one card per component: Agent, Container, Communicator, Data Flows, Redpanda and Topic Browser. Each card has its own usage page. The Data Flows card leads to the Data Flows section, with one page each for Bridges, Stand-alone Flows and Stream Processors.
+The usage pages mirror the instance details page in the Management Console. That page shows one card per component: Agent, Container, Communicator, Data Flows, Redpanda and Topic Browser. Each card has its own usage page. The Data Flows card leads to the Data Flows section, with one page each for Bridges, Stand-alone Flows and Stream Processors. The fields, badges and badge reasons of every card are listed once, in `usage/instances/instance-details-page.md`. A usage page links there instead of repeating the table.
 
 Subpages follow the component's internal structure in umh-core, the FSMv1 or FSMv2 state machines that run it. The Management Console follows the same structure. For example, a bridge consists of a connection, a read flow and a write flow, and the UI shows each of them. Name a subpage the way the UI names that part. Explain a part that has no subpage through what it does for the user and the metrics it produces.
 
@@ -23,7 +23,7 @@ Leave out any section that doesn't apply, and keep this order:
 1. Opening in the primary reader's words, with no internals.
 2. What the Management Console shows, and what to do about it.
 3. `## Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
-4. `## Metrics`: what this component tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there. Do not describe known defects. Add the docs update to the ticket that fixes them.
+4. `## Metrics`: what this component tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/metrics/README.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the Metrics page, and link there. Do not describe known defects. Add the docs update to the ticket that fixes them.
 5. Details for IT or support.
 
 ## Config snippets
