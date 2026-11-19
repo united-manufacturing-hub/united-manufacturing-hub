@@ -13,16 +13,16 @@ You need:
 
 Open your instance, go to the **Plugins** tab, click **Add plugin** and choose **Historian**.
 
-![The plugin list with the Historian plugin](./images/historian-select-plugin.png)
+<figure><img src="./images/historian-select-plugin.png" alt="The plugin list with the Historian plugin" width="596"><figcaption></figcaption></figure>
 
 Enter the connection of your database. The **Setup Guide** next to the form lists the values for the
 Getting Started Stack; the fields are described in [Setup](setup.md#connection-form).
 
-![The connection form with the Historian Setup Guide](./images/historian-connection-form.png)
+<figure><img src="./images/historian-connection-form.png" alt="The connection form with the Historian Setup Guide" width="609"><figcaption></figcaption></figure>
 
 Click **Save & Deploy**. The Plugins tab now shows the Historian card.
 
-![The Historian card on the Plugins tab](./images/historian-plugin-card.png)
+<figure><img src="./images/historian-plugin-card.png" alt="The Historian card on the Plugins tab" width="596"><figcaption></figcaption></figure>
 
 ## Step 2: Choose the data model to store
 
@@ -34,28 +34,28 @@ dash; see [Historian bridge](bridge.md#data-models-with-a-dash-in-the-name).
 Go to **Data Models** → **Add Data Model**, name it `pump` and copy the structure from **Example:
 Pump** in the Data Modeling Guide next to the form.
 
-![A pump data model next to the Data Modeling Guide](./images/historian-pump-data-model.png)
+<figure><img src="./images/historian-pump-data-model.png" alt="A pump data model next to the Data Modeling Guide" width="609"><figcaption></figcaption></figure>
 
 Then add a bridge from the **Simulator - Example Pump via Generate** template. It publishes random
 values for version 1 of `pump`.
 
-![The Simulator - Example Pump via Generate template in the Add Bridge list](./images/historian-example-pump-template.png)
+<figure><img src="./images/historian-example-pump-template.png" alt="The Simulator - Example Pump via Generate template in the Add Bridge list" width="567"><figcaption></figcaption></figure>
 
 ## Step 3: Save the data model to the Historian
 
 On the **Data Models** page, click **add** in the **Historian** column of your data model, or **Save
 to Historian** in its row menu.
 
-![The row menu of a data model with Save to Historian](./images/historian-row-menu-save-to-historian.png)
+<figure><img src="./images/historian-row-menu-save-to-historian.png" alt="The row menu of a data model with Save to Historian" width="596"><figcaption></figcaption></figure>
 
 The Historian bridge opens filled in. Check the instance and the location.
 
-![The General tab of the Historian bridge](./images/historian-bridge-general.png)
+<figure><img src="./images/historian-bridge-general.png" alt="The General tab of the Historian bridge" width="596"><figcaption></figcaption></figure>
 
 In the write flow, check the version: the latest is selected. If your devices publish an older
 version, select that one; the pump example publishes v1.
 
-![The topic table of the Historian bridge with the selected data model and version](./images/historian-bridge-topics.png)
+<figure><img src="./images/historian-bridge-topics.png" alt="The topic table of the Historian bridge with the selected data model and version" width="596"><figcaption></figcaption></figure>
 
 Do not deploy yet.
 
@@ -69,14 +69,12 @@ Do not deploy yet.
 Durations take hours, minutes or seconds, such as `168h`, not days. The values are fixed after the
 first deployment; see [Historian parameters](how-the-historian-stores-data.md#historian-parameters).
 
-![Advanced Settings with the notice that the table settings apply once](./images/historian-advanced-settings.png)
-
-<figure><img src="./images/historian-deploy-successful.png" alt="The deployment finished successfully" width="704"><figcaption></figcaption></figure>
+<figure><img src="./images/historian-advanced-settings.png" alt="Advanced Settings with the notice that the table settings apply once" width="596"><figcaption></figcaption></figure>
 
 On the **Data Models** page, the **Historian** column now shows the bridge's health. Hover over it for
 the stored versions.
 
-![The Historian column with the details for the data model](./images/historian-data-models-column.png)
+<figure><img src="./images/historian-data-models-column.png" alt="The Historian column with the details for the data model" width="596"><figcaption></figcaption></figure>
 
 ## Step 5: Check that the data arrives
 
@@ -100,7 +98,7 @@ The fields are described in [Historian](README.md#overview-page).
 3. Leave **Aggregate** on to get the average, minimum and maximum per interval.
 4. Copy the query.
 
-![The SQL query tab for the pump temperature](./images/historian-sql-query-tab.png)
+<figure><img src="./images/historian-sql-query-tab.png" alt="The SQL query tab for the pump temperature" width="410"><figcaption></figcaption></figure>
 
 The tab shows queries for every tag, with the note **Historian database required**. They return rows
 only for stored data contracts; see
@@ -114,7 +112,7 @@ On the Historian overview page, click **Database schema**.
 
 Click **LLM Context** and copy or download the text. It describes your tables for an AI assistant.
 
-![The LLM Context dialog](./images/historian-llm-context.png)
+<figure><img src="./images/historian-llm-context.png" alt="The LLM Context dialog" width="563"><figcaption></figcaption></figure>
 
 Give the text to the assistant with your question, for example "show the average pump temperature
 per hour for the last week". Check each generated query in Grafana before you rely on it.
