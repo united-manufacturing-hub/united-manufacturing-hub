@@ -177,7 +177,7 @@ var _ = Describe("pollAndRecord", func() {
 			Port:    closedPort(),
 			SSLMode: config.HistorianSSLModeDisable,
 		}}
-		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+		d := isolatedPoolDeps()
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -188,3 +188,23 @@ var _ = Describe("pollAndRecord", func() {
 		Expect(d.MetricsRecorder().Drain().Gauges).To(BeEmpty())
 	})
 })
+
+// isolatedPoolDeps builds Deps with a pool holder of their own, so a spec does
+// not close a pool that sharedPool holds for another spec.
+func isolatedPoolDeps() Deps {
+	holder := &poolHolder{}
+	DeferCleanup(closeTestPool, holder)
+
+	return Deps{
+		BaseDependencies: baseUnder("parent-a"),
+		pool:             holder,
+		summary:          &readCache[timescalemetrics.Summary]{interval: summaryInterval},
+		databaseSize:     &readCache[int64]{interval: databaseSizeInterval},
+	}
+}
+
+func closeTestPool(holder *poolHolder) {
+	if holder.pool != nil {
+		holder.pool.Close()
+	}
+}
