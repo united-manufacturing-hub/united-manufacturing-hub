@@ -439,13 +439,18 @@ func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
 	return simple.Degraded("TimescaleDB answered, but the connection check failed")
 }
 
-// pollAndRecord runs Poll and records its status as umh_historian_* gauges,
-// also when Poll returns an error.
+// pollAndRecord runs Poll and records its status as worker gauges. A Poll
+// error means the context was cancelled and nothing was observed, so it
+// records nothing.
 func pollAndRecord(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	status, err := Poll(ctx, d, cfg)
-	RecordHistorianStatus(d.GetHierarchyPath(), status)
+	if err != nil {
+		return status, err
+	}
 
-	return status, err
+	recordStatus(d.MetricsRecorder(), status)
+
+	return status, nil
 }
 
 func init() {

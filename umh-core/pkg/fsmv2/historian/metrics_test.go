@@ -20,15 +20,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/prometheus/client_golang/prometheus"
-	dto "github.com/prometheus/client_model/go"
-
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/historian/timescalemetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
-
-var metricsHierarchyPath = idUnder("parent-a").HierarchyPath
 
 var fullSummary = timescalemetrics.Summary{
 	HistorianOccupiedDiskBytes: 4096,
@@ -63,97 +59,67 @@ var failedCheckStatus = TimescaleStatus{
 	Auth: models.TimescaleAuthUnknown,
 }
 
-var figureGauges = append([]*prometheus.GaugeVec{historianDatabaseOccupiedDiskBytes}, historianSummaryGauges...)
-
-// gaugeValue reads a series that is expected to exist; reading creates it.
-func gaugeValue(gauge *prometheus.GaugeVec, labelValues ...string) float64 {
-	var metric dto.Metric
-	Expect(gauge.WithLabelValues(labelValues...).Write(&metric)).To(Succeed())
-
-	return metric.GetGauge().GetValue()
+var figureGauges = []deps.GaugeName{
+	GaugeHistorianOccupiedDiskBytes,
+	GaugeHistorianDataSpanSeconds,
+	GaugeHistorianJobs,
+	GaugeHistorianFailedJobs,
+	GaugeHistorianDatabaseOccupiedDiskBytes,
 }
 
-// collectedSeries counts the series one gauge vec would serve on /metrics.
-func collectedSeries(gauge *prometheus.GaugeVec) int {
-	collected := make(chan prometheus.Metric)
+// recordedGauges records status and returns the gauges the collector would drain.
+func recordedGauges(status TimescaleStatus) map[string]float64 {
+	recorder := deps.NewMetricsRecorder()
+	recordStatus(recorder, status)
 
-	go func() {
-		gauge.Collect(collected)
-		close(collected)
-	}()
+	return recorder.Drain().Gauges
+}
 
-	count := 0
-	for range collected {
-		count++
+func gaugeKeys(names []deps.GaugeName) []string {
+	keys := make([]string, 0, len(names))
+	for _, name := range names {
+		keys = append(keys, string(name))
 	}
 
-	return count
+	return keys
 }
 
-func seriesCount(gauges []*prometheus.GaugeVec) int {
-	count := 0
-	for _, gauge := range gauges {
-		count += collectedSeries(gauge)
-	}
-
-	return count
-}
-
-// The gauges are package globals registered once, so every spec starts and
-// ends with them empty.
-var _ = BeforeEach(func() {
-	CleanupHistorianMetrics()
-	DeferCleanup(CleanupHistorianMetrics)
-})
-
-var _ = Describe("RecordHistorianStatus", func() {
+var _ = Describe("recordStatus", func() {
 	It("sets every gauge from a connected status with its figures read", func() {
-		RecordHistorianStatus(metricsHierarchyPath, connectedStatus)
+		gauges := recordedGauges(connectedStatus)
 
-		Expect(gaugeValue(historianReachable, metricsHierarchyPath)).To(Equal(1.0))
-		Expect(gaugeValue(historianQueryLatencySeconds, metricsHierarchyPath)).To(Equal(connectedStatus.LatencyMs / 1000))
-		Expect(gaugeValue(historianOccupiedDiskBytes, metricsHierarchyPath)).To(Equal(float64(fullSummary.HistorianOccupiedDiskBytes)))
-		Expect(gaugeValue(historianDataSpanSeconds, metricsHierarchyPath)).To(Equal(float64(fullSummary.DataSpanSeconds)))
-		Expect(gaugeValue(historianJobs, metricsHierarchyPath)).To(Equal(float64(fullSummary.JobCount)))
-		Expect(gaugeValue(historianFailedJobs, metricsHierarchyPath)).To(Equal(float64(fullSummary.FailedJobCount)))
-		Expect(gaugeValue(historianDatabaseOccupiedDiskBytes, metricsHierarchyPath)).To(Equal(float64(fullDatabaseOccupiedDiskBytes)))
-
-		Expect(gaugeValue(historianAuth, metricsHierarchyPath, string(models.TimescaleAuthValid))).To(Equal(1.0))
-		Expect(gaugeValue(historianAuth, metricsHierarchyPath, string(models.TimescaleAuthInvalid))).To(Equal(0.0))
-		Expect(gaugeValue(historianAuth, metricsHierarchyPath, string(models.TimescaleAuthUnknown))).To(Equal(0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthValid), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthInvalid), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthUnknown), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianQueryLatencySeconds), connectedStatus.LatencyMs/1000))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianOccupiedDiskBytes), float64(fullSummary.HistorianOccupiedDiskBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDataSpanSeconds), float64(fullSummary.DataSpanSeconds)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianJobs), float64(fullSummary.JobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianFailedJobs), float64(fullSummary.FailedJobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseSizeReady), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
 	})
 
-	It("exports the connection gauges but no figures before the first read", func() {
-		RecordHistorianStatus(metricsHierarchyPath, connectedStatusBeforeFirstRead)
+	It("sets the ready flags to 0 and no figures before the first read", func() {
+		gauges := recordedGauges(connectedStatusBeforeFirstRead)
 
-		Expect(collectedSeries(historianReachable)).To(Equal(1))
-		Expect(collectedSeries(historianQueryLatencySeconds)).To(Equal(1))
-		Expect(collectedSeries(historianAuth)).To(Equal(len(authStates)))
-		Expect(seriesCount(figureGauges)).To(BeZero())
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseSizeReady), 0.0))
+		Expect(gauges).NotTo(HaveKey(BeElementOf(gaugeKeys(figureGauges))))
 	})
 
-	It("deletes the figure series after a failed connection check", func() {
-		RecordHistorianStatus(metricsHierarchyPath, connectedStatus)
-		Expect(seriesCount(figureGauges)).To(Equal(len(figureGauges)), "the full status exported every figure")
+	It("sets no latency and no figures after a failed connection check", func() {
+		gauges := recordedGauges(failedCheckStatus)
 
-		RecordHistorianStatus(metricsHierarchyPath, failedCheckStatus)
-
-		Expect(seriesCount(figureGauges)).To(BeZero())
-		Expect(collectedSeries(historianQueryLatencySeconds)).To(BeZero(),
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthUnknown), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseSizeReady), 0.0))
+		Expect(gauges).NotTo(HaveKey(string(GaugeHistorianQueryLatencySeconds)),
 			"a failed check measures no latency, and a 0 would read as a fast database")
-		Expect(gaugeValue(historianReachable, metricsHierarchyPath)).To(Equal(0.0))
-		Expect(gaugeValue(historianAuth, metricsHierarchyPath, string(models.TimescaleAuthUnknown))).To(Equal(1.0))
-	})
-})
-
-var _ = Describe("CleanupHistorianMetrics", func() {
-	It("deletes every historian series", func() {
-		RecordHistorianStatus(metricsHierarchyPath, connectedStatus)
-		Expect(seriesCount(historianGauges)).NotTo(BeZero())
-
-		CleanupHistorianMetrics()
-
-		Expect(seriesCount(historianGauges)).To(BeZero())
+		Expect(gauges).NotTo(HaveKey(BeElementOf(gaugeKeys(figureGauges))))
 	})
 })
 
@@ -183,20 +149,42 @@ var _ = Describe("pollAndRecord", func() {
 	})
 
 	It("records the status Poll returned", func() {
-		status, err := pollAndRecord(context.Background(), pollDeps(), historianConfig)
+		d := pollDeps()
+
+		status, err := pollAndRecord(context.Background(), d, historianConfig)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(gaugeValue(historianReachable, metricsHierarchyPath)).To(Equal(1.0))
-		Expect(gaugeValue(historianJobs, metricsHierarchyPath)).To(Equal(float64(status.Summary.JobCount)))
-		Expect(gaugeValue(historianDatabaseOccupiedDiskBytes, metricsHierarchyPath)).To(Equal(float64(*status.DatabaseOccupiedDiskBytes)))
+
+		gauges := d.MetricsRecorder().Drain().Gauges
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianJobs), float64(status.Summary.JobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseOccupiedDiskBytes), float64(*status.DatabaseOccupiedDiskBytes)))
 	})
 
 	It("records a failed connection check", func() {
 		fakeDatabase.SetErr(timescalemetrics.ErrFakeConnectionRefused)
+		d := pollDeps()
 
-		_, _ = pollAndRecord(context.Background(), pollDeps(), historianConfig)
+		_, err := pollAndRecord(context.Background(), d, historianConfig)
 
-		Expect(gaugeValue(historianReachable, metricsHierarchyPath)).To(Equal(0.0))
-		Expect(seriesCount(figureGauges)).To(BeZero())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
+	})
+
+	It("records nothing when the context is cancelled", func() {
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			Port:    closedPort(),
+			SSLMode: config.HistorianSSLModeDisable,
+		}}
+		d := newDeps(idUnder("parent-a"), baseUnder("parent-a"), nil)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := pollAndRecord(ctx, d, cfg)
+
+		Expect(err).To(MatchError(context.Canceled))
+		Expect(d.MetricsRecorder().Drain().Gauges).To(BeEmpty())
 	})
 })
