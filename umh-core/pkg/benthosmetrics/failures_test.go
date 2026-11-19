@@ -53,7 +53,7 @@ var _ = Describe("The kind of a FailureEntry", func() {
 	It("reads an error entry built without a window as an error", func() {
 		e := FailureEntry{Signal: "output_error", Label: "output error", Count: 1}
 
-		Expect(e.IsConnection()).To(BeFalse(), "an error entry is not a connection entry")
+		Expect(e.Connection).To(BeFalse(), "an error entry is not a connection entry")
 
 		ok, reason := (&Failures{Entries: []FailureEntry{e}}).ErrorFree()
 		Expect(ok).To(BeFalse())
@@ -64,7 +64,7 @@ var _ = Describe("The kind of a FailureEntry", func() {
 	It("reads a connection entry as a connection", func() {
 		e := FailureEntry{Signal: "input_connection", Label: "input", Count: 1, Connection: true}
 
-		Expect(e.IsConnection()).To(BeTrue())
+		Expect(e.Connection).To(BeTrue())
 
 		ok, reason := (&Failures{Entries: []FailureEntry{e}}).ErrorFree()
 		Expect(ok).To(BeFalse())
