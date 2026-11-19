@@ -44,14 +44,13 @@ var benthosErrorFakeKey = config.NewDependencyKey[*errorWindowFake]("benthos-err
 type errorWindowFake struct {
 	*benthosmetricstest.Server
 
-	clk     *clock.Mock
 	advance atomic.Int64
 }
 
 // newErrorWindowFake starts a fake whose /metrics reads advance clk by one
 // second each until setReadAdvance changes the step.
 func newErrorWindowFake(clk *clock.Mock) *errorWindowFake {
-	f := &errorWindowFake{Server: benthosmetricstest.NewServer(), clk: clk}
+	f := &errorWindowFake{Server: benthosmetricstest.NewServer()}
 	f.setReadAdvance(time.Second)
 	f.OnMetricsRead(func() { clk.Add(time.Duration(f.advance.Load())) })
 
@@ -63,12 +62,6 @@ func newErrorWindowFake(clk *clock.Mock) *errorWindowFake {
 // real second per stride instead of one per scrape second.
 func (f *errorWindowFake) setReadAdvance(d time.Duration) {
 	f.advance.Store(int64(d))
-}
-
-// now returns the shared scrape clock's current time, for a wait that names
-// how far the clock has stepped past an entry's own timestamps.
-func (f *errorWindowFake) now() time.Time {
-	return f.clk.Now()
 }
 
 // benthosEntry returns f's entry named signal, or nil when f holds none.
@@ -232,22 +225,27 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 					inputAtBurst = s.Result.Sample.Metrics.InputReceivedTotal()
 				}
 
+				// Judge the entry against its own scrape, not the clock as it
+				// reads now: this callback can be handed a sample taken before
+				// later scrapes advanced the clock.
+				seenAt := s.Result.Sample.At
+
 				// A clear more than 45 s, one and a half read steps, before
 				// the window ends is the bug this scenario pins, not a state
 				// to wait out.
-				if e == nil && fake.now().Before(lastErrorAt.Add(benthosmetrics.ErrorWindow-45*time.Second)) {
-					return false, "", fmt.Errorf("the entry cleared %v before the ten-minute window ended (last error at %s, now %s)",
-						benthosmetrics.ErrorWindow-fake.now().Sub(lastErrorAt), lastErrorAt, fake.now())
+				if e == nil && seenAt.Before(lastErrorAt.Add(benthosmetrics.ErrorWindow-45*time.Second)) {
+					return false, "", fmt.Errorf("the entry cleared %v before the ten-minute window ended (last error at %s, scrape at %s)",
+						benthosmetrics.ErrorWindow-seenAt.Sub(lastErrorAt), lastErrorAt, seenAt)
 				}
 
 				if e == nil {
 					return false, failuresSeen(obs), nil
 				}
 
-				done := fake.now().After(lastErrorAt.Add(benthosmetrics.ErrorWindow - 45*time.Second))
+				done := seenAt.After(lastErrorAt.Add(benthosmetrics.ErrorWindow - 45*time.Second))
 
-				return done, fmt.Sprintf("now=%s last_error=%s %s",
-					fake.now().Format(time.TimeOnly), lastErrorAt.Format(time.TimeOnly), failuresSeen(obs)), nil
+				return done, fmt.Sprintf("scrape=%s last_error=%s %s",
+					seenAt.Format(time.TimeOnly), lastErrorAt.Format(time.TimeOnly), failuresSeen(obs)), nil
 			}); err != nil {
 			return err
 		}
@@ -259,14 +257,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 
 				// The window lets the entry go at ten minutes: still present
 				// past that is the bug this scenario pins, not a state to wait
-				// out.
-				//
-				// Judge the entry against ITS OWN scrape, not the clock as it
-				// reads now. This callback can be handed a sample taken
-				// before later scrapes advanced the clock, and measuring a
-				// retained entry against a newer now would report late
-				// clearing that never happened — a failure that depends on
-				// goroutine scheduling rather than on the code under test.
+				// out. Judged against the entry's own scrape, as above.
 				seenAt := s.Result.Sample.At
 				if e != nil && seenAt.After(lastErrorAt.Add(benthosmetrics.ErrorWindow+45*time.Second)) {
 					return false, "", fmt.Errorf("the entry is still present %v after the last error, past the %v window",
