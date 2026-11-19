@@ -202,13 +202,13 @@ func quantileOrZero(p *float64) float64 {
 	return *p
 }
 
-// StaleAfter is the staleness rule: three missed scrapes.
-const StaleAfter = 3 * benthosmetrics.ScrapeInterval
+// staleAfter is the staleness rule: three missed scrapes.
+const staleAfter = 3 * benthosmetrics.ScrapeInterval
 
 // isFresh reports whether a scrape that began at takenAt can still vouch for
 // liveness at now. A zero takenAt means no scrape has succeeded.
 func isFresh(takenAt, now time.Time) bool {
-	return !takenAt.IsZero() && now.Sub(takenAt) <= StaleAfter
+	return !takenAt.IsZero() && now.Sub(takenAt) <= staleAfter
 }
 
 // lastGoodFailures holds, per Benthos S6 service name, the Failures of the
@@ -272,14 +272,16 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 // sample, be descheduled, and arrive here after the other has already
 // stored a NEWER one. Writing unconditionally would put the older sample
 // back and a later unknown read would answer from it, so the write is
-// skipped unless f is strictly newer than what the hold has. ObservedAt is
+// skipped when f is older than what the hold has. ObservedAt is
 // the scrape's own time, which only moves forward for a given worker.
 func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, f *benthosmetrics.Failures) {
 	// Snapshot the registry BEFORE taking the mutex: Refs clones every
 	// registered spec, and holding lastGoodMu across it would block every
 	// other flow's lookup for the length of a full registry copy.
+	known, candidates := heldBeforeSweep(s6ServiceName)
+
 	var registered map[string]struct{}
-	if !heldFor(s6ServiceName) {
+	if !known {
 		registered = make(map[string]struct{})
 		for _, ref := range c.Refs(WorkerType) {
 			registered[ref.Name] = struct{}{}
@@ -290,11 +292,7 @@ func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, 
 	defer lastGoodMu.Unlock()
 
 	if registered != nil {
-		for name := range lastGoodFailures {
-			if _, ok := registered[name]; !ok {
-				delete(lastGoodFailures, name)
-			}
-		}
+		sweepUnregistered(lastGoodFailures, candidates, registered)
 	}
 
 	// Strictly older only. Two samples sharing an ObservedAt are the same
@@ -303,9 +301,9 @@ func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, 
 	//
 	// A wall-clock step backwards would stall the hold until the clock
 	// catches up. That fails in the safe direction: the held answer carries
-	// its own ObservedAt, so the health path reads it as "no fresh Benthos
-	// metrics" rather than reporting a stale verdict as current.
-	if prev, known := lastGoodFailures[s6ServiceName]; known &&
+	// its own ObservedAt, which now lies in the future, and the health path
+	// reads a sample from the future as "no fresh Benthos metrics".
+	if prev, held := lastGoodFailures[s6ServiceName]; held &&
 		f.ObservedAt.Before(prev.ObservedAt) {
 		return
 	}
@@ -318,14 +316,40 @@ func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, 
 	lastGoodFailures[s6ServiceName] = cp
 }
 
-// heldFor reports whether the hold already has an entry for s6ServiceName.
-func heldFor(s6ServiceName string) bool {
+// heldBeforeSweep reports whether the hold already has an entry for
+// s6ServiceName. When it does not, it also returns the ObservedAt of every
+// entry the hold has now, the candidates a sweep may drop.
+func heldBeforeSweep(s6ServiceName string) (bool, map[string]time.Time) {
 	lastGoodMu.Lock()
 	defer lastGoodMu.Unlock()
 
-	_, known := lastGoodFailures[s6ServiceName]
+	if _, known := lastGoodFailures[s6ServiceName]; known {
+		return true, nil
+	}
 
-	return known
+	candidates := make(map[string]time.Time, len(lastGoodFailures))
+	for name, f := range lastGoodFailures {
+		candidates[name] = f.ObservedAt
+	}
+
+	return false, candidates
+}
+
+// sweepUnregistered drops from hold the candidates whose worker is not in
+// registered. The registry is read without the hold's mutex, so another
+// reader may add or update an entry between that read and this sweep; only
+// entries still as they were in candidates are dropped, so the sweep never
+// removes a sample it has not seen. The caller holds lastGoodMu.
+func sweepUnregistered(hold map[string]benthosmetrics.Failures, candidates map[string]time.Time, registered map[string]struct{}) {
+	for name, seenAt := range candidates {
+		if _, ok := registered[name]; ok {
+			continue
+		}
+
+		if f, ok := hold[name]; ok && f.ObservedAt.Equal(seenAt) {
+			delete(hold, name)
+		}
+	}
 }
 
 // forgetLastGoodFailures drops s6ServiceName's entry from the hold.

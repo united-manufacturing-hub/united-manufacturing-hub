@@ -284,7 +284,7 @@ var _ = Describe("GetLastObservedState across a failing store read", func() {
 		restore()
 
 		restore = swapScrapeClock(func() time.Time {
-			return t0.Add(time.Second + StaleAfter + time.Millisecond)
+			return t0.Add(time.Second + staleAfter + time.Millisecond)
 		})
 		defer restore()
 		Expect(readIsLive()).To(BeFalse(),
@@ -627,6 +627,32 @@ var _ = Describe("The Failures hold's sweep and forget", func() {
 		Expect(heldInFailuresHold(newName)).To(BeTrue(), "the new worker is held")
 		Expect(heldInFailuresHold(oldName)).To(BeFalse(),
 			"adding a new name sweeps out names whose worker is no longer registered")
+	})
+	// The registry is read outside the hold's mutex, so another reader can
+	// store a sample between that read and the sweep. The sweep must leave
+	// such a sample alone; otherwise a late, older read for the same name
+	// could fill the emptied entry and undo the newer sample.
+	It("keeps entries stored after its registry snapshot", func() {
+		at := time.Now()
+		hold := map[string]benthosmetrics.Failures{
+			"benthos-gone":    {ObservedAt: at},
+			"benthos-added":   {ObservedAt: at},
+			"benthos-updated": {ObservedAt: at.Add(time.Second)},
+		}
+
+		// What the sweep saw before the registry read: "benthos-added" was
+		// not held yet, and "benthos-updated" held an older sample. None of
+		// the three was registered when the registry was read.
+		candidates := map[string]time.Time{
+			"benthos-gone":    at,
+			"benthos-updated": at,
+		}
+
+		sweepUnregistered(hold, candidates, map[string]struct{}{})
+
+		Expect(hold).NotTo(HaveKey("benthos-gone"), "an unchanged, unregistered entry is swept")
+		Expect(hold).To(HaveKey("benthos-added"), "an entry added after the snapshot stays")
+		Expect(hold).To(HaveKey("benthos-updated"), "an entry updated after the snapshot stays")
 	})
 })
 
