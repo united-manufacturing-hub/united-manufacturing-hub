@@ -71,7 +71,7 @@ first deployment; see [Historian parameters](how-the-historian-stores-data.md#hi
 
 ![Advanced Settings with the notice that the table settings apply once](./images/historian-advanced-settings.png)
 
-![The deployment finished successfully](./images/historian-deploy-successful.png)
+<figure><img src="./images/historian-deploy-successful.png" alt="The deployment finished successfully" width="704"><figcaption></figcaption></figure>
 
 On the **Data Models** page, the **Historian** column now shows the bridge's health. Hover over it for
 the stored versions.
