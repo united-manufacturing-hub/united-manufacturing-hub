@@ -1,100 +1,44 @@
-# Configuration File Editing
+# Edit the Config File
 
-The configuration file editor allows you to directly modify your instance's `/data/config.yaml` file through the Management Console UI.
+This page explains how to edit an instance's `config.yaml` in the Management Console, and how to repair the file when umh-core cannot read it. The repair steps need access to the Docker host.
 
-## Accessing the Config Editor
+`config.yaml` holds everything you configure on an instance: bridges, stand-alone flows, data models and the agent settings. The UI writes to the same file, so a bridge you create in the UI appears in `config.yaml`, and a bridge you add to `config.yaml` appears in the UI. The [Configuration Reference](../../reference/configuration-reference.md) lists every key.
 
-Two ways to open the configuration editor:
+## Open the file
 
-1. **From Instance Details**: Click the "Config File" button in the top-right corner
-2. **From Instance Overview**: Click the context menu (⋮) → "Config File"
+Open the instance's details page and click **View Instance Config**. In the instance list, the row menu of an online UMH Core instance has the same page under **Config file**.
 
-![Config File Editor](./images/instance-detail-config-edit.png)
+The page shows `/data/config.yaml` as umh-core read it last. **Refresh** reads it again. **Download** saves a copy named `config-<first 8 characters of the instance ID>.yaml`.
 
-## ⚠️ Warning: Direct YAML Editing
+## Save a change
 
-**You are editing the config.yaml file directly.** Use this feature with caution:
-- Invalid YAML syntax will break your instance
-- Recovery requires SSH access to the container
-- The agent applies changes via hot-reload - no restart needed
+1. Edit the file in the editor.
+2. Click **Save**.
 
-## Editor Controls
+The Management Console first checks that the text is valid YAML. umh-core then checks that the file matches the structure of `config.yaml` and writes it. It rejects the save if the file changed on the instance since you opened it, for example because someone created a bridge in the meantime. Click **Refresh** and make your change again.
 
-### Main Actions
-- **Refresh**: Reload the current configuration from the instance
-- **Save**: Apply your changes (the agent will hot-reload)
+After **Configuration saved successfully**, umh-core applies the change without a restart.
 
-### Additional Options (⋮ menu)
+{% hint style="warning" %}
+The check on save accepts a key that umh-core does not know, for example a misspelled one. umh-core reads `config.yaml` strictly afterwards, so a single unknown key makes it stop applying changes. See [When umh-core cannot read the file](#when-umh-core-cannot-read-the-file).
+{% endhint %}
 
-![Local File Sync Options](./images/instance-overview-config-edit-sync-to-filesystem-to-work-with-LLM-custom-IDE.png)
+## When umh-core cannot read the file
 
-- **Download**: Save a local copy of the configuration
-- **Local File Sync**:
-  - **Open Local File**: Edit the config in your preferred IDE
-  - **Create Local File**: Start a new local file for editing
+While umh-core cannot read `config.yaml`, it applies no changes. Bridges, flows and Redpanda keep running with the configuration they had. The Config File page cannot load the file either and shows an error.
 
-Local file sync enables:
-- Version control with Git
-- IDE features (syntax highlighting, validation, autocomplete)
-- AI assistant integration (Cursor, GitHub Copilot, Claude)
+After 10 minutes of failed reads, umh-core stops its control loop. It then no longer starts, stops or restarts any component until the container restarts. The [Agent metrics](agent/README.md#metrics) count this as an error with `instance="config_permanent_failure"`.
 
-## Configuration Structure
+To repair the file, run on the Docker host:
 
-The editor shows your complete configuration with main sections:
-
-```yaml
-templates:
-  protocolConverter:
-    # Reusable bridge templates
-
-protocolConverter:
-  - name: my-bridge
-    # Bridge configurations (shown as "Bridges" in UI)
-
-dataFlow:
-  - name: my-flow
-    # Stand-alone flow configurations
+```bash
+docker exec -it <container name> vi /data/config.yaml
 ```
 
-Key sections:
-- `templates:` - Reusable configuration blocks for templating
-- `protocolConverter:` - Bridge definitions (UI shows as "Bridges")
-- `dataFlow:` - Stand-alone flow definitions
-- `dataContracts:` - Data validation rules
-- `dataModels:` - Data structure definitions
+The agent log at `/data/logs/umh-core/current` names the line that umh-core could not read. Fix it and save. If umh-core already stopped its control loop, restart the container afterwards:
 
-For complete documentation, see [Configuration Reference](../../reference/configuration-reference.md).
+```bash
+docker restart <container name>
+```
 
-## UI ↔ YAML Synchronization
-
-UMH Core maintains two-way sync between UI and YAML:
-
-**UI → YAML**: When you create bridges or data models in the UI, they appear here automatically
-
-**YAML → UI**: After saving YAML changes, they're reflected in the UI immediately
-
-This enables flexible workflows:
-- **OT teams**: Use the UI for visual configuration
-- **IT teams**: Use YAML for infrastructure-as-code
-- **Learning**: Create in UI, study the generated YAML
-- **Scaling**: Template in YAML for multiple similar devices
-
-## Troubleshooting
-
-**Syntax Errors**: The Save button will show errors if YAML is invalid. Common issues:
-- Incorrect indentation (use spaces, not tabs)
-- Missing colons after keys
-- Unclosed quotes
-
-**Changes Not Applied**: Ensure you clicked Save. Check the agent logs if changes don't take effect.
-
-**Recovery from Bad Config**: If the instance breaks:
-1. SSH into the container
-2. Edit `/data/config.yaml` directly
-3. The agent will auto-reload when valid
-
-## Next Steps
-
-- [Configuration Reference](../../reference/configuration-reference.md) - Full YAML schema
-- [Variables](../../reference/variables.md) - Template variables and substitution
-- [Bridges](../data-flows/bridges.md) - Configure data connections
+`docker restart` keeps the container's environment variables and its `/data` volume.
