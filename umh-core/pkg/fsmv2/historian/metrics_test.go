@@ -171,6 +171,23 @@ var _ = Describe("pollAndRecord", func() {
 		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
 	})
 
+	It("records an unreachable status when the pool cannot be built", func() {
+		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
+			Host:    "127.0.0.1",
+			SSLMode: "not-a-mode",
+		}}
+		d := isolatedPoolDeps()
+
+		_, err := pollAndRecord(context.Background(), d, cfg)
+
+		Expect(err).To(HaveOccurred())
+
+		gauges := d.MetricsRecorder().Drain().Gauges
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthUnknown), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
+	})
+
 	It("records nothing when the context is cancelled", func() {
 		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
 			Host:    "127.0.0.1",

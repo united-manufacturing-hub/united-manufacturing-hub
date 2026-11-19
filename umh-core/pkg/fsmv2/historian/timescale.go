@@ -439,18 +439,18 @@ func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
 	return simple.Degraded("TimescaleDB answered, but the connection check failed")
 }
 
-// pollAndRecord runs Poll and records its status as worker gauges. A Poll
-// error means the context was cancelled and nothing was observed, so it
-// records nothing.
+// pollAndRecord runs Poll and records its status as worker gauges. A cancelled
+// poll observed nothing, so it records nothing; a pool that cannot be built is
+// recorded as unreachable.
 func pollAndRecord(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	status, err := Poll(ctx, d, cfg)
-	if err != nil {
+	if errors.Is(err, context.Canceled) {
 		return status, err
 	}
 
 	recordStatus(d.MetricsRecorder(), status)
 
-	return status, nil
+	return status, err
 }
 
 func init() {
