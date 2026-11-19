@@ -35,14 +35,15 @@ therefore sets them when it creates a data contract's tables and leaves them alo
 first bridge of a data contract sets them for every later one.
 
 If the configured value differs from the database, the bridge logs a warning and keeps the database
-value. The [Monitor page](README.md#monitor-page) shows the values in use.
+value. The [Monitor page](README.md#monitor-page) shows the values in use. To change a parameter
+after the tables exist, change it in the database; see
+[Changing compression or retention](https://docs.umh.app/benthos-umh/output/historian#changing-compression-or-retention).
 
 ### Retention applies only to an empty table
 
 Applied to a table with data, a retention would delete every older chunk at once. The Historian
 therefore applies it only to a table that holds no data yet. To add a retention later, run the
-statement from the bridge's warning; see
-[Changing compression or retention](https://docs.umh.app/benthos-umh/output/historian#changing-compression-or-retention).
+statement from the bridge's warning in the database.
 
 ## Precision and datatypes
 

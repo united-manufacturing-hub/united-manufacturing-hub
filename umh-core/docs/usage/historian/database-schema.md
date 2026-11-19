@@ -100,10 +100,11 @@ GROUP  BY 1
 ORDER  BY 1;
 ```
 
-An interval without a stored value stays empty and shows as a gap in Grafana. A tag that stores
-values only on change, for example behind the
-[downsampler](https://docs.umh.app/benthos-umh/processing/downsampler), shows gaps while its value is
-constant. `avg` weights every row equally, so it is a time average only at a fixed sample rate.
+An interval without a stored value stays empty and shows as a gap in Grafana. The
+[downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) drops values that change less
+than its threshold before they reach the Unified Namespace, so the Historian never receives them. A
+downsampled tag therefore shows gaps while its value stays within the threshold. `avg` weights every
+row equally, so it is a time average only at a fixed sample rate.
 
 ## Database Schema page
 
