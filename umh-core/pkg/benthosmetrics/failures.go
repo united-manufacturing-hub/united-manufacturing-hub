@@ -58,16 +58,10 @@ type FailureEntry struct {
 	// rose; zero on a connection entry.
 	LastErrorAt time.Time
 
-	// Connection is true for an input or output that is not connected, false
-	// for an error counter.
+	// Connection is true for a connection entry: inputs or outputs that are
+	// not connected, which stays until Benthos reconnects them. It is false
+	// for an error entry.
 	Connection bool
-}
-
-// IsConnection reports whether e is a connection entry: an entry for an
-// input or output that is not connected, which stays until Benthos
-// reconnects it. Every other entry is an error entry.
-func (e FailureEntry) IsConnection() bool {
-	return e.Connection
 }
 
 // ErrorFree reports whether nothing is failing. Otherwise reason describes
@@ -85,7 +79,7 @@ func (f *Failures) ErrorFree() (ok bool, reason string) {
 		label += "s"
 	}
 
-	if e.IsConnection() {
+	if e.Connection {
 		return false, fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
 	}
 
@@ -135,7 +129,7 @@ func short(d time.Duration) string {
 // entry never counts.
 func (f *Failures) NotCleared(margin time.Duration) bool {
 	for _, e := range f.Entries {
-		if e.IsConnection() {
+		if e.Connection {
 			continue
 		}
 
