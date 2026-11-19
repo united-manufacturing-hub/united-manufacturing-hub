@@ -12,7 +12,7 @@ The write flow is one part of a [bridge](bridges.md). The bridge's read flow bri
 
 This page shows how to set up a write flow in the Management Console. It then lists which UNS topics a write flow may receive, and shows the same write flow in `config.yaml`. When the Management Console rejects your topics, or the bridge shows as degraded, see [Write Flow Topics Rejected](write-flow-topics-rejected.md).
 
-Write flows need umh-core 0.45.0 or later. On an instance with an older version, the **Write Flow** tab is disabled, with the tooltip "This instance does not support write flows yet. Update umh-core."
+The [topic validation](#topic-validation) rules apply from umh-core 0.45.0. The [emergency setting](write-flow-topics-rejected.md#emergency-setting-bypass-write-flow-validation) lets a write flow receive data outside its bridge's location from umh-core 0.45.2.
 
 {% hint style="warning" %}
 **Write flows do not guarantee delivery yet.** The Management Console shows this warning on every write flow that does not write to the Historian. A message can be lost when the destination rejects it or is unreachable. Do not use a write flow for data that must arrive, such as production orders or quality records.
@@ -197,7 +197,12 @@ A new version of a data contract does not reach the write flow on its own. Add t
 
 ## Configuration
 
-A write flow is stored in `config.yaml` under the bridge, in `protocolConverterServiceConfig.config.dataflowcomponent_write`. The Management Console writes this section for you. Edit it by hand only on the instance's [Config File](../instances/config-file.md) page.
+A write flow is stored in `config.yaml` in the section `dataflowcomponent_write`. Where that section sits depends on whether the bridge uses a template:
+
+- A bridge created in the Management Console keeps its whole config in a template, in `templates.protocolConverter.<name>`, where `<name>` is the bridge's name. The write flow is in `templates.protocolConverter.<name>.dataflowcomponent_write`. The bridge references the template with `templateRef: <name>`.
+- A bridge without `templateRef` keeps it under the bridge, in `protocolConverterServiceConfig.config.dataflowcomponent_write`.
+
+The Management Console writes these sections for you. Edit them by hand only on the instance's [Config File](../instances/config-file.md) page.
 
 This bridge has only a write flow. It sends every `_pump_v1` tag at its location and below to a test HTTP endpoint. Every bridge has a connection check, also one with only a write flow:
 
@@ -232,6 +237,34 @@ protocolConverter:
             code: |-
               url: http://{{ .IP }}:{{ .PORT }}/api/measurements
               verb: POST
+      variables:
+        IP: "mes-test.example"
+        PORT: "8080"
+```
+
+Created in the Management Console, the same bridge looks like this. `config` moves to the template, and the bridge keeps `location`, `writeDFCDesiredState` and `variables`:
+
+```yaml
+templates:
+  protocolConverter:
+    pump-to-mes:
+      connection:
+        nmap:
+          target: "{{ .IP }}"
+          port: "{{ .PORT }}"
+      dataflowcomponent_write:
+        source:
+          topics: |-
+            ^umh\.v1\.{{ .location_path }}\.(?:[^._][^.]*\.)*_pump_v1\.
+        # processing and destination as in the example above
+protocolConverter:
+  - name: pump-to-mes
+    desiredState: active
+    protocolConverterServiceConfig:
+      templateRef: pump-to-mes
+      location:
+        2: packaging
+      writeDFCDesiredState: active
       variables:
         IP: "mes-test.example"
         PORT: "8080"
