@@ -45,6 +45,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/redpanda"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/streamprocessor"
 	topicbrowserfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/topicbrowser"
+	fsmv2timescale "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/historian"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/metrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/sentry"
@@ -165,6 +166,13 @@ func main() {
 		log.Warnf("%v; ignoring it and keeping FSMv1's Benthos monitor", benthosMetricsErr)
 	} else if benthosMetricsEnabled {
 		log.Info("USE_FSMV2_BENTHOS_METRICS is on: Benthos instances are monitored by the FSMv2 Benthos metrics worker (in-process scrape, no S6 monitor service)")
+	}
+
+	historianMetricsEnabled, historianMetricsErr := fsmv2timescale.MetricsEnabled()
+	if historianMetricsErr != nil {
+		log.Warnf("%v; ignoring it and keeping the umh_historian_* metrics off", historianMetricsErr)
+	} else if historianMetricsEnabled {
+		log.Info("USE_HISTORIAN_METRICS is on: the Historian connection check exports umh_historian_* metrics")
 	}
 
 	featureUsage := &models.FeatureUsage{
