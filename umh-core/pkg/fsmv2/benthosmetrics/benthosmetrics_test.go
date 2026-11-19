@@ -149,7 +149,7 @@ var _ = Describe("mapObserved", func() {
 				Reason:   "poll error: GET http://localhost:4195/version: connection refused",
 			}, true},
 			{"failed poll, last good sample past three scrapes", simple.Status[Scrape]{
-				Result:   liveScrape(now.Add(-StaleAfter-time.Millisecond), true, true),
+				Result:   liveScrape(now.Add(-staleAfter-time.Millisecond), true, true),
 				Degraded: true,
 				Reason:   "poll error: GET http://localhost:4195/version: connection refused",
 			}, false},

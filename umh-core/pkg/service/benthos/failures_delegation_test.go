@@ -387,4 +387,15 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		Expect(ok).To(BeFalse(), "an old sample fails closed")
 		Expect(reason).To(Equal("no fresh Benthos metrics"))
 	})
+
+	// With the flag on, a sample stamped after now — the wall clock stepped
+	// back since it was taken — has no known age, so it is not fresh either.
+	It("answers 'no fresh Benthos metrics' for Failures from the future", func() {
+		setBenthosMetricsFlag("true")
+		stubStoredFailuresAt(name, &benthosmetrics.Failures{}, time.Now().Add(time.Hour))
+
+		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
+		Expect(ok).To(BeFalse(), "a sample from the future fails closed")
+		Expect(reason).To(Equal("no fresh Benthos metrics"))
+	})
 })
