@@ -4,16 +4,16 @@ A data flow shows "degraded" in the Management Console when its Benthos instance
 
 This applies to bridges, stand-alone flows and stream processors alike, because each one runs a Benthos instance.
 
-{% hint style="info" %}
-**Early access:** With `-e USE_FSMV2_BENTHOS_METRICS=true` on the `docker run` command that starts the container, metric-check errors also clear 10 minutes after the last one, without a restart, and the metric check also counts inputs and outputs that are not connected until Benthos reconnects them. The reason then names errors before connections, for example `benthos reported 3 output errors in the last 10m, last one 4m ago` or `benthos reports 1 input not connected`. On most outages Benthos also logs the failure, and the log check's reason is shown before the metric check's, so the metric reason appears only while the log stays clean. An output that lost its connection counts as connected again once Benthos has written the message it was holding when the connection dropped. Some inputs and outputs report a broken connection as an error, not as a lost connection, so their connection problems show up through the log check instead. Two further reasons appear only with the flag on, when umh-core cannot read the instance's metrics at all: `no Benthos metrics yet` and `no fresh Benthos metrics` (see [When umh-core cannot read the metrics](#when-umh-core-cannot-read-the-metrics)). The flag is read at startup, so changing it means recreating the container.
-{% endhint %}
-
 ## The two checks
 
 umh-core checks each Benthos instance in two ways:
 
 - **The log check** reads the instance's log. An `error` line, or a `warning` line that says "failed to", "connection lost" or "unable to", counts as a failure. The reason reads `found error (clears in 4m12s): <the log line>`.
 - **The metric check** reads the instance's error counters: output errors and processor errors. The reason names the counter, for example `benthos reported 3 output errors`.
+
+{% hint style="info" %}
+**Early access:** With `USE_FSMV2_BENTHOS_METRICS=true` (see [Configuration](#configuration)), metric-check errors clear 10 minutes after the last one, without a restart, and the metric check also reports inputs and outputs that are not connected until Benthos reconnects them. The reason names errors before connections, for example `benthos reported 3 output errors in the last 10m, last one 4m ago` or `benthos reports 1 input not connected`. The log check's reason is shown first, and Benthos logs most outages, so the metric reason appears only while the log stays clean. An output that lost its connection counts as connected again once Benthos has written the message it was holding when the connection dropped. Some inputs and outputs report a broken connection as an error instead, so it shows through the log check. Two reasons exist only with the flag on; see [When umh-core cannot read the metrics](#when-umh-core-cannot-read-the-metrics).
+{% endhint %}
 
 ## When a failure stops counting
 
@@ -44,3 +44,7 @@ In both cases the logs are the next place to look, not the status.
 3. For the metric check, the reason names a count and the kind of error, not the output or processor behind it. Find the failing one in the flow's logs, which usually show the error behind the counter, and the input or output that lost its connection.
 4. If the reason says umh-core has no metrics, see [When umh-core cannot read the metrics](#when-umh-core-cannot-read-the-metrics).
 5. Wait until the failure stops counting (see [When a failure stops counting](#when-a-failure-stops-counting)). A log-check failure clears on its own. A metric-check error clears only when Benthos restarts, so redeploy the flow after the fix, unless the early-access flag above is on.
+
+## Configuration
+
+- `USE_FSMV2_BENTHOS_METRICS` (environment variable, default `false`): turns on the early-access metric check described above, for example with `-e USE_FSMV2_BENTHOS_METRICS=true` on the `docker run` command. It is read at startup, so changing it means recreating the container; `docker restart` keeps the old environment.

@@ -177,6 +177,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 		if err := waitForSample("the flow degrades on the burst: one entry with the burst's count and its reason",
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
+
 				e := benthosEntry(s.Result.Sample.Failures, "output_error")
 				if e == nil {
 					return false, failuresSeen(obs), nil
@@ -188,6 +189,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 				// and the "last one" clause. pkg/benthosmetrics pins the
 				// elapsed wording itself on a controlled clock.
 				ok, reason := flowErrorFree(s.Result.Sample.Failures)
+
 				want := fmt.Sprintf("benthos reported %d output errors in the last 10m, last one ", e.Count)
 				if !ok && !strings.HasPrefix(reason, want) {
 					return false, "", fmt.Errorf("the entry's reason is %q, want it to start %q", reason, want)
@@ -205,8 +207,10 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 
 		// The error counter stays flat from here: no further error, no
 		// restart, until the window has let the burst go.
-		var lastErrorAt time.Time
-		var inputAtBurst int64
+		var (
+			lastErrorAt  time.Time
+			inputAtBurst int64
+		)
 
 		env.Step("the error counter stays flat; the clock steps thirty seconds per scrape while the window runs out")
 		fake.SetTraffic(40, 20, 0)
@@ -323,6 +327,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 		if err := waitForSample("the flow shows the input outage: a connection entry with its reason",
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
+
 				e := benthosEntry(s.Result.Sample.Failures, "input_connection")
 				if e == nil {
 					return false, failuresSeen(obs), nil

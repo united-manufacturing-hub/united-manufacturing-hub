@@ -224,6 +224,7 @@ func (c *FSMv2Client) Refs(workerType string) []dynamicchildren.Ref {
 	}
 
 	refs := make([]dynamicchildren.Ref, 0)
+
 	for ref := range c.w.Registry().Snapshot() {
 		if ref.WorkerType == workerType {
 			refs = append(refs, ref)

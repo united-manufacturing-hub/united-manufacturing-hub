@@ -211,10 +211,11 @@ func isFresh(takenAt, now time.Time) bool {
 	return !takenAt.IsZero() && now.Sub(takenAt) <= staleAfter
 }
 
-// lastGoodFailures holds, per Benthos S6 service name, the Failures of the
-// last store read that answered for that name, so an unknown read can
-// answer from them (see Failures). The mutex guards the map: concurrent
-// Benthos services read their instance's Failures on their own tick.
+// lastGoodFailures, the hold, keeps per Benthos S6 service name the
+// Failures of the last store read that answered for that name, so an unknown
+// read can answer from them (see Failures). The mutex guards the map:
+// concurrent Benthos services read their instance's Failures on their own
+// tick.
 var (
 	lastGoodMu       sync.Mutex
 	lastGoodFailures = map[string]benthosmetrics.Failures{}
@@ -241,12 +242,13 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 		// it, or it was deleted: fail closed, and drop what the hold has.
 		if errors.Is(err, fsmv2client.ErrNotFound) || errors.Is(err, fsmv2client.ErrWorkerDeleted) {
 			forgetLastGoodFailures(s6ServiceName)
+
 			return nil, false
 		}
 
 		// Any other read failure — a read error or a read timeout — is an
 		// unknown read: answer from the last good Failures.
-		return holdLastGoodFailures(c, s6ServiceName)
+		return heldFailures(c, s6ServiceName)
 	}
 
 	f := obs.Status.Result.Sample.Failures
@@ -254,6 +256,7 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 		// The worker stored no sample yet, or its sample carries no
 		// Failures: there is nothing good to hold for it.
 		forgetLastGoodFailures(s6ServiceName)
+
 		return nil, false
 	}
 
@@ -262,18 +265,11 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 	return f, true
 }
 
-// rememberLastGoodFailures stores f as the last good Failures read for
-// s6ServiceName. A name new to the hold first sweeps it: entries whose
-// worker is no longer registered are dropped, so the hold cannot outgrow
-// the fleet it serves.
-//
-// Two readers of the same name race here. The health path reads on its own
-// tick and the telemetry count reads on the notify loop, so one can read a
-// sample, be descheduled, and arrive here after the other has already
-// stored a NEWER one. Writing unconditionally would put the older sample
-// back and a later unknown read would answer from it, so the write is
-// skipped when f is older than what the hold has. ObservedAt is
-// the scrape's own time, which only moves forward for a given worker.
+// rememberLastGoodFailures stores a copy of f as s6ServiceName's last good
+// Failures, unless the hold already has a newer one: two readers of the same
+// name can race, and a slow one must not put an older sample back. A name
+// new to the hold first sweeps out names whose worker is no longer
+// registered, so the hold cannot outgrow the fleet it serves.
 func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, f *benthosmetrics.Failures) {
 	// Snapshot the registry BEFORE taking the mutex: Refs clones every
 	// registered spec, and holding lastGoodMu across it would block every
@@ -295,14 +291,9 @@ func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, 
 		sweepUnregistered(lastGoodFailures, candidates, registered)
 	}
 
-	// Strictly older only. Two samples sharing an ObservedAt are the same
-	// scrape, so letting a tie through costs nothing and keeps the hold
-	// writable for callers that do not stamp the field.
-	//
-	// A wall-clock step backwards would stall the hold until the clock
-	// catches up. That fails in the safe direction: the held answer carries
-	// its own ObservedAt, which now lies in the future, and the health path
-	// reads a sample from the future as "no fresh Benthos metrics".
+	// Ties are the same scrape. A wall clock stepped back stalls the hold
+	// until it catches up, which is safe: the health path rejects a sample
+	// from the future as "no fresh Benthos metrics".
 	if prev, held := lastGoodFailures[s6ServiceName]; held &&
 		f.ObservedAt.Before(prev.ObservedAt) {
 		return
@@ -360,27 +351,21 @@ func forgetLastGoodFailures(s6ServiceName string) {
 	delete(lastGoodFailures, s6ServiceName)
 }
 
-// holdLastGoodFailures answers an unknown read of s6ServiceName from the
-// last good Failures the hold has for it, when its worker is still
-// registered and the hold has an entry; otherwise the read stays without
-// an answer.
-//
-// The check is by name, so a worker deleted and recreated under the same
-// name could in principle be answered from its predecessor's Failures. Two
-// things bound that. Any read between the two lives returns ErrNotFound or
-// ErrWorkerDeleted, which drops the hold, and the successor's first good
-// read replaces it. And the answer carries its own ObservedAt, so the
-// health path rejects it as "no fresh Benthos metrics" once it is older
-// than constants.BenthosMaxMetricsAndConfigAge. Both would have to miss for
-// a predecessor's errors to reach a user.
-func holdLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmetrics.Failures, bool) {
+// heldFailures answers an unknown read of s6ServiceName from the hold, when
+// its worker is still registered. A worker recreated under the same name may
+// get its predecessor's Failures until its first good read; their ObservedAt
+// makes the health path reject them once they are stale.
+func heldFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmetrics.Failures, bool) {
 	registered := false
+
 	for _, ref := range c.Refs(WorkerType) {
 		if ref.Name == s6ServiceName {
 			registered = true
+
 			break
 		}
 	}
+
 	if !registered {
 		return nil, false
 	}
@@ -404,10 +389,9 @@ func holdLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*be
 
 // ErrorsNotClearedCount returns how many of the registered Benthos workers
 // hold an error that should have cleared: their stored Failures answer true
-// for NotCleared(margin). It counts every registered worker of this type —
-// the Benthos instance of a data flow component, a protocol converter, a
-// stream processor, a topic browser or a stand-alone flow alike — and a
-// protocol converter with both sides stuck counts twice.
+// for NotCleared(margin). It counts every registered worker of this type:
+// one per bridge side, stand-alone flow, stream processor and topic browser,
+// so a bridge with both sides stuck counts twice.
 func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
 	c := fsmv2client.GetClient()
 	if c == nil {
@@ -415,6 +399,7 @@ func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
 	}
 
 	count := 0
+
 	for _, ref := range c.Refs(WorkerType) {
 		if failures, ok := Failures(ctx, ref.Name); ok && failures.NotCleared(margin) {
 			count++
