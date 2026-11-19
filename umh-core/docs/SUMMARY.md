@@ -47,7 +47,7 @@
     * [Troubleshooting](usage/historian/troubleshooting/README.md)
       * [Historian Bridge Fails After Deploying](usage/historian/troubleshooting/bridge-fails-after-deploying.md)
       * [Historian Bridge Topics Rejected](usage/historian/troubleshooting/bridge-topics-rejected.md)
-      * [Historian Bridge Loses Data](usage/historian/troubleshooting/stored-data-is-lost.md)
+      * [Historian Bridge Writes No Data](usage/historian/troubleshooting/bridge-writes-no-data.md)
       * [New Data Model Version Not Stored](usage/historian/troubleshooting/new-version-not-stored.md)
       * [SQL Query Returns No Rows](usage/historian/troubleshooting/sql-query-returns-no-rows.md)
       * [Historian Rows Dropped](usage/historian/troubleshooting/rows-dropped.md)

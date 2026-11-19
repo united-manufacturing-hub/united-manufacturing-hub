@@ -7,8 +7,8 @@ bridge and select **Logs**.
 | Page | Read it when |
 |---|---|
 | [Historian Bridge Fails After Deploying](bridge-fails-after-deploying.md) | The bridge stops right after deploying |
-| [Historian Bridge Topics Rejected](bridge-topics-rejected.md) | The bridge is degraded or does not deploy because of its source topic |
-| [Historian Bridge Loses Data](stored-data-is-lost.md) | The bridge runs, but its data does not arrive |
+| [Historian Bridge Topics Rejected](bridge-topics-rejected.md) | After an upgrade to umh-core 0.45.0, the bridge is degraded or does not deploy |
+| [Historian Bridge Writes No Data](bridge-writes-no-data.md) | The bridge runs, but its data does not arrive |
 | [New Data Model Version Not Stored](new-version-not-stored.md) | A new version of a data model is not stored |
 | [SQL Query Returns No Rows](sql-query-returns-no-rows.md) | A query from the SQL query tab returns nothing |
 | [Historian Rows Dropped](rows-dropped.md) | The bridge logs dropped rows |
