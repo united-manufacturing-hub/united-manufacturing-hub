@@ -37,10 +37,11 @@ const (
 )
 
 // seriesLabels returns the label sets of every series of metricName for
-// hierarchyPath in the default Prometheus registry.
-func seriesLabels(metricName, hierarchyPath string) []map[string]string {
+// hierarchyPath in the default Prometheus registry. callerDepth is how many
+// helper frames sit between the spec and this function.
+func seriesLabels(callerDepth int, metricName, hierarchyPath string) []map[string]string {
 	families, err := prometheus.DefaultGatherer.Gather()
-	ExpectWithOffset(2, err).NotTo(HaveOccurred())
+	ExpectWithOffset(callerDepth+1, err).NotTo(HaveOccurred())
 
 	var matches []map[string]string
 
@@ -69,7 +70,7 @@ func seriesLabels(metricName, hierarchyPath string) []map[string]string {
 func stateDurationStates(hierarchyPath string) []string {
 	var states []string
 
-	for _, labels := range seriesLabels(stateDurationMetric, hierarchyPath) {
+	for _, labels := range seriesLabels(1, stateDurationMetric, hierarchyPath) {
 		states = append(states, labels["state"])
 	}
 
@@ -130,14 +131,14 @@ var _ = Describe("The worker metrics of a worker", func() {
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
 		exportTestWorkerMetrics(hierarchyPath)
-		Expect(seriesLabels(removalTestGaugeMetric, hierarchyPath)).To(HaveLen(1))
-		Expect(seriesLabels(removalTestCounterMetric, hierarchyPath)).To(HaveLen(1))
+		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(HaveLen(1))
+		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(HaveLen(1))
 
 		state.signal = fsmv2.SignalNeedsRemoval
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
 		Expect(s.ListWorkers()).To(BeEmpty())
-		Expect(seriesLabels(removalTestGaugeMetric, hierarchyPath)).To(BeEmpty())
-		Expect(seriesLabels(removalTestCounterMetric, hierarchyPath)).To(BeEmpty())
+		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(BeEmpty())
+		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(BeEmpty())
 	})
 })
