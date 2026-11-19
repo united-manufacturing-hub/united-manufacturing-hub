@@ -63,7 +63,11 @@ Before you start you need:
 - A test endpoint that accepts the data, not your production MES
 
 {% hint style="warning" %}
-**A write flow changes the state of the destination.** A destination can be a PLC or a system that machines act on. If it is, a written value can move equipment. Test the write flow against a simulator or a test system first. You own the commissioning, testing and safety approval of the process that the destination controls. UMH does not validate it.
+**WARNING: Risk of unexpected machine or process operation**
+
+Writing to an external system can affect the operation of connected machinery or processes. Incorrect writes can result in death, serious injury or equipment damage.
+
+**UMH does not provide safety functions.** Data delivery guarantees do not make UMH suitable for use as part of a safety function. Safety functions must be implemented independently of UMH using appropriate safety-rated controllers and devices, correctly programmed and validated for the application.
 {% endhint %}
 
 ### 1. Open the bridge's overview page
@@ -127,10 +131,6 @@ The **Destination** card holds the settings of the system you write to, for exam
 ![The Destination card for an HTTP Client](images/write-flows-destination.png)
 
 ### 6. Deploy and check
-
-{% hint style="warning" %}
-**Deploying starts writing to the destination.** Point the write flow at a test system first.
-{% endhint %}
 
 1. Turn on **Activate Flow** on the **Write Flow** card.
 2. Select **Save & Deploy**. The dialog shows **Deploy successful** once the bridge runs.
@@ -198,10 +198,6 @@ A new version of a data contract does not reach the write flow on its own. Add t
 ## Configuration
 
 A write flow is stored in `config.yaml` under the bridge, in `protocolConverterServiceConfig.config.dataflowcomponent_write`. The Management Console writes this section for you. Edit it by hand only on the instance's [Config File](../instances/config-file.md) page.
-
-{% hint style="warning" %}
-**Deploying starts writing to the destination.** Point the write flow at a test system first.
-{% endhint %}
 
 This bridge has only a write flow. It sends every `_pump_v1` tag at its location and below to a test HTTP endpoint. Every bridge has a connection check, also one with only a write flow:
 
