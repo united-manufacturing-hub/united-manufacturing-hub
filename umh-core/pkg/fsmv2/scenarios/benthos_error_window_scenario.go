@@ -342,7 +342,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 					return false, "", fmt.Errorf("the connection entry's reason is %q", reason)
 				}
 
-				done := !ok && e.IsConnection() && e.Count == 1
+				done := !ok && e.Connection && e.Count == 1
 
 				return done, failuresSeen(obs), nil
 			}); err != nil {
