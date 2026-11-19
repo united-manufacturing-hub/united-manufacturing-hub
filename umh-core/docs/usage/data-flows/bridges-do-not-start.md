@@ -22,7 +22,7 @@ Before umh-core starts a new bridge, it runs bridge admission. A new bridge wait
 
 An instance starts at most `(CPU cores − 1) × 5` bridges, rounded down: 15 on 4 cores, 7 with a CPU limit of 2.5 cores. CPU cores means the container's CPU limit. Without a limit, it means the cores the container may use: all of the machine's cores, or the cores it is pinned to with a cpuset. A container pinned to 2 of 8 cores starts at most 5 bridges. More cores raise the limit.
 
-The limit counts bridges, not workload: a bridge reading 10 tags counts the same as one reading 10,000. Stopped bridges and waiting bridges listed earlier in `config.yaml` count too. Stand-alone flows and stream processors do not. To size the machine, see the [Sizing Guide](../../production/sizing-guide.md).
+The limit is a safety cap, not a sizing model: a machine sized by the limit alone is too small. The limit counts bridges, not workload: a bridge reading 10 tags counts the same as one reading 10,000. Stopped bridges and waiting bridges listed earlier in `config.yaml` count too. Stand-alone flows and stream processors do not. To size the machine, see the [Sizing Guide](../../production/sizing-guide.md).
 
 ## Emergency settings: Turn off bridge admission
 
