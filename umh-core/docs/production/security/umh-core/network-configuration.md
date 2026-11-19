@@ -19,11 +19,11 @@ Allowlist the hostname in your firewall. Do not allowlist IP addresses or certif
 
 ### TLS Inspection (MITM)
 
-A firewall that inspects TLS replaces the certificate of `management.umh.app` with one that your corporate certificate authority (CA) signs. Until you add your corporate CA to the container, umh-core rejects that certificate and the instance stays offline in the Management Console. [Instance Stays Offline Behind a Corporate Firewall](../../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md) shows how to confirm this and gives the steps.
+A firewall that inspects TLS replaces the certificate of `management.umh.app` with one that your corporate certificate authority (CA) signs. Until you add your corporate CA to the container, umh-core rejects that certificate and the instance stays offline in the Management Console. [Instance Stays Offline Behind a Corporate Firewall](../../../usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md) shows how to confirm this and gives the steps.
 
 ## Proxy Configuration
 
-If your network requires a proxy, add the proxy variables to the `docker run` command. An existing container must be removed and started again with the new flags, as in [step 4](../../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) of the corporate CA steps. The container's bridges stop until it is back up.
+If your network requires a proxy, add the proxy variables to the `docker run` command. An existing container must be removed and started again with the new flags, as in [step 4](../../../usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) of the corporate CA steps. The container's bridges stop until it is back up.
 
 ```bash
 docker run \
@@ -47,4 +47,4 @@ Supported proxy types: HTTP and HTTPS.
 
 ## Common Configuration
 
-In most corporate environments, a proxy and TLS inspection go together. In that case the container needs both the proxy variables above and your corporate CA. [Instance Stays Offline Behind a Corporate Firewall](../../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) gives the steps for the CA.
+In most corporate environments, a proxy and TLS inspection go together. In that case the container needs both the proxy variables above and your corporate CA. [Instance Stays Offline Behind a Corporate Firewall](../../../usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) gives the steps for the CA.

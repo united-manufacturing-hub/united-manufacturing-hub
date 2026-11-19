@@ -2,7 +2,7 @@
 
 The communicator connects your instance to the Management Console. Use this page when the instance shows as offline or its Communicator card is degraded.
 
-If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md).
+If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](../troubleshooting/instance-offline-behind-corporate-firewall.md).
 
 ## The Communicator card
 
