@@ -252,6 +252,7 @@ var _ = Describe("The framework cycle", func() {
 
 		t0 := time.Now().Truncate(time.Second)
 		clockNow := t0
+
 		defer swapScrapeClock(func() time.Time { return clockNow })()
 
 		worker, err := factory.NewWorkerByType(
@@ -265,6 +266,7 @@ var _ = Describe("The framework cycle", func() {
 
 		// No error yet.
 		s.SetCounters(100, 100, 0)
+
 		clockNow = t0
 		first := observeOneCycle(worker, spec)
 		ok, _ := first.Result.Sample.Failures.ErrorFree()
@@ -272,6 +274,7 @@ var _ = Describe("The framework cycle", func() {
 
 		// One output error fires the entry.
 		s.SetCounters(100, 100, 1)
+
 		clockNow = t0.Add(time.Second)
 		fired := observeOneCycle(worker, spec)
 		ok, _ = fired.Result.Sample.Failures.ErrorFree()
@@ -280,6 +283,7 @@ var _ = Describe("The framework cycle", func() {
 		// Benthos restarts and counts no error since: the counters are back
 		// at 0, and the pre-restart entry clears at once.
 		s.SetCounters(0, 0, 0)
+
 		clockNow = t0.Add(2 * time.Second)
 		restarted := observeOneCycle(worker, spec)
 		Expect(restarted.Result.Sample.Metrics.InputReceivedTotal()).To(Equal(int64(0)),
@@ -289,6 +293,7 @@ var _ = Describe("The framework cycle", func() {
 
 		// Benthos runs error-free for a while.
 		s.SetCounters(40, 40, 0)
+
 		clockNow = t0.Add(3 * time.Second)
 		_ = observeOneCycle(worker, spec)
 
@@ -297,6 +302,7 @@ var _ = Describe("The framework cycle", func() {
 		// entry carries their count: the worker kept its window state across
 		// the restart and compares the new counters with 0.
 		s.SetCounters(0, 0, 3)
+
 		clockNow = t0.Add(4 * time.Second)
 		degraded := observeOneCycle(worker, spec)
 		ok, _ = degraded.Result.Sample.Failures.ErrorFree()
@@ -311,6 +317,7 @@ var _ = Describe("The framework cycle", func() {
 	It("degrades on stale metrics after three missed scrapes", func() {
 		s := benthosmetricstest.NewServer()
 		defer s.Close()
+
 		s.SetCounters(100, 80, 0)
 
 		spec := userSpecFor("scenario-stale", s.Port())
@@ -354,20 +361,20 @@ var _ = Describe("The framework cycle", func() {
 			"three missed scrapes must degrade")
 	})
 
-	// With the flag on exactly one live copy of the failure window state
-	// exists per Benthos instance, in the worker's deps, that
-	// IsMetricsErrorFree and the not-cleared count read through the package's
-	// Failures lookup, and the state is dropped when the instance is
-	// removed.
-	It("gives the flagged-on worker the only live copy of the failure window state", func() {
+	// With the flag on, IsMetricsErrorFree and the not-cleared count read the
+	// error window state the worker's deps hold, through the package's
+	// Failures lookup, and the state is dropped when the instance is removed.
+	It("serves the worker's own error window state through the Failures lookup", func() {
 		s := benthosmetricstest.NewServer()
 		defer s.Close()
+
 		s.SetCounters(100, 80, 0)
 
 		spec := userSpecFor("scenario-window", s.Port())
 
 		t0 := time.Now().Truncate(time.Second)
 		clockNow := t0
+
 		defer swapScrapeClock(func() time.Time { return clockNow })()
 
 		worker, err := factory.NewWorkerByType(
@@ -385,11 +392,12 @@ var _ = Describe("The framework cycle", func() {
 		_ = observeOneCycle(worker, spec)
 
 		s.SetCounters(100, 80, 2)
+
 		clockNow = t0.Add(time.Second)
 		fired := observeOneCycle(worker, spec)
 		Expect(fired.Result.Sample.Failures).NotTo(BeNil())
 		Expect(fired.Result.Sample.Failures.Entries).To(HaveLen(1),
-			"the worker's deps hold the failure window state")
+			"the worker's deps hold the error window state")
 
 		// The readers reach that one copy through the package's Failures
 		// lookup: the stored observation answers with the worker's own
@@ -410,6 +418,7 @@ var _ = Describe("The framework cycle", func() {
 
 		// The state is dropped when the instance is removed.
 		client.Delete(dynamicchildren.Ref{WorkerType: WorkerType, Name: "scenario-window"})
+
 		f, ok = Failures(context.Background(), "scenario-window")
 		Expect(ok).To(BeFalse(), "a removed instance has no state left")
 		Expect(f).To(BeNil())

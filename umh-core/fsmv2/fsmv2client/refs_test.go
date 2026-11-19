@@ -44,6 +44,7 @@ func TestRefsListsRegisteredWorkersOfType(t *testing.T) {
 	client.Delete(dynamicchildren.Ref{WorkerType: "benthos_metrics", Name: "benthos-deleted"})
 
 	got := client.Refs("benthos_metrics")
+
 	want := []dynamicchildren.Ref{
 		{WorkerType: "benthos_metrics", Name: "benthos-a"},
 		{WorkerType: "benthos_metrics", Name: "benthos-b"},
