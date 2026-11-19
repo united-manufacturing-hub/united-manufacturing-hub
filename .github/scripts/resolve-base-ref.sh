@@ -41,19 +41,31 @@ if [ -n "${BASE_REF:-}" ]; then
   exit 0
 fi
 
-# Guard: CURRENT_TAG must itself be a stable vX.Y.Z tag. Otherwise the awk below
+# Guard: CURRENT_TAG must itself be a stable vX.Y.Z tag. Otherwise the loop below
 # yields an empty PREV_TAG that is indistinguishable from a true first release,
-# and we would silently defer to the unreliable auto-baseline. The release:
-# event gate enforces the 'v' prefix, but a workflow_dispatch can pass any tag.
+# and we would silently defer to the unreliable auto-baseline. A
+# workflow_dispatch can pass any tag.
 if ! printf '%s\n' "$CURRENT_TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
   echo "::error::${CURRENT_TAG} is not a stable vX.Y.Z tag; refusing to guess a scan base." >&2
   exit 1
 fi
 
-PREV_TAG="$(git tag -l 'v*' \
-  | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-  | sort -V \
-  | awk -v cur="$CURRENT_TAG" '$0==cur{print prev; exit} {prev=$0}')"
+# Several tags can point at one commit: v0.25.0 and v0.26.0 do. A preceding
+# tag on CURRENT_TAG's own commit would give an empty window, so the scan starts
+# at the closest preceding tag on a different commit. Each tag on that commit
+# then gets the whole window.
+# One for-each-ref call lists every tag with its commit: %(*objectname) is the
+# commit of an annotated tag and empty for a lightweight one, whose
+# %(objectname) is the commit.
+CURRENT_SHA="$(git rev-parse "${CURRENT_TAG}^{commit}")"
+PREV_TAG=""
+while read -r tag sha; do
+  [ "$tag" = "$CURRENT_TAG" ] && break
+  [ "$sha" = "$CURRENT_SHA" ] && continue
+  PREV_TAG="$tag"
+done < <(git for-each-ref --format='%(refname:strip=2) %(*objectname) %(objectname)' 'refs/tags/v*' \
+  | awk '$1 ~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ { print $1, $2 }' \
+  | sort -V)
 
 # Distinguish "not an ancestor" (exit 1 — a normal answer) from a real git
 # failure (exit >1: bad ref, missing object, unfetched history). The latter
