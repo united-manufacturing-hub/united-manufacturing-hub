@@ -41,7 +41,7 @@ The **Logs** button opens the logs of the agent. The agent writes them to `/data
 
 The Agent shows Degraded while the emergency setting *Turn off bridge admission* is on. The badge reason then starts with `Bridge admission is off (agent.enableResourceLimitBlocking: false).` New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit.
 
-To clear it, fix the resource problem first. Then set `agent.enableResourceLimitBlocking: true` in the config file. See [Emergency settings: Turn off bridge admission](../../data-flows/troubleshooting/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
+To clear it, fix the resource problem first. Then set `agent.enableResourceLimitBlocking: true` in the config file. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
 
 A degraded Agent also marks the whole instance as degraded. In the instance list, hover over the status dot of the instance to see the line `Agent: <reason>`.
 

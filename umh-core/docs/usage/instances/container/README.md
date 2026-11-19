@@ -29,7 +29,7 @@ Memory from 70% and disk from 75% count as a warning. The badge stays Active and
 
 ### What happens while the container is degraded
 
-A new bridge waits to start while CPU, memory or disk is degraded. Bridges that already run keep running. The reason of the waiting bridge starts with the same line as the reason on the Container card. See [Bridges do not start](../../data-flows/troubleshooting/bridges-do-not-start.md).
+A new bridge waits to start while CPU, memory or disk is degraded. Bridges that already run keep running. The reason of the waiting bridge starts with the same line as the reason on the Container card. See [Bridges do not start](../../data-flows/bridges-do-not-start.md).
 
 ### What to do
 
@@ -37,7 +37,7 @@ A new bridge waits to start while CPU, memory or disk is degraded. Bridges that 
 - **Disk**: free space on the `/data` volume, or shorten how long Redpanda keeps data. See [Disk](../../../production/sizing-guide.md#disk).
 - **CPU**: raise or remove the CPU limit of the container, or reduce the load. [CPU Health](cpu-health/README.md) lists what to do for each CPU status.
 
-If a bridge must start before the resource problem is fixed, use the emergency setting. See [Emergency settings: Turn off bridge admission](../../data-flows/troubleshooting/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
+If a bridge must start before the resource problem is fixed, use the emergency setting. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
 
 ## The CPU row
 
