@@ -32,10 +32,10 @@ Some failures are part of normal operation, for example a cache lookup for a key
 
 With the early-access flag on, two reasons mean the metric check has no reading to judge rather than an error to report. The flow may well be moving data; what is missing is umh-core's view of it.
 
-- `no Benthos metrics yet` — no reading has arrived since the flow started. This is normal for the first seconds after a flow starts or after umh-core restarts. If it stays, the Benthos process is not serving its metrics port: read the flow's logs, which usually show why it did not start.
+- `no Benthos metrics yet` — umh-core has no reading for the flow. This is normal for the first seconds after a flow starts or after umh-core restarts. If it stays, the Benthos process may not be serving its metrics port: read the flow's logs, which usually show why it did not start. If the flow's logs are clean, umh-core itself may be failing to collect the metrics: look for errors about Benthos metrics in the agent's log, `/data/logs/umh-core/current`.
 - `no fresh Benthos metrics` — readings arrived before and have now stopped, or the newest is more than ten seconds old. Read the flow's logs to see whether Benthos is still running, and check whether the instance is short of CPU, which delays the readings.
 
-In both cases the flow's logs are the next place to look, not the status.
+In both cases the logs are the next place to look, not the status.
 
 ## What to do
 
