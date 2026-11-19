@@ -25,6 +25,9 @@ import (
 // Failures is what is wrong with one Benthos instance as of one scrape:
 // recent errors, and inputs or outputs that are not connected. The zero
 // value means nothing is wrong.
+//
+// Failures holds no fsmv2/diagnosis types, so the FSMv2 store can save it as
+// JSON.
 type Failures struct {
 	// Entries holds one entry per current failure, error entries first. An
 	// error entry stays until ErrorWindow (10 minutes) passes with no new
