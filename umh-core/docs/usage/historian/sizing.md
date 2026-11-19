@@ -2,10 +2,6 @@
 
 This page tells you what to add to a machine for the Historian and how much disk it needs per year. The figures assume the Historian output's standard settings and no downsampling.
 
-{% hint style="info" %}
-**Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
-{% endhint %}
-
 ## Extra CPU and memory
 
 The Historian's database can run on the same machine as UMH Core. As a starting point, add this to the machine in the [Sizing Guide](../../production/sizing-guide.md):
@@ -32,7 +28,7 @@ Example: 2,000 analog values per second need about 400 GB for one year, plus abo
 
 ## Set retention
 
-By default the Historian deletes nothing, so its disk grows until it is full. With `retention` set, the Historian deletes all values older than the retention. Set `retention` in the Historian bridge before it writes its first value, because it applies only when the bridge creates its tables. To change it later, see the [Historian output reference](https://docs.umh.app/benthos-umh/output/historian#changing-compression-or-retention).
+By default the Historian deletes nothing, so its disk grows until it is full. To delete old values, set a retention in the [Historian bridge](bridge.md#settings-applied-once). The retention applies only before the bridge writes its first value.
 
 ## Reduce the volume
 

@@ -99,7 +99,7 @@ Our value prop is **curated integration + SLA**. If every customer patches their
 **Short answer:** anything that needs heavy customization or third-party plug-ins now lives **outside** the core image, so you keep full version control.
 
 * **Grafana + TimescaleDB (Historian)**\
-  Deployed as a separate Docker or Helm package—or via the upcoming _UMH Historian_ plug-in. Many plants already run their own Grafana stack or rely on community plug-ins; we don't want to auto-upgrade and break dashboards.
+  Deployed as a separate Docker or Helm package, or through the [UMH Historian](usage/historian/README.md) plugin. Many plants already run their own Grafana stack or rely on community plug-ins; we don't want to auto-upgrade and break dashboards.
 * **Node-RED**\
   Lives in its own container for the same reason: community plug-ins change fast, and site teams often pin specific versions.
 * **MQTT broker**\

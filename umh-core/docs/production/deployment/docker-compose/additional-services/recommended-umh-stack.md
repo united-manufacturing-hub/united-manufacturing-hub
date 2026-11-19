@@ -131,5 +131,5 @@ The [Sizing Guide](../../../sizing-guide.md) covers UMH Core on its own: 4 vCPU,
 
 Starting the stack gives you four running containers. Two things still need configuring before a dashboard shows anything:
 
-1. **Get data into TimescaleDB.** umh-core does not write to the database by itself. You configure a flow that reads from the Unified Namespace and writes to PostgreSQL. See [Stand-alone Flow](../../../../usage/data-flows/stand-alone-flow.md), which covers the `kafka_to_postgresql_historian_bridge`.
+1. **Get data into TimescaleDB.** umh-core does not write to the database by itself. Add the Historian plugin to the instance and save the data models you want to keep. See [Use the Historian](../../../../usage/historian/use-the-historian.md).
 2. **Point Grafana at the database.** Add a PostgreSQL data source in Grafana using host `pgbouncer:5432`, database `umh`, and the credentials you set above. See Grafana's [PostgreSQL data source documentation](https://grafana.com/docs/grafana/latest/datasources/postgres/).
