@@ -44,8 +44,9 @@
 //
 // The verdict is read off the stored status through the HealthReporter interface,
 // so the adapter imports nothing from the worker package and stays generic over
-// the stored status type. StaleAfter is 3x the worker type's ObservationInterval
-// (1s fallback), derived from the registry, not a developer knob. Because the
+// the stored status type. An observation is stale once it is older than 3x the
+// worker type's ObservationInterval (1s fallback), derived from the registry, not
+// a developer knob. Because the
 // desired state is config-driven, SetDesiredFSMState returns an error and the
 // fsmv1 lifecycle methods are no-ops; only Remove actuates (it Deletes the ref).
 //
