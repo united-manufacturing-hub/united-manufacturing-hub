@@ -1,32 +1,38 @@
 # Topic does not appear in the Topic Browser
 
-The Topic Browser can show an empty tree, **No topics have arrived yet.**, while the instance is connected and producing data. A single topic can also stay missing while its bridge keeps sending it. This page explains what to try and how to check that your data is still flowing. The last step needs access to the Docker host of the instance.
+The Topic Browser can show an empty tree, `No topics have arrived yet.`, while the instance is connected and producing data. A single topic can also stay missing while its bridge keeps sending it. The last step on this page needs access to the Docker host of the instance.
 
-An empty tree does not mean your data stopped. The Topic Browser is a view the instance builds from the messages it receives (see [Topic Browser](topic-browser.md)); the messages themselves keep flowing through your bridges into [Redpanda](redpanda.md). If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration). Otherwise, the steps below recover the view when it stops showing what the instance has.
+An empty tree does not mean your data stopped. The Topic Browser is a view the instance builds from the messages it receives (see [Topic Browser](topic-browser.md)); the messages themselves keep flowing through your bridges into [Redpanda](redpanda.md). If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration).
 
 ![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
 
 ## What to try first
 
+Three checks, in order of how little they disturb:
+
 1. Wait a minute. A new topic can take a moment to show.
 2. Reload the page in your browser.
-3. Check the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the instance's detail page. If its badge is not **Active**, hover it to see the reason. For `redpanda degraded`, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+3. Open the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the instance's detail page. If its badge does not read **Active**, the information icon beside the badge gives the reason.
 
 ## When the instance is offline
 
-If the instance that reports the topic has gone offline, the browser says so above the value and keeps showing what arrived before it went. The values are real, but they stop at that moment, and the age under the value says how long ago that was.
+If the instance that reports the topic has gone offline, the browser says so above the value and keeps showing what arrived before it went. The age beside the value says how long ago that was.
 
 ![A topic whose instance went offline, with the last values it reported](../../generated/topic-browser-instance-offline.png)
 
 ## Check whether the data is still flowing
 
-Open the bridge that sends the topic under [Bridges](../data-flows/bridges.md) and select **Metrics**. While data flows, the counts of messages received and sent keep rising.
+Select the topic in the Topic Browser and read the **Bridge** or **Stream** row to find out what produces it. Then open that bridge under [Bridges](../data-flows/bridges.md) and select **Metrics**. While data flows, the counts of messages received and sent keep rising.
 
-The [Redpanda](redpanda.md) card on the instance's detail page shows the state of the broker the messages go to. If it is not **Active**, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+If the bridge shows errors, or its count of messages sent stands still, the topic is missing upstream of the Topic Browser. See [Bridges Do Not Start](../data-flows/bridges-do-not-start.md) for a bridge that never starts, and the [Bridges](../data-flows/bridges.md) page for one that starts and sends nothing. To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
 
-If the bridge shows errors or its count of messages sent stands still, the topic is missing upstream of the Topic Browser: see [Bridges Do Not Start](../data-flows/bridges-do-not-start.md) and the [Bridges](../data-flows/bridges.md) page. To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
+The [Redpanda](redpanda.md) card on the instance's detail page shows the state of the broker the messages go to. If it does not read **Active**, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
 ## Restart the container
+
+{% hint style="warning" %}
+Restarting the container stops umh-core and every bridge in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
+{% endhint %}
 
 If the data is flowing and the topic is still missing, restart the container of the instance. On the Docker host, run:
 
@@ -36,10 +42,6 @@ docker restart umh-core
 
 Replace `umh-core` with the name of your container if you named it differently.
 
-{% hint style="warning" %}
-Restarting the container stops umh-core and every bridge in it until it is back up, and the bridges read no values during the restart. Plan it for a maintenance window.
-{% endhint %}
+## Getting help
 
-## Still missing
-
-If none of the steps above helps, send us what you see — the instance, the time, and whether a reload or a restart brought the topic back — on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH contact.
+If none of the steps above helps, tell us on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH contact: the instance, the time, and whether a reload or a restart brought the topic back.
