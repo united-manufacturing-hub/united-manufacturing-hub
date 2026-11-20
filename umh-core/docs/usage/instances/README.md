@@ -11,12 +11,18 @@ An instance is a running UMH Core container: a single Docker container that host
 | Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance that the instance filter leaves out shows **Not in the filter** and no other values. |
 | Instance name | The name of the instance. Click it to open the instance details page. |
 | Type | **Core** for UMH Core, **Classic** for UMH Classic. `n/a` while the instance is offline. |
-| Version | The UMH Core version. A marker shows when a newer version is available. |
+| Version | The UMH Core version, or for UMH Classic the version of the companion. A marker shows when a newer version is available. |
 | Data flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
 | Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser. |
 | Read throughput (msg/sec) | The messages per second of all data flows on the instance, input and output added together, as a one-minute average. |
 
-The row menu opens the **Instance details**, the **Config file** and **Delete**. Instance details and Config file are available only while the instance is online.
+The row menu has these entries:
+
+- **Instance details**, available while the instance is online.
+- **Config file**, only for a UMH Core instance that is online.
+- **Upgrade**, only for a UMH Classic instance whose companion is not up to date.
+- **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license.
+- **Delete**.
 
 ## The instance details page
 
@@ -37,7 +43,7 @@ The **Plugins** tab shows the plugins added to the instance. The [Historian](../
 
 ## Configuration
 
-An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Management Console generates the token while you create the instance and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start.
+An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Management Console generates the token while you create the instance and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
 
 The token does two things:
 
@@ -50,7 +56,7 @@ Every other setting is a key in `config.yaml` or an environment variable of the 
 
 ## Metrics
 
-Every instance serves Prometheus metrics on port 8080. [Collect Metrics with Prometheus](metrics/collect-with-prometheus.md) explains how to reach them. [Metrics](metrics/README.md) explains the series.
+Every instance serves Prometheus metrics on port 8080. [Collect Metrics with Prometheus](metrics/collect-with-prometheus.md) explains how to reach them. [Metrics](metrics/README.md) explains the series, and [Read the metrics](metrics/README.md#read-the-metrics) explains why Prometheus renames the `instance` label.
 
 ## Troubleshooting
 
