@@ -350,3 +350,51 @@ var _ = Describe("The Failures lookup", func() {
 		Expect(f).To(BeNil())
 	})
 })
+
+var _ = Describe("ErrorsNotClearedCount", func() {
+	// sampleWith wraps one Failures, holding one output error whose last
+	// error is lastErrorAgo old, in a stored observation.
+	sampleWith := func(lastErrorAgo time.Duration) *fsmv2.Observation[simple.Status[Scrape]] {
+		now := time.Now()
+
+		return &fsmv2.Observation[simple.Status[Scrape]]{
+			CollectedAt: now.Add(-100 * time.Millisecond),
+			Status: simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.Failures{
+				ObservedAt: now,
+				Entries: []benthosmetrics.FailureEntry{{
+					Signal: "output_error", Label: "output error", Count: 1,
+					Since: now.Add(-lastErrorAgo), LastErrorAt: now.Add(-lastErrorAgo),
+				}},
+			}}}},
+		}
+	}
+
+	It("counts every registered Benthos worker holding an error that should have cleared", func() {
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero(), "no client")
+
+		// Both sides of a protocol converter are stuck, so it counts twice.
+		reader := &stubManagerReader{obs: sampleWith(benthosmetrics.ErrorWindow + 2*time.Minute)}
+		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
+		fsmv2client.SetClient(c)
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+
+		for _, name := range []string{
+			"benthos-dataflow-read-protocolconverter-pc-1",
+			"benthos-dataflow-write-protocolconverter-pc-1",
+		} {
+			Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
+		}
+
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(2))
+
+		reader.obs = sampleWith(time.Minute)
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero(),
+			"errors still inside the window do not count")
+
+		reader.obs = sampleWith(benthosmetrics.ErrorWindow + 2*time.Minute)
+		reader.err = errors.New("store read timed out")
+
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero(),
+			"a worker whose read fails does not count")
+	})
+})

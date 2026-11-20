@@ -109,3 +109,30 @@ var _ = Describe("FSMv2MonitorEnabled, the adoption flag for an env-gated fsmv2 
 		Entry("flag off", false, false),
 	)
 })
+
+// The not-cleared count has no omitempty, so a zero count is reported too.
+var _ = Describe("The not-cleared count telemetry key", func() {
+	It("serializes benthosErrorsNotClearedInstanceCount", func() {
+		usage := models.FeatureUsage{
+			BenthosErrorsNotClearedInstanceCount: 3,
+		}
+
+		data, err := json.Marshal(usage)
+		Expect(err).NotTo(HaveOccurred())
+
+		var raw map[string]interface{}
+		Expect(json.Unmarshal(data, &raw)).To(Succeed())
+
+		Expect(raw).To(HaveKeyWithValue("benthosErrorsNotClearedInstanceCount", float64(3)))
+
+		// No omitempty: a zero count is reported too, so the telemetry shape
+		// does not flip with the value.
+		zero, err := json.Marshal(models.FeatureUsage{})
+		Expect(err).NotTo(HaveOccurred())
+
+		var zeroRaw map[string]interface{}
+		Expect(json.Unmarshal(zero, &zeroRaw)).To(Succeed())
+
+		Expect(zeroRaw).To(HaveKeyWithValue("benthosErrorsNotClearedInstanceCount", float64(0)))
+	})
+})

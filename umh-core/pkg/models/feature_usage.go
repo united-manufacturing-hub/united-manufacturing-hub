@@ -56,6 +56,10 @@ type FeatureUsage struct {
 	// config.BypassWriteFlowValidationEnv). The Management Console reads it to relax its
 	// own topic checks.
 	WriteFlowValidationBypassed bool `json:"writeFlowValidationBypassed"`
+	// BenthosErrorsNotClearedInstanceCount is how many Benthos instances hold
+	// an error well past its error window. It should stay 0, and
+	// is 0 with USE_FSMV2_BENTHOS_METRICS off. Nothing in umh-core acts on it.
+	BenthosErrorsNotClearedInstanceCount int `json:"benthosErrorsNotClearedInstanceCount"`
 }
 
 // FSMv2CPUEnabled reports the effective state of the fsmv2 CPU path, given the
