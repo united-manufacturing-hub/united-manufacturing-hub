@@ -117,9 +117,11 @@ type IBenthosService interface {
 	//
 	// It returns:
 	//
-	//	ok    – true when logs look clean, false otherwise.
-	//	entry – zero value when ok is true; otherwise the first offending log line.
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
+	//	ok     – true when logs look clean, false otherwise.
+	//	entry  – zero value when ok is true; otherwise the first offending log line.
+	//	newest – zero value when ok is true; otherwise the timestamp of the last
+	//	         offending log line, which is when the window becomes clean again.
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry, time.Time)
 	// IsMetricsErrorFree reports true when Benthos metrics contain no error
 	// counters.
 	//
@@ -1033,22 +1035,47 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 // IsLogsFine reports true when recent Benthos logs (within the supplied
 // window) contain no critical errors or warnings.
 //
+// It scans the whole window rather than stopping at the first offending
+// line, because the window only becomes clean once the last offending line
+// has aged out of it.
+//
 // It returns:
 //
-//	ok    – true when logs look clean, false otherwise.
-//	entry – zero value when ok is true; otherwise the first offending log line.
+//	ok     – true when logs look clean, false otherwise.
+//	entry  – zero value when ok is true; otherwise the first offending log line.
+//	newest – zero value when ok is true; otherwise the timestamp of the last
+//	         offending log line, which is when the window becomes clean again.
 func (s *BenthosService) IsLogsFine(
 	logs []s6service.LogEntry,
 	now time.Time,
 	window time.Duration,
-) (bool, s6service.LogEntry) {
+) (bool, s6service.LogEntry, time.Time) {
 	if len(logs) == 0 {
-		return true, s6service.LogEntry{}
+		return true, s6service.LogEntry{}, time.Time{}
 	}
 
 	cutoff := now.Add(-window)         // pre-compute once
 	critWarnSubstrings := [...]string{ // small, fixed slice
 		"failed to", "connection lost", "unable to",
+	}
+
+	var (
+		first  s6service.LogEntry
+		newest time.Time
+		found  bool
+	)
+
+	// record keeps the first offending entry as the reported one and tracks
+	// the newest offending timestamp seen so far.
+	record := func(l s6service.LogEntry) {
+		if !found {
+			first = l
+			found = true
+		}
+
+		if l.Timestamp.After(newest) {
+			newest = l.Timestamp
+		}
 	}
 
 	for _, l := range logs {
@@ -1061,7 +1088,9 @@ func (s *BenthosService) IsLogsFine(
 		case strings.HasPrefix(l.Content, "configuration file read error:"),
 			strings.HasPrefix(l.Content, "failed to create logger:"),
 			strings.HasPrefix(l.Content, "Config lint error:"):
-			return false, l
+			record(l)
+
+			continue
 		}
 
 		// Only one regexp call per line.
@@ -1069,20 +1098,28 @@ func (s *BenthosService) IsLogsFine(
 			level, msg := m[1], m[2]
 
 			if level == "error" {
-				return false, l
+				record(l)
+
+				continue
 			}
 
 			if level == "warning" {
 				for _, sub := range critWarnSubstrings {
 					if strings.Contains(msg, sub) {
-						return false, l
+						record(l)
+
+						break
 					}
 				}
 			}
 		}
 	}
 
-	return true, s6service.LogEntry{}
+	if found {
+		return false, first, newest
+	}
+
+	return true, s6service.LogEntry{}, time.Time{}
 }
 
 // IsMetricsErrorFree reports true when Benthos metrics contain no error
