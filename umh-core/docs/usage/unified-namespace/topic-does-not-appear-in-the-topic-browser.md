@@ -29,7 +29,11 @@ If the topic shows in the tree, select it and read the **Bridge** or **Stream** 
 
 While data flows, the counts of messages received and sent keep rising.
 
-If the bridge or stream processor shows errors, or its count of messages sent stands still, the topic is missing upstream of the Topic Browser. See [Bridges Do Not Start](../data-flows/bridges-do-not-start.md) for a bridge that never starts, the [Bridges](../data-flows/bridges.md) page for one that starts and sends nothing, and [Stream Processors](../data-flows/stream-processor.md) for a stream processor. To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
+If the count of messages sent stands still, the topic is missing upstream of the Topic Browser. See [Bridges Do Not Start](../data-flows/bridges-do-not-start.md) for a bridge that never starts, the [Bridges](../data-flows/bridges.md) page for one that starts and sends nothing, and [Stream Processors](../data-flows/stream-processor.md) for a stream processor.
+
+If the count keeps rising but errors show, they may concern other topics: one bridge or stream processor can send many. Open its **Logs** and check whether the errors concern the data behind your topic. If they do, fix what they report and check the counts again.
+
+To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
 
 The [Redpanda](redpanda.md) card on the instance's detail page shows the state of the broker the messages go to. If it does not read **Active**, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
