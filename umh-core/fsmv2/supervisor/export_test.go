@@ -21,5 +21,10 @@ func (s *Supervisor[TObserved, TDesired]) WorkerMetricsClaimForTest(workerID str
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return metrics.WorkerMetricsClaim(s.workers[workerID].metricsClaim.Load())
+	workerCtx, exists := s.workers[workerID]
+	if !exists {
+		panic("WorkerMetricsClaimForTest: no worker " + workerID)
+	}
+
+	return metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load())
 }
