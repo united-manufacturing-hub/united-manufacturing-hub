@@ -49,14 +49,13 @@ type Tracker struct {
 	// scrapes.
 	engine *diagnosis.Engine[readings]
 
-	// errorEngine holds the windows that turn error counters into failure
-	// entries across scrapes. It is separate from engine so a Benthos
-	// restart can clear the error state on its own, without wiping the
-	// throughput windows (see observe).
-	errorEngine *diagnosis.Engine[readings]
+	// failures holds the error state across scrapes. It is separate from
+	// engine so a Benthos restart can clear the error state on its own,
+	// without wiping the throughput windows (see observe).
+	failures *failureTracker
 
-	// prev is the previous observed scrape, nil before the first.
-	prev *observation
+	// previous is the previous observed scrape, nil before the first.
+	previous *observation
 
 	// offsets folds counter restarts into the series the engine is fed, one
 	// per direction; see observe.
@@ -85,9 +84,9 @@ func NewTracker(now func() time.Time) *Tracker {
 			// response itself is returned.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		engine:      mustNewEngine(table()),
-		errorEngine: mustNewEngine(errorTable()),
-		now:         now,
+		engine:   mustNewEngine(table()),
+		failures: newFailureTracker(),
+		now:      now,
 	}
 }
 

@@ -161,11 +161,11 @@ var _ = Describe("The time in the reason", func() {
 })
 
 var _ = Describe("Rendering a duration for a user", func() {
-	// short drops the trailing zero units Go leaves behind, so the window in
-	// the reason reads "10m" and not "10m0s".
-	DescribeTable("short",
+	// shortDuration drops the trailing zero units Go leaves behind, so the
+	// window in the reason reads "10m" and not "10m0s".
+	DescribeTable("shortDuration",
 		func(d time.Duration, want string) {
-			Expect(short(d)).To(Equal(want))
+			Expect(shortDuration(d)).To(Equal(want))
 		},
 		Entry("the error window", ErrorWindow, "10m"),
 		Entry("seconds", 59*time.Second, "59s"),

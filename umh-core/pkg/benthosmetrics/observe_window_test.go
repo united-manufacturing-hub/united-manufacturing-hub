@@ -237,9 +237,9 @@ var _ = Describe("The error window", func() {
 		}
 	})
 
-	// Failures.NotCleared judges each error entry against its own LastErrorAt,
-	// so an entry stuck past its window counts even while another counter
-	// keeps rising.
+	// Failures.HasErrorNotClearedInTime judges each error entry against its
+	// own LastErrorAt, so an entry stuck past its window counts even while
+	// another counter keeps rising.
 	It("counts an entry stuck past its window while another counter keeps rising", func() {
 		now := failureT.Add(12 * time.Minute)
 		f := Failures{
@@ -250,14 +250,14 @@ var _ = Describe("The error window", func() {
 			},
 		}
 
-		Expect(f.NotCleared(time.Minute)).To(BeTrue(),
+		Expect(f.HasErrorNotClearedInTime(time.Minute)).To(BeTrue(),
 			"the output_error entry is stuck past its window")
 	})
 
 	// An output error every minute for 15 minutes keeps one entry open since
 	// T, but each new error restarts its window, so the entry does not count:
-	// NotCleared counts from the last error, not from when the entry
-	// appeared.
+	// HasErrorNotClearedInTime counts from the last error, not from when the
+	// entry appeared.
 	It("does not count an entry while its errors keep arriving", func() {
 		tl := newErrorTimeline(failureT.Add(-time.Second), func(at time.Time) int64 {
 			if at.Before(failureT) {
@@ -271,27 +271,27 @@ var _ = Describe("The error window", func() {
 		Expect(tl.failures.Entries).To(HaveLen(1))
 		Expect(tl.failures.Entries[0].Since).To(Equal(failureT), "the entry has been open since T")
 		Expect(tl.failures.Entries[0].LastErrorAt).To(Equal(failureT.Add(15 * time.Minute)))
-		Expect(tl.failures.NotCleared(time.Minute)).To(BeFalse(),
+		Expect(tl.failures.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(),
 			"the last error was at this very scrape")
 	})
 
-	// An entry may clear up to margin late before it counts. NotCleared is
-	// true only when the last error is more than ErrorWindow plus margin
-	// behind the scrape.
+	// An entry may clear up to margin late before it counts.
+	// HasErrorNotClearedInTime is true only when the last error is more than
+	// ErrorWindow plus margin behind the scrape.
 	It("gives an entry its margin before it counts as not cleared", func() {
 		now := failureT.Add(15 * time.Minute)
-		lastErrorAgo := func(age time.Duration) Failures {
+		failuresWithLastErrorAgo := func(age time.Duration) Failures {
 			return Failures{ObservedAt: now, Entries: []FailureEntry{{
 				Signal: "output_error", Since: now.Add(-age), LastErrorAt: now.Add(-age),
 			}}}
 		}
 
-		f := lastErrorAgo(ErrorWindow + 30*time.Second)
-		Expect(f.NotCleared(time.Minute)).To(BeFalse(), "30s late is inside the 1m margin")
-		f = lastErrorAgo(ErrorWindow + time.Minute)
-		Expect(f.NotCleared(time.Minute)).To(BeFalse(), "exactly window plus margin is not more than it")
-		f = lastErrorAgo(ErrorWindow + time.Minute + time.Second)
-		Expect(f.NotCleared(time.Minute)).To(BeTrue(), "one second past window plus margin counts as not cleared")
+		f := failuresWithLastErrorAgo(ErrorWindow + 30*time.Second)
+		Expect(f.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "30s late is inside the 1m margin")
+		f = failuresWithLastErrorAgo(ErrorWindow + time.Minute)
+		Expect(f.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "exactly window plus margin is not more than it")
+		f = failuresWithLastErrorAgo(ErrorWindow + time.Minute + time.Second)
+		Expect(f.HasErrorNotClearedInTime(time.Minute)).To(BeTrue(), "one second past window plus margin counts as not cleared")
 	})
 })
 
@@ -299,12 +299,8 @@ var _ = Describe("The error window", func() {
 // counter readable and unchanged, or every error counter unknown.
 type failureFeed struct{}
 
-func (failureFeed) Readable(time.Time) readings {
-	s := readings{
-		inputReceived: diagnosis.Unknown(),
-		outputSent:    diagnosis.Unknown(),
-		errors:        map[string]diagnosis.Reading{},
-	}
+func (failureFeed) Readable(time.Time) errorReadings {
+	s := errorReadings{errors: map[string]diagnosis.Reading{}}
 	for _, c := range errorCounters {
 		s.errors[c.name] = diagnosis.Known(0)
 	}
@@ -314,10 +310,6 @@ func (failureFeed) Readable(time.Time) readings {
 
 // Unreadable leaves every error reading out of the map; a missing key reads
 // as an unknown reading.
-func (failureFeed) Unreadable(time.Time) readings {
-	return readings{
-		inputReceived: diagnosis.Unknown(),
-		outputSent:    diagnosis.Unknown(),
-		errors:        map[string]diagnosis.Reading{},
-	}
+func (failureFeed) Unreadable(time.Time) errorReadings {
+	return errorReadings{errors: map[string]diagnosis.Reading{}}
 }

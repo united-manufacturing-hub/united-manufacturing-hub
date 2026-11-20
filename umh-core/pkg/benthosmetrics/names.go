@@ -65,12 +65,6 @@ const (
 	latencyCountStem = "latency_ns_count"
 )
 
-// The two error counter series the error signals read (see errorCounters).
-const (
-	outputError    = "output_error"
-	processorError = "processor_error"
-)
-
 // inputCounters maps each input counter series, from
 // internal/component/input/async_reader.go, to the setter of the field it fills.
 var inputCounters = map[string]func(InputMetrics, int64) InputMetrics{
@@ -119,7 +113,7 @@ var outputCounters = map[string]func(OutputMetrics, int64) OutputMetrics{
 
 		return m
 	},
-	outputError: func(m OutputMetrics, v int64) OutputMetrics {
+	"output_error": func(m OutputMetrics, v int64) OutputMetrics {
 		m.Error = v
 
 		return m
@@ -144,7 +138,7 @@ var processorCounters = map[string]func(ProcessorMetrics, int64) ProcessorMetric
 
 		return m
 	},
-	processorError: func(m ProcessorMetrics, v int64) ProcessorMetrics {
+	"processor_error": func(m ProcessorMetrics, v int64) ProcessorMetrics {
 		m.Error = v
 
 		return m

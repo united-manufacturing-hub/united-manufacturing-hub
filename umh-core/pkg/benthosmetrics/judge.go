@@ -36,16 +36,23 @@ type errorCounter struct {
 	read func(Metrics) int64
 }
 
-// errorCounters lists the counters the error signals are built from. The
-// names are the Benthos series names from names.go.
+// outputErrorSignal and processorErrorSignal are the signal names of the
+// two error counters. They spell the same as the Benthos series they sum,
+// but nothing reads them as series names: read sums the parsed fields.
+const (
+	outputErrorSignal    = "output_error"
+	processorErrorSignal = "processor_error"
+)
+
+// errorCounters lists the counters the error signals are built from.
 var errorCounters = []errorCounter{
 	{
-		name:  outputError,
+		name:  outputErrorSignal,
 		label: "output error",
 		read:  Metrics.outputErrorTotal,
 	},
 	{
-		name:  processorError,
+		name:  processorErrorSignal,
 		label: "processor error",
 		read:  Metrics.processorErrorTotal,
 	},
@@ -158,29 +165,21 @@ func newIncrease() diagnosis.Reduction {
 	return r
 }
 
-// errorReadings turns one observation's error counters into the readings the
+// errorReadingsOf turns one scrape's error counters into the readings the
 // error engine reads.
-func errorReadings(cur observation) readings {
-	s := readings{
-		inputReceived: diagnosis.Unknown(),
-		outputSent:    diagnosis.Unknown(),
-		errors:        make(map[string]diagnosis.Reading, len(cur.errors)),
-	}
-	for name, v := range cur.errors {
+func errorReadingsOf(errorCounts map[string]int64) errorReadings {
+	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounts))}
+	for name, v := range errorCounts {
 		s.errors[name] = diagnosis.Known(float64(v))
 	}
 
 	return s
 }
 
-// seedErrors is the readings a restarted error engine observes first: each
+// seedErrors is the readings a reset error engine observes first: each
 // error counter at its value in errorCounts, or 0 when errorCounts has none.
-func seedErrors(errorCounts map[string]int64) readings {
-	s := readings{
-		inputReceived: diagnosis.Unknown(),
-		outputSent:    diagnosis.Unknown(),
-		errors:        make(map[string]diagnosis.Reading, len(errorCounters)),
-	}
+func seedErrors(errorCounts map[string]int64) errorReadings {
+	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounters))}
 	for _, c := range errorCounters {
 		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
 	}
@@ -189,15 +188,16 @@ func seedErrors(errorCounts map[string]int64) readings {
 }
 
 // firstNotConnectedSince returns, per connection check with something not
-// connected, when that started: the time from prev, or at if prev has none.
-func firstNotConnectedSince(prev map[string]time.Time, counts map[string]int64, at time.Time) map[string]time.Time {
+// connected, when that started: the time from previous, or at if previous
+// has none.
+func firstNotConnectedSince(previous map[string]time.Time, counts map[string]int64, at time.Time) map[string]time.Time {
 	out := make(map[string]time.Time, len(counts))
 	for name, n := range counts {
 		if n == 0 {
 			continue
 		}
 
-		since, ok := prev[name]
+		since, ok := previous[name]
 		if !ok {
 			since = at
 		}
@@ -208,36 +208,50 @@ func firstNotConnectedSince(prev map[string]time.Time, counts map[string]int64, 
 	return out
 }
 
-// judgeFailures builds the Failures for one scrape: error entries first, then
-// connection entries, each group with the larger Count first.
-func judgeFailures(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur observation) Failures {
-	errorEntries := append(firedErrorEntries(e, fired, cur), heldErrorEntries(fired, cur)...)
-	connectionEntries := notConnectedEntries(cur)
+// judgedScrape is what the judge reads off the scrape being judged.
+type judgedScrape struct {
+	at time.Time
+
+	// errorCounts holds the raw error counters, keyed by the counter's name.
+	errorCounts map[string]int64
+
+	// connections holds the number of inputs or outputs not connected,
+	// keyed by the connection check's name.
+	connections map[string]int64
+}
+
+// judge builds the Failures for the scrape current: error entries first,
+// then connection entries, each group with the larger Count first. ft still
+// holds the previous scrape's counts and entries, or what reset left of them;
+// only notConnectedSince is already updated for current.
+func (ft *failureTracker) judge(fired []diagnosis.Fired, current judgedScrape) Failures {
+	errorEntries := append(ft.firedErrorEntries(fired, current), ft.heldErrorEntries(fired, current)...)
+	connectionEntries := ft.notConnectedEntries(current)
 
 	sortByCountDesc(errorEntries)
 	sortByCountDesc(connectionEntries)
 
 	return Failures{
 		Entries:    append(errorEntries, connectionEntries...),
-		ObservedAt: cur.at,
+		ObservedAt: current.at,
 	}
 }
 
 // firedErrorEntries returns one error entry per fired error signal. Its
 // Count is how much the counter went up within ErrorWindow, and its
 // LastErrorAt is the last scrape at which the counter rose.
-func firedErrorEntries(e *diagnosis.Engine[readings], fired []diagnosis.Fired, cur observation) []FailureEntry {
+func (ft *failureTracker) firedErrorEntries(fired []diagnosis.Fired, current judgedScrape) []FailureEntry {
 	var entries []FailureEntry
 
 	for _, f := range fired {
 		c := errorCounterOf(f.Signal)
-		n, _ := e.Reduction(f.Signal, f.Signal).Get() // 0 until the window holds 2 readings
+		n, _ := ft.engine.Reduction(f.Signal, f.Signal).Get() // 0 until the window holds 2 readings
 		entries = append(entries, FailureEntry{
 			Signal:      c.name,
 			Label:       c.label,
 			Count:       int64(n),
 			Since:       f.Since,
-			LastErrorAt: lastRise(cur, c.name, f.Since),
+			LastErrorAt: ft.lastRise(current, c.name, f.Since),
 		})
 	}
 
@@ -246,11 +260,11 @@ func firedErrorEntries(e *diagnosis.Engine[readings], fired []diagnosis.Fired, c
 
 // notConnectedEntries returns one connection entry per connection check with
 // an input or output that is not connected.
-func notConnectedEntries(cur observation) []FailureEntry {
+func (ft *failureTracker) notConnectedEntries(current judgedScrape) []FailureEntry {
 	var entries []FailureEntry
 
 	for _, c := range connectionChecks {
-		n := cur.connections[c.name]
+		n := current.connections[c.name]
 		if n == 0 {
 			continue
 		}
@@ -259,7 +273,7 @@ func notConnectedEntries(cur observation) []FailureEntry {
 			Signal:     c.name,
 			Label:      c.label,
 			Count:      n,
-			Since:      cur.notConnectedSince[c.name],
+			Since:      ft.notConnectedSince[c.name],
 			Connection: true,
 		})
 	}
@@ -271,22 +285,22 @@ func notConnectedEntries(cur observation) []FailureEntry {
 // longer fires but whose LastErrorAt is still within ErrorWindow. The engine
 // measures a rise from the oldest reading in its window, the one before the
 // error, so after sparse scrapes it stops firing before ErrorWindow has
-// passed since the error itself. cur.prevEntries is nil after a restart or a
-// gap longer than ErrorWindow, so nothing is held across those.
-func heldErrorEntries(fired []diagnosis.Fired, cur observation) []FailureEntry {
+// passed since the error itself. ft.lastEntries is nil after a reset, so
+// nothing is held across a restart or a gap longer than ErrorWindow.
+func (ft *failureTracker) heldErrorEntries(fired []diagnosis.Fired, current judgedScrape) []FailureEntry {
 	var held []FailureEntry
 
-	for _, pe := range cur.prevEntries {
-		if pe.Connection || isFiring(fired, pe.Signal) {
+	for _, previous := range ft.lastEntries {
+		if previous.Connection || isFiring(fired, previous.Signal) {
 			continue
 		}
 
-		if cur.at.Sub(pe.LastErrorAt) > ErrorWindow {
+		if current.at.Sub(previous.LastErrorAt) > ErrorWindow {
 			continue
 		}
 
-		pe.LastErrorAt = redate(cur.at, pe.LastErrorAt)
-		held = append(held, pe)
+		previous.LastErrorAt = redate(current.at, previous.LastErrorAt)
+		held = append(held, previous)
 	}
 
 	return held
@@ -299,34 +313,35 @@ func isFiring(fired []diagnosis.Fired, signal string) bool {
 
 // lastRise returns when the error counter named signal last rose, for the
 // entry that opened at since.
-func lastRise(cur observation, signal string, since time.Time) time.Time {
-	// A counter missing from cur.before reads as 0, so after a restart every
-	// non-zero counter rose.
-	if cur.errors[signal] > cur.before[signal] {
-		return cur.at
+func (ft *failureTracker) lastRise(current judgedScrape, signal string, since time.Time) time.Time {
+	// A counter missing from ft.lastCounts reads as 0, so after a restart
+	// every non-zero counter rose.
+	if current.errorCounts[signal] > ft.lastCounts[signal] {
+		return current.at
 	}
 
-	pe, ok := prevEntry(cur.prevEntries, signal, since)
+	previous, ok := ft.lastEntry(signal, since)
 	if !ok {
 		return since
 	}
 
-	return redate(cur.at, pe.LastErrorAt)
+	return redate(current.at, previous.LastErrorAt)
 }
 
 // redate returns t re-dated from at by the monotonic time elapsed between
 // them, so the result's wall clock matches at's even after a wall-clock step.
-// NotCleared on Failures that went through JSON, which drops monotonic
-// readings, then still measures real time.
+// HasErrorNotClearedInTime on Failures that went through JSON, which drops
+// monotonic readings, then still measures real time.
 func redate(at, t time.Time) time.Time {
 	return at.Add(-at.Sub(t))
 }
 
-// prevEntry returns the entry in prevEntries with the same signal and Since.
-func prevEntry(prevEntries []FailureEntry, signal string, since time.Time) (FailureEntry, bool) {
-	for _, pe := range prevEntries {
-		if pe.Signal == signal && pe.Since.Equal(since) {
-			return pe, true
+// lastEntry returns the previous scrape's entry with the same signal and
+// Since.
+func (ft *failureTracker) lastEntry(signal string, since time.Time) (FailureEntry, bool) {
+	for _, previous := range ft.lastEntries {
+		if previous.Signal == signal && previous.Since.Equal(since) {
+			return previous, true
 		}
 	}
 
