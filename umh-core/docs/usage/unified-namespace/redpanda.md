@@ -74,6 +74,8 @@ When umh-core starts without a config file, it creates one with the two settings
 | `defaultTopicRetentionMs` | `604800000` | Redpanda keeps messages for seven days. |
 | `defaultTopicCleanupPolicy` | `delete` | Redpanda deletes messages older than the retention time. |
 
+umh-core applies a change to either setting to the running Redpanda. Neither needs a restart.
+
 If your config file was created before umh-core started to write `defaultTopicCleanupPolicy`, it has no such setting, and Redpanda uses `compact`. Under `compact`, Redpanda keeps only the latest message per key once a segment of the topic closes. A segment closes after one hour by default. You cannot replay the older history of a topic then.
 
 ### Metrics

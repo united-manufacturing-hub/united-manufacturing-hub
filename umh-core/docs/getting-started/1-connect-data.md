@@ -169,7 +169,7 @@ Real hardware uses the address-mapping table instead of the generator. The [Brid
 Building on the location path from Step 1, you now understand:
 
 - **Unified Namespace (UNS)** - Event-driven data backbone that eliminates point-to-point connections ([learn more](../usage/unified-namespace/README.md))
-- **Bridge** - Reads from an external system and publishes to the UNS; its write flow writes UNS data to the external system. Bridges are the only way data enters the UNS.
+- **Bridge** - Reads from an external system and publishes to the UNS; its write flow writes UNS data to the external system. [Stand-alone flows](../usage/data-flows/stand-alone-flow.md) can also publish to the UNS.
 - **Bridge Template** - Pre-configured starting point for a bridge (e.g. "Generic via Generate")
 - **Data Flows** - Configuration area for bridges and other data pipelines
 - **Protocol** - Connection method (manufacturing protocols like OPC UA, Modbus, S7, or IT protocols like HTTP)

@@ -21,7 +21,7 @@ Variables follow a clear precedence hierarchy:
 
 ### Connection Variables
 
-These variables hold the host and port of the bridge's external system. The **Connection** section of a bridge in the Management Console sets them, or you define them in `variables:`. A Historian bridge takes host and port from the Historian connection instead.
+These variables hold the host and port of the bridge's external system. The **Connection** section of a bridge in the Management Console sets them, or you define them in `variables:`. A Historian bridge does not set them: its host and port come from the Historian connection, and its templates read them as `{{ .historian.timescale.host }}` and `{{ .historian.timescale.port }}`.
 
 | Variable | Description | Example Value | Source | Status |
 |----------|-------------|---------------|---------|---------|
