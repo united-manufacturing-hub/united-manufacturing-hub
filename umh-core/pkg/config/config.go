@@ -115,10 +115,11 @@ type AgentConfig struct {
 	UseFSMv2MemoryCleanup     bool `yaml:"useFSMv2MemoryCleanup,omitempty"`
 	UseFSMv2CPU               bool `yaml:"useFSMv2CPU,omitempty"`
 
+	UseFSMv2MemoryMonitor bool `yaml:"useFSMv2MemoryMonitor,omitempty"` // Enable the fsmv2 memory monitor worker
+
 	// Deprecated: UseGatekeeper is ignored. It stays so that a config.yaml that
 	// still sets it parses, because the config parse rejects unknown keys.
-	UseFSMv2MemoryMonitor bool `yaml:"useFSMv2MemoryMonitor,omitempty"` // Enable the fsmv2 memory monitor worker
-	UseGatekeeper         bool `yaml:"useGatekeeper,omitempty"`
+	UseGatekeeper bool `yaml:"useGatekeeper,omitempty"`
 
 	// BypassWriteFlowValidation is the value of BYPASS_WRITE_FLOW_VALIDATION. It never comes
 	// from config.yaml: the config manager sets it on every config it returns (see

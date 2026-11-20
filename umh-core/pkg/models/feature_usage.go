@@ -54,7 +54,3 @@ type FeatureUsage struct {
 	// own topic checks.
 	WriteFlowValidationBypassed bool `json:"writeFlowValidationBypassed"`
 }
-
-func FSMv2MonitorEnabled(flag bool) bool {
-	return flag
-}

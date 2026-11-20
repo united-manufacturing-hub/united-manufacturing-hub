@@ -251,7 +251,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
 											Health: &models.Health{
-												Message: "CPU usage at 85%",
+												Message: "CPU running near full\nCPU averaged 85% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it.",
 											},
 										},
 									},
@@ -263,7 +263,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 					Expect(decision.Admitted()).To(BeFalse())
-					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU usage at 85%"))
+					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU running near full\nCPU averaged 85%"))
 				})
 
 				It("should block a throttled box through its degraded CPU health, not through a throttle check of its own", func() {
@@ -284,7 +284,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										MemoryHealth:  models.Active,
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
-											Health:    &models.Health{Message: "CPU throttled (15.0% periods throttled)"},
+											Health:    &models.Health{Message: "CPU limited\nThis instance hit its CPU limit and was paused until the next cycle, in 15% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."},
 											CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{ThrottleRatio: 0.15, CapacityCores: 2.0}},
 										},
 									},
@@ -296,7 +296,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 					Expect(decision.Admitted()).To(BeFalse())
-					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU throttled (15.0% periods throttled)"))
+					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU limited\nThis instance hit its CPU limit"))
 				})
 			})
 
@@ -407,7 +407,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										DiskHealth:    models.Degraded,
 										CPU: &models.CPU{
 											Health: &models.Health{
-												Message: "CPU overloaded",
+												Message: "CPU contention\nTasks in this instance spent 23% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it.",
 											},
 										},
 										Memory: &models.Memory{
@@ -429,7 +429,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 					Expect(decision.Admitted()).To(BeFalse())
-					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU overloaded"))
+					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU contention\n"))
 				})
 			})
 		})
@@ -493,7 +493,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										Health:    &models.Health{Message: "CPU throttled (20.0% periods throttled)"},
+										Health:    &models.Health{Message: "CPU limited\nThis instance hit its CPU limit and was paused until the next cycle, in 20% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."},
 										CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{ThrottleRatio: 0.20, CapacityCores: 2.0}},
 									},
 								},
@@ -506,7 +506,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 				Expect(decision.Admitted()).To(BeFalse())
-				Expect(decision.Message()).To(ContainSubstring("CPU throttled"))
+				Expect(decision.Message()).To(ContainSubstring("CPU limited"))
 
 				// Note: The FSM reconciliation logic (not tested here) should allow
 				// transition from to_be_created -> to_be_removed even when BridgeAdmission refuses

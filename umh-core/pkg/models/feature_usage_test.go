@@ -87,13 +87,3 @@ var _ = Describe("FeatureUsage", func() {
 		Expect(raw).To(HaveKeyWithValue("historianBridgeCount", float64(3)))
 	})
 })
-
-var _ = Describe("FSMv2MonitorEnabled, the adoption flag for an env-gated fsmv2 monitor", func() {
-	DescribeTable("reports the effective state of the monitor",
-		func(flag, expected bool) {
-			Expect(models.FSMv2MonitorEnabled(flag)).To(Equal(expected))
-		},
-		Entry("flag on", true, true),
-		Entry("flag off", false, false),
-	)
-})

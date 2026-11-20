@@ -138,6 +138,8 @@ func (w *ConfigworkerWorker) CollectObservedState(ctx context.Context, desired f
 	// benthos_monitor is fsmv1 and the connection service's manager drives
 	// the fsmv2 nmap workers, so neither is reconciled here.
 	w.reconcileHistorian(ctx)
+	// The CPU health check always runs, so only the memory monitor can be
+	// deleted by syncMonitorChild.
 	w.reconcileMonitorChild(fsmv2cpu.Ref, true, deps.FeatureSupportCPU)
 	w.reconcileMonitorChild(fsmv2memory.Ref, w.memoryMonitorEnabled, deps.FeatureSupportMemory)
 
