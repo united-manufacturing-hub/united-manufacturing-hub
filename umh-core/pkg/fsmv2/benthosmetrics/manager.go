@@ -212,7 +212,7 @@ func isFresh(takenAt, now time.Time) bool {
 }
 
 // lastGoodFailures, the hold, keeps per Benthos S6 service name the
-// Failures of the last store read that answered for that name, so an unknown
+// Failures of the last Failures read that answered for that name, so an unknown
 // read can answer from them (see Failures). The mutex guards the map:
 // concurrent Benthos services read their instance's Failures on their own
 // tick.
@@ -233,10 +233,7 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 		return nil, false
 	}
 
-	obs, err := fsmv2client.Get[simple.Status[Scrape]](
-		ctx, c,
-		dynamicchildren.Ref{WorkerType: WorkerType, Name: s6ServiceName},
-	)
+	f, err := loadFailures(ctx, c, s6ServiceName)
 	if err != nil {
 		// No worker answers under this name — nothing was ever stored for
 		// it, or it was deleted: fail closed, and drop what the hold has.
@@ -251,7 +248,6 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 		return heldFailures(c, s6ServiceName)
 	}
 
-	f := obs.Status.Result.Sample.Failures
 	if f == nil {
 		// The worker stored no sample yet, or its sample carries no
 		// Failures: there is nothing good to hold for it.
@@ -263,6 +259,20 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 	rememberLastGoodFailures(c, s6ServiceName, f)
 
 	return f, true
+}
+
+// loadFailures reads the Failures stored for s6ServiceName's worker. It
+// returns nil and no error when the worker stored no Failures yet.
+func loadFailures(ctx context.Context, c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmetrics.Failures, error) {
+	obs, err := fsmv2client.Get[simple.Status[Scrape]](
+		ctx, c,
+		dynamicchildren.Ref{WorkerType: WorkerType, Name: s6ServiceName},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return obs.Status.Result.Sample.Failures, nil
 }
 
 // rememberLastGoodFailures stores a copy of f as s6ServiceName's last good
@@ -391,7 +401,8 @@ func heldFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmet
 // hold an error that should have cleared: their stored Failures answer true
 // for NotCleared(margin). It counts every registered worker of this type:
 // one per bridge side, stand-alone flow, stream processor and topic browser,
-// so a bridge with both sides stuck counts twice.
+// so a bridge with both sides stuck counts twice. It reads like Failures,
+// an unknown read answering from the hold, but never changes the hold.
 func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
 	c := fsmv2client.GetClient()
 	if c == nil {
@@ -401,7 +412,12 @@ func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
 	count := 0
 
 	for _, ref := range c.Refs(WorkerType) {
-		if failures, ok := Failures(ctx, ref.Name); ok && failures.NotCleared(margin) {
+		f, err := loadFailures(ctx, c, ref.Name)
+		if err != nil && !errors.Is(err, fsmv2client.ErrNotFound) && !errors.Is(err, fsmv2client.ErrWorkerDeleted) {
+			f, _ = heldFailures(c, ref.Name)
+		}
+
+		if f != nil && f.NotCleared(margin) {
 			count++
 		}
 	}

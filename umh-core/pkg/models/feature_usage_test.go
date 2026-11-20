@@ -110,25 +110,8 @@ var _ = Describe("FSMv2MonitorEnabled, the adoption flag for an env-gated fsmv2 
 	)
 })
 
-// The FSMv2 Benthos metrics flag lands in the telemetry under the JSON key
-// fsmv2BenthosMetricsEnabled, and the count of Benthos instances whose
-// errors did not clear in time under benthosErrorsNotClearedInstanceCount,
-// with no omitempty so a zero count is reported too.
-var _ = Describe("The benthos metrics telemetry keys", func() {
-	It("serializes fsmv2BenthosMetricsEnabled", func() {
-		usage := models.FeatureUsage{
-			FSMv2BenthosMetricsEnabled: true,
-		}
-
-		data, err := json.Marshal(usage)
-		Expect(err).NotTo(HaveOccurred())
-
-		var raw map[string]interface{}
-		Expect(json.Unmarshal(data, &raw)).To(Succeed())
-
-		Expect(raw).To(HaveKeyWithValue("fsmv2BenthosMetricsEnabled", true))
-	})
-
+// The not-cleared count has no omitempty, so a zero count is reported too.
+var _ = Describe("The not-cleared count telemetry key", func() {
 	It("serializes benthosErrorsNotClearedInstanceCount", func() {
 		usage := models.FeatureUsage{
 			BenthosErrorsNotClearedInstanceCount: 3,

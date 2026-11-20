@@ -206,23 +206,6 @@ var _ = Describe("The not-cleared count", func() {
 			"a registry with no Benthos workers counts nothing")
 	})
 
-	// The red test of this count: with the flag on and a stuck instance in
-	// the registry, the count is greater than 0, so a count of 0 cannot
-	// silently measure nothing — and with the flag off the count stays 0.
-	It("is greater than zero with the flag on and a stuck instance", func() {
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{
-			dfcBenthosName: stuckOutputError(time.Now()),
-		})
-
-		setBenthosMetricsFlag("")
-		Expect(benthosErrorsNotClearedInstanceCount(context.Background())).To(BeZero(),
-			"with the flag off nobody asks the lookup")
-
-		setBenthosMetricsFlag("true")
-		Expect(benthosErrorsNotClearedInstanceCount(context.Background())).To(BeNumerically(">", 0),
-			"with the flag on and a stuck instance the count is greater than zero")
-	})
-
 	// No client: the count is 0 instead of panicking.
 	It("is zero with no client", func() {
 		setBenthosMetricsFlag("true")

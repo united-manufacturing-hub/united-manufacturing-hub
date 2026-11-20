@@ -734,4 +734,39 @@ var _ = Describe("ErrorsNotClearedCount", func() {
 		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(3),
 			"a worker with no stored sample does not count")
 	})
+
+	It("never changes the Failures hold", func() {
+		name := "benthos-dataflow-dfc-1"
+		reader := &stubManagerReader{obs: sampleWith(notCleared())}
+		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
+		fsmv2client.SetClient(c)
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+		DeferCleanup(func() { forgetLastGoodFailures(name) })
+		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
+
+		held := func() bool {
+			lastGoodMu.Lock()
+			defer lastGoodMu.Unlock()
+
+			_, ok := lastGoodFailures[name]
+
+			return ok
+		}
+
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(1))
+		Expect(held()).To(BeFalse(), "a good read does not fill the hold")
+
+		_, ok := Failures(context.Background(), name)
+		Expect(ok).To(BeTrue())
+		Expect(held()).To(BeTrue())
+
+		reader.err = persistence.ErrNotFound
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero())
+		Expect(held()).To(BeTrue(), "a not-found read does not drop the hold's entry")
+
+		reader.err = errors.New("read failed")
+
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(1),
+			"an unknown read answers from the hold")
+	})
 })
