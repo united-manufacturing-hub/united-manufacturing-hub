@@ -150,13 +150,15 @@ The Historian output inside each Historian bridge counts its own writes. The bri
 
 ### Database figures
 
-The connection check also exports the figures the Management Console shows for the Historian as `umh_fsmv2_worker_historian_*` series. They tell you whether TimescaleDB answers and accepts the credentials, how fast the disk fills, and whether TimescaleDB keeps compressing and deleting old data on schedule. The figures read from the database refresh once a minute, the database size every 15 minutes. While the database cannot be read, the figures keep their last value, and `umh_fsmv2_worker_historian_summary_ready` or `umh_fsmv2_worker_historian_database_size_ready` is 0. The query latency is current only while `umh_fsmv2_worker_historian_auth_valid` is 1. All series disappear when you remove the `historian:` section.
+The connection check also exports the figures the Management Console shows for the Historian as `umh_fsmv2_worker_historian_*` series. They tell you whether TimescaleDB answers and accepts the credentials, how fast the disk fills, and whether TimescaleDB keeps compressing and deleting old data on schedule. The figures read from the database refresh once a minute, the database size every 15 minutes. While the database cannot be read, the figures keep their last value, and `umh_fsmv2_worker_historian_summary_ready` or `umh_fsmv2_worker_historian_database_size_ready` is 0. After a failed read, umh-core reads the figures again a minute later. After you point the `historian:` section at another database, the figures show the previous database until the first read of the new one succeeds. A figure is current only while its ready series is 1. The query latency is current only while `umh_fsmv2_worker_historian_auth_valid` is 1. All series disappear when you remove the `historian:` section.
 
-This alert fires when TimescaleDB stops answering:
+This alert fires when TimescaleDB has not answered for a minute:
 
 ```promql
-umh_fsmv2_worker_historian_reachable == 0
+max_over_time(umh_fsmv2_worker_historian_reachable[1m]) == 0
 ```
+
+`umh_fsmv2_worker_historian_reachable` is also 0 when umh-core cannot build a connection from the `historian:` section, for example because of an invalid `sslmode`.
 
 This alert fires when a background job on the Historian tables failed its last run, for example a compression or retention job:
 
