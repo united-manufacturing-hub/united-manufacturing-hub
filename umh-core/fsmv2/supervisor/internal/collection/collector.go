@@ -119,6 +119,8 @@ type Collector[TObserved any] struct {
 	mu            sync.RWMutex
 	collectionMu  sync.Mutex // Serializes collectAndSaveObservedState between observation loop and CollectFinalObservation
 	running       bool
+	activeLoops   int           // includes a loop that outlived Restart's Stop timeout
+	allLoopsDone  chan struct{} // closes when activeLoops returns to 0
 }
 
 // NewCollector creates a new collector with the given configuration.
@@ -159,6 +161,12 @@ func (c *Collector[TObserved]) Start(ctx context.Context) error {
 	c.goroutineDone = make(chan struct{})
 	c.running = true
 
+	if c.activeLoops == 0 {
+		c.allLoopsDone = make(chan struct{})
+	}
+
+	c.activeLoops++
+
 	go c.observationLoop()
 
 	return nil
@@ -172,17 +180,17 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
-// Stopped returns a channel that closes when the observation loop has exited.
-// Stop can return before that, after its timeout.
+// Stopped returns a channel that closes when every observation loop this
+// collector started has exited. Stop and Restart can return before that.
 func (c *Collector[TObserved]) Stopped() <-chan struct{} {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if c.goroutineDone == nil {
+	if c.activeLoops == 0 {
 		return closedChannel
 	}
 
-	return c.goroutineDone
+	return c.allLoopsDone
 }
 
 var closedChannel = newClosedChannel()
@@ -383,6 +391,11 @@ func (c *Collector[TObserved]) observationLoop() {
 		c.running = false
 
 		close(doneChan)
+
+		c.activeLoops--
+		if c.activeLoops == 0 {
+			close(c.allLoopsDone)
+		}
 		// Read state string while holding lock to avoid race with Restart()
 		finalState := c.state.String()
 		c.mu.Unlock()

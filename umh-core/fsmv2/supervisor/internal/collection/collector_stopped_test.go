@@ -28,13 +28,13 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/collection"
 )
 
-func newStoppedTestCollector(worker *supervisor.TestWorker) *collection.Collector[supervisor.TestObservedState] {
+func newStoppedTestCollector(worker *supervisor.TestWorker, observationInterval time.Duration) *collection.Collector[supervisor.TestObservedState] {
 	return collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
 		Worker:              worker,
 		Identity:            supervisor.TestIdentity(),
 		Store:               supervisor.CreateTestTriangularStore(),
 		Logger:              deps.NewNopFSMLogger(),
-		ObservationInterval: 10 * time.Millisecond,
+		ObservationInterval: observationInterval,
 		ObservationTimeout:  5 * time.Second,
 		DesiredStateProvider: func() (fsmv2.DesiredState, error) {
 			return &supervisor.TestDesiredState{}, nil
@@ -57,7 +57,7 @@ var _ = Describe("Collector.Stopped", func() {
 				return supervisor.CreateTestObservedStateWithID("test-worker"), nil
 			},
 		}
-		collector := newStoppedTestCollector(worker)
+		collector := newStoppedTestCollector(worker, 10*time.Millisecond)
 
 		Expect(collector.Start(context.Background())).To(Succeed())
 		Eventually(collectionStarted).Should(BeClosed())
@@ -73,8 +73,41 @@ var _ = Describe("Collector.Stopped", func() {
 		Eventually(collector.Stopped()).Should(BeClosed())
 	})
 
+	It("stays open while a loop that outlived Restart still collects", func() {
+		collectionStarted := make(chan struct{})
+		releaseCollection := make(chan struct{})
+
+		var startedOnce sync.Once
+
+		worker := &supervisor.TestWorker{
+			CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+				startedOnce.Do(func() { close(collectionStarted) })
+				<-releaseCollection
+
+				return supervisor.CreateTestObservedStateWithID("test-worker"), nil
+			},
+		}
+		collector := newStoppedTestCollector(worker, time.Hour)
+
+		Expect(collector.Start(context.Background())).To(Succeed())
+		collector.TriggerNow()
+		Eventually(collectionStarted).Should(BeClosed())
+
+		collector.Restart()
+
+		expiredStopCtx, cancelStop := context.WithCancel(context.Background())
+		cancelStop()
+		collector.Stop(expiredStopCtx)
+
+		Consistently(collector.Stopped(), 100*time.Millisecond).ShouldNot(BeClosed())
+
+		close(releaseCollection)
+
+		Eventually(collector.Stopped()).Should(BeClosed())
+	})
+
 	It("is closed for a collector that never started", func() {
-		collector := newStoppedTestCollector(&supervisor.TestWorker{})
+		collector := newStoppedTestCollector(&supervisor.TestWorker{}, 10*time.Millisecond)
 
 		Expect(collector.Stopped()).To(BeClosed())
 	})
