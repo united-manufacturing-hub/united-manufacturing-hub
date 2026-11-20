@@ -16,7 +16,7 @@ The Agent card shows the identity and the version of the instance. Usage page: [
 | Name | The name of the instance. The **Rename** button changes it. |
 | Location | The location path of the instance, one level per line. It is set when you create the instance and cannot be changed on the card. |
 | Core Version | The version of UMH Core. Hover over it to see the versions of S6 Overlay, Benthos and Redpanda. A marker next to the version shows when the release channel has a newer version. |
-| Release Channel | The release channel the instance follows, from `agent.releaseChannel` in the config file: `stable`, `nightly` or `enterprise`. It shows `n/a` when `agent.releaseChannel` is missing or has another value. |
+| Release Channel | The release channel the instance follows, from `agent.releaseChannel` in the config file: `stable`, `nightly` or `enterprise`. It shows `n/a` when `agent.releaseChannel` is missing or has another value. The `RELEASE_CHANNEL` environment variable overwrites the key on every start, so to change the channel, start a new container with the new value. |
 
 The **Logs** button opens the logs of the agent. The agent writes them to `/data/logs/umh-core/`. See [Container Layout](../../reference/container-layout.md#logs). The **Metrics** button is not available yet.
 
@@ -28,7 +28,7 @@ The Container card shows the CPU, memory and disk of the UMH Core container. Usa
 |---|---|
 | Status badge | The health of the container. See [Container status](#container-status). |
 | CPU | The CPU usage. See [The CPU row](#the-cpu-row). |
-| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the host. With the [memory monitor preview](#memory-with-the-memory-monitor-preview), the row shows 60-second means, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. |
+| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the host. With the [memory monitor preview](#memory-with-the-memory-monitor-preview), the row shows 60-second means. With a memory limit, it shows the container's memory against the limit, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. Without a limit, it shows the used memory of the whole machine against the machine's memory. |
 | Disk | The used and total space of the `/data` volume, and the percentage. |
 | Architecture | The CPU architecture UMH Core runs on, `amd64` or `arm64`. |
 | Hardware ID | The ID of this installation. UMH Core creates it on the first start and stores it in `/data/hwid`. It stays the same as long as the `/data` volume is kept. See [Container Layout](../../reference/container-layout.md#hwid). |
@@ -49,7 +49,7 @@ Memory from 70% and disk from 75% count as a warning. The badge stays Active and
 
 ### The CPU row
 
-From v0.44.46, the CPU row shows the 60-second mean CPU usage of the instance against its CPU limit, or against the machine's cores when no limit is set, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. The info button next to it shows the usage, its 95th percentile, throttling and pressure of the container, and the busy cores and steal of the machine. The row turns red while the CPU is degraded. When umh-core cannot measure the CPU, the row reads `N/A`.
+From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. The info button next to it shows the usage, its 95th percentile, throttling and pressure of the container, and the busy cores and steal of the machine. The row turns red while the CPU is degraded. When umh-core cannot measure the CPU, the row reads `N/A`.
 
 The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details) appear in the badge reason of the Container card. While the CPU is degraded, the reason line starts with `CPU degraded:`, for example `CPU degraded: CPU limited`. While the whole container is Active, the reason is the CPU status itself, for example `CPU healthy. …`.
 
