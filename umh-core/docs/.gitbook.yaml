@@ -25,8 +25,14 @@ redirects:
   production/deployment/docker-compose/advanced: production/deployment/docker-compose/additional-services/README.md
   production/deployment/docker-compose/advanced/nginx: production/deployment/docker-compose/additional-services/nginx.md
   production/corporate-firewalls: production/security/umh-core/network-configuration.md
-  production/cpu-health: usage/instances/container/cpu-health/README.md
-  usage/instances/cpu-health: usage/instances/container/cpu-health/README.md
-  usage/instances/cpu-health/cpu-contention-while-cores-are-free: usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md
-  usage/instances/cpu-health/enable-cpu-pressure-stats: usage/instances/container/cpu-health/enable-cpu-pressure-stats.md
-  production/metrics: usage/instances/agent/metrics.md
+  production/cpu-health: usage/instances/container/how-cpu-health-is-judged.md
+  usage/instances/cpu-health: usage/instances/container/how-cpu-health-is-judged.md
+  usage/instances/cpu-health/cpu-contention-while-cores-are-free: usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md
+  usage/instances/cpu-health/enable-cpu-pressure-stats: usage/instances/container/enable-cpu-pressure-stats.md
+  production/metrics: usage/instances/metrics/README.md
+  usage/instances/config-file: usage/instances/edit-the-config-file.md
+  usage/instances/agent/metrics: usage/instances/metrics/README.md
+  usage/instances/container/cpu-health: usage/instances/container/how-cpu-health-is-judged.md
+  usage/instances/container/cpu-health/cpu-contention-while-cores-are-free: usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md
+  usage/instances/container/cpu-health/enable-cpu-pressure-stats: usage/instances/container/enable-cpu-pressure-stats.md
+  usage/instances/communicator/instance-offline-behind-corporate-firewall: usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md
