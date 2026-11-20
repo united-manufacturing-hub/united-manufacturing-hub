@@ -353,6 +353,9 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 
 			return workerCtx.currentState.String()
 		},
+		MetricsClaim: func() metrics.WorkerMetricsClaim {
+			return metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load())
+		},
 		ShutdownRequestedProvider: func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -501,7 +504,6 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
 		identity:           identity,
 		worker:             worker,
-		logger:             workerLogger,
 		currentState:       initialState,
 		currentStateReason: "initial",
 		lastLifecyclePhase: initialPhase,
@@ -530,7 +532,7 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
-	workerCtx.metricsClaim = metrics.ClaimWorkerMetrics(identity.HierarchyPath)
+	workerCtx.metricsClaim.Store(uint64(metrics.ClaimWorkerMetrics(identity.HierarchyPath)))
 	s.workers[identity.ID] = workerCtx
 
 	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
@@ -545,9 +547,7 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 	s.logger.Info("worker_added")
 }
 
-// stopWorker stops a worker's collector and executor and deletes its
-// state-duration and worker-metric series. It runs when a worker is removed and
-// when Shutdown stops the workers that are still registered.
+// stopWorker also runs from Shutdown for workers that stay registered.
 func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	ctx context.Context,
 	workerCtx *WorkerContext[TObserved, TDesired],
@@ -563,39 +563,7 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 
 	workerCtx.mu.RUnlock()
 
-	s.cleanupWorkerMetricsOnceStopped(workerCtx)
-}
-
-// workerMetricsCleanupWaitLimit bounds how long a removed worker's metrics wait
-// for its collector to exit.
-const workerMetricsCleanupWaitLimit = 10 * time.Minute
-
-// cleanupWorkerMetricsOnceStopped deletes the worker-metric series after the
-// collector goroutine exits, because a collection that outlived Stop can still
-// export them.
-func (s *Supervisor[TObserved, TDesired]) cleanupWorkerMetricsOnceStopped(removed *WorkerContext[TObserved, TDesired]) {
-	select {
-	case <-removed.collector.Stopped():
-		metrics.CleanupWorkerMetrics(removed.identity.HierarchyPath, removed.metricsClaim)
-	default:
-		go s.waitThenCleanupWorkerMetrics(removed, workerMetricsCleanupWaitLimit)
-	}
-}
-
-func (s *Supervisor[TObserved, TDesired]) waitThenCleanupWorkerMetrics(removed *WorkerContext[TObserved, TDesired], waitLimit time.Duration) {
-	hierarchyPath := removed.identity.HierarchyPath
-
-	waitTimer := time.NewTimer(waitLimit)
-	defer waitTimer.Stop()
-
-	select {
-	case <-removed.collector.Stopped():
-	case <-waitTimer.C:
-		removed.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_metrics_cleanup_wait_exceeded",
-			deps.Duration("wait_limit", waitLimit))
-	}
-
-	metrics.CleanupWorkerMetrics(hierarchyPath, removed.metricsClaim)
+	metrics.CleanupWorkerMetrics(workerCtx.identity.HierarchyPath, metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load()))
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without

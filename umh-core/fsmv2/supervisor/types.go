@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/collection"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/execution"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/lockmanager"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/metrics"
 )
 
 // CollectorHealth tracks the health and restart state of the observation collector.
@@ -128,7 +127,6 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Interfaces (16 bytes each)
 	worker       fsmv2.Worker
 	currentState fsmv2.State[any, any]
-	logger       deps.FSMLogger // set once at creation, so it is safe to read without a lock
 
 	// Pointers (8 bytes each)
 	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.
@@ -146,8 +144,8 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Structs
 	identity deps.Identity
 
-	// metricsClaim is set when the worker is registered; see metrics.ClaimWorkerMetrics.
-	metricsClaim metrics.WorkerMetricsClaim
+	// metricsClaim is set when the worker is registered and read by its collector goroutine.
+	metricsClaim atomic.Uint64
 
 	// Strings (16 bytes each - pointer + length)
 	// lastObservedStateName caches the constructed observed state name (e.g., "running_healthy_connected").

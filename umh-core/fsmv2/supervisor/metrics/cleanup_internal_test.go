@@ -22,49 +22,76 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
-const cleanupTestPath = "cleanup-internal-test(worker)"
+const (
+	claimTestPath        = "claim-internal-test(worker)"
+	claimTestGauge       = "claim_internal_test_gauge"
+	claimTestGaugeMetric = "umh_fsmv2_worker_" + claimTestGauge
+	claimTestCounter     = "claim_internal_test_counter"
+)
 
-var _ = Describe("WorkerMetricsExporter.cleanup", func() {
-	It("forgets the last value of a counter that never went above 0", func() {
-		exporter := newWorkerMetricsExporter()
-		claim := exporter.claim(cleanupTestPath)
+var _ = Describe("WorkerMetricsExporter claims", func() {
+	var (
+		registry *prometheus.Registry
+		exporter *WorkerMetricsExporter
+	)
 
-		exporter.export(cleanupTestPath, &deps.Metrics{
-			Counters: map[string]int64{"cleanup_internal_test_zero_counter": 0},
-		})
-		Expect(exporter.prevCounters).To(HaveKey(cleanupTestPath))
-
-		exporter.cleanup(cleanupTestPath, claim)
-
-		Expect(exporter.prevCounters).NotTo(HaveKey(cleanupTestPath))
+	BeforeEach(func() {
+		registry = prometheus.NewRegistry()
+		exporter = newWorkerMetricsExporter(registry)
 	})
 
-	It("leaves the series of a worker added later at the same path", func() {
-		const gaugeName = "cleanup_internal_test_claimed_gauge"
+	gaugeValues := func() []float64 {
+		families, err := registry.Gather()
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-		exporter := newWorkerMetricsExporter()
-		removedWorker := exporter.claim(cleanupTestPath)
-		addedWorker := exporter.claim(cleanupTestPath)
+		var values []float64
 
-		exporter.export(cleanupTestPath, &deps.Metrics{Gauges: map[string]float64{gaugeName: 1}})
+		for _, family := range families {
+			if family.GetName() != claimTestGaugeMetric {
+				continue
+			}
 
-		exporter.cleanup(cleanupTestPath, removedWorker)
-		Expect(seriesCount("umh_fsmv2_worker_" + gaugeName)).To(Equal(1))
-
-		exporter.cleanup(cleanupTestPath, addedWorker)
-		Expect(seriesCount("umh_fsmv2_worker_" + gaugeName)).To(BeZero())
-	})
-})
-
-func seriesCount(metricName string) int {
-	families, err := prometheus.DefaultGatherer.Gather()
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-	for _, family := range families {
-		if family.GetName() == metricName {
-			return len(family.GetMetric())
+			for _, metric := range family.GetMetric() {
+				values = append(values, metric.GetGauge().GetValue())
+			}
 		}
+
+		return values
 	}
 
-	return 0
-}
+	exportGauge := func(claim WorkerMetricsClaim, value float64) {
+		exporter.export(claimTestPath, claim, &deps.Metrics{Gauges: map[string]float64{claimTestGauge: value}})
+	}
+
+	It("forgets the last value of a counter that never went above 0", func() {
+		claim := exporter.claim(claimTestPath)
+
+		exporter.export(claimTestPath, claim, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 0}})
+		Expect(exporter.prevCounters).To(HaveKey(claimTestPath))
+
+		exporter.cleanup(claimTestPath, claim)
+
+		Expect(exporter.prevCounters).NotTo(HaveKey(claimTestPath))
+	})
+
+	It("drops an export from a removed worker", func() {
+		removedWorker := exporter.claim(claimTestPath)
+		exportGauge(removedWorker, 1)
+
+		exporter.cleanup(claimTestPath, removedWorker)
+		exportGauge(removedWorker, 1)
+
+		Expect(gaugeValues()).To(BeEmpty())
+	})
+
+	It("keeps a worker added later at the same path from the removed worker's exports and cleanup", func() {
+		removedWorker := exporter.claim(claimTestPath)
+		addedWorker := exporter.claim(claimTestPath)
+		exportGauge(addedWorker, 1)
+
+		exportGauge(removedWorker, 99)
+		exporter.cleanup(claimTestPath, removedWorker)
+
+		Expect(gaugeValues()).To(ConsistOf(1.0))
+	})
+})

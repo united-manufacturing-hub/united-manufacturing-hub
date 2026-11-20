@@ -473,6 +473,7 @@ type WorkerMetricsExporter struct {
 	gauges       map[string]*prometheus.GaugeVec
 	prevCounters map[string]map[string]int64 // hierarchy path -> counter name -> last value
 	owners       map[string]WorkerMetricsClaim
+	registerer   prometheus.Registerer
 	lastClaim    WorkerMetricsClaim
 	mu           sync.Mutex
 }
@@ -481,20 +482,22 @@ type WorkerMetricsExporter struct {
 // worker-metric series of a hierarchy path.
 type WorkerMetricsClaim uint64
 
-func newWorkerMetricsExporter() *WorkerMetricsExporter {
+func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsExporter {
 	return &WorkerMetricsExporter{
 		counters:     make(map[string]*prometheus.CounterVec),
 		gauges:       make(map[string]*prometheus.GaugeVec),
 		prevCounters: make(map[string]map[string]int64),
 		owners:       make(map[string]WorkerMetricsClaim),
+		registerer:   registerer,
 	}
 }
 
-var workerMetricsExporter = newWorkerMetricsExporter()
+var workerMetricsExporter = newWorkerMetricsExporter(prometheus.DefaultRegisterer)
 
-// ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
+// ExportWorkerMetrics exports metrics from ObservedState to Prometheus while
+// claim owns hierarchyPath. A path no worker has claimed accepts claim 0.
 // No-op if observed does not implement MetricsHolder.
-func ExportWorkerMetrics(hierarchyPath string, observed fsmv2.ObservedState) {
+func ExportWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim, observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
 		return
@@ -505,25 +508,30 @@ func ExportWorkerMetrics(hierarchyPath string, observed fsmv2.ObservedState) {
 		return
 	}
 
-	workerMetricsExporter.export(hierarchyPath, &metrics)
+	workerMetricsExporter.export(hierarchyPath, claim, &metrics)
 }
 
-func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metrics) {
+func (e *WorkerMetricsExporter) export(hierarchyPath string, claim WorkerMetricsClaim, metrics *deps.Metrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// a removed worker's late collection must not bring its series back
+	if e.owners[hierarchyPath] != claim {
+		return
+	}
 
 	labels := prometheus.Labels{
 		"hierarchy_path": hierarchyPath,
 	}
 
-	prevValues := e.prevCounters[hierarchyPath]
-	if prevValues == nil {
-		prevValues = make(map[string]int64)
-		e.prevCounters[hierarchyPath] = prevValues
+	previousCounterValues := e.prevCounters[hierarchyPath]
+	if previousCounterValues == nil {
+		previousCounterValues = make(map[string]int64)
+		e.prevCounters[hierarchyPath] = previousCounterValues
 	}
 
 	for name, value := range metrics.Counters {
-		prevValue := prevValues[name]
+		prevValue := previousCounterValues[name]
 
 		delta := value - prevValue
 		if delta > 0 {
@@ -531,7 +539,7 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metri
 			counter.With(labels).Add(float64(delta))
 		}
 
-		prevValues[name] = value
+		previousCounterValues[name] = value
 	}
 
 	for name, value := range metrics.Gauges {
@@ -540,9 +548,8 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metri
 	}
 }
 
-// ClaimWorkerMetrics makes a newly added worker the owner of the worker-metric
-// series of hierarchyPath, so the cleanup of a worker removed earlier at the
-// same path leaves them in place.
+// ClaimWorkerMetrics makes a newly added worker the only one that exports and
+// deletes the worker-metric series of hierarchyPath.
 func ClaimWorkerMetrics(hierarchyPath string) WorkerMetricsClaim {
 	return workerMetricsExporter.claim(hierarchyPath)
 }
@@ -593,7 +600,7 @@ func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.Coun
 		return counter
 	}
 
-	counter := promauto.NewCounterVec(
+	counter := promauto.With(e.registerer).NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem + "_worker",
@@ -612,7 +619,7 @@ func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeV
 		return gauge
 	}
 
-	gauge := promauto.NewGaugeVec(
+	gauge := promauto.With(e.registerer).NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem + "_worker",

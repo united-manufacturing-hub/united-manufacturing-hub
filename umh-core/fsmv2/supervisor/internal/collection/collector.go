@@ -62,6 +62,8 @@ type CollectorConfig[TObserved any] struct {
 	Logger                    deps.FSMLogger
 	StateProvider             func() string // Returns current FSM state name (injected by supervisor)
 	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
+	// MetricsClaim returns the claim the worker's metrics are exported under; nil exports under claim 0.
+	MetricsClaim func() metrics.WorkerMetricsClaim
 	// ChildrenCountsProvider is the legacy two-int interface. New workers should
 	// consume ChildrenView instead and read HealthyCount / UnhealthyCount as fields.
 	// The collector still calls both setters during migration; counts agree because
@@ -119,8 +121,6 @@ type Collector[TObserved any] struct {
 	mu            sync.RWMutex
 	collectionMu  sync.Mutex // Serializes collectAndSaveObservedState between observation loop and CollectFinalObservation
 	running       bool
-	activeLoops   int           // includes a loop that outlived Restart's Stop timeout
-	allLoopsDone  chan struct{} // closes when activeLoops returns to 0
 }
 
 // NewCollector creates a new collector with the given configuration.
@@ -161,12 +161,6 @@ func (c *Collector[TObserved]) Start(ctx context.Context) error {
 	c.goroutineDone = make(chan struct{})
 	c.running = true
 
-	if c.activeLoops == 0 {
-		c.allLoopsDone = make(chan struct{})
-	}
-
-	c.activeLoops++
-
 	go c.observationLoop()
 
 	return nil
@@ -180,26 +174,12 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
-// Stopped returns a channel that closes when every observation loop this
-// collector started has exited. Stop and Restart can return before that.
-func (c *Collector[TObserved]) Stopped() <-chan struct{} {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if c.activeLoops == 0 {
-		return closedChannel
+func (c *Collector[TObserved]) metricsClaim() metrics.WorkerMetricsClaim {
+	if c.config.MetricsClaim == nil {
+		return 0
 	}
 
-	return c.allLoopsDone
-}
-
-var closedChannel = newClosedChannel()
-
-func newClosedChannel() chan struct{} {
-	closed := make(chan struct{})
-	close(closed)
-
-	return closed
+	return c.config.MetricsClaim()
 }
 
 // TriggerNow signals the observation loop to collect immediately.
@@ -388,22 +368,19 @@ func (c *Collector[TObserved]) observationLoop() {
 	defer func() {
 		c.mu.Lock()
 		// a loop that outlived Restart must not mark the loop Restart started as stopped
-		if doneChan == c.goroutineDone {
+		superseded := doneChan != c.goroutineDone
+		if !superseded {
 			c.state = collectorStateStopped
 			c.running = false
 		}
 
 		close(doneChan)
-
-		c.activeLoops--
-		if c.activeLoops == 0 {
-			close(c.allLoopsDone)
-		}
 		// Read state string while holding lock to avoid race with Restart()
 		finalState := c.state.String()
 		c.mu.Unlock()
 		c.config.Logger.Debug("collector_loop_stopped",
-			deps.String("final_state", finalState))
+			deps.String("final_state", finalState),
+			deps.Bool("superseded_by_restart", superseded))
 	}()
 
 	c.config.Logger.Debug("collector_loop_starting",
@@ -630,7 +607,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, observed)
+	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim(), observed)
 
 	if changed {
 		c.logTrace("observation_saved",

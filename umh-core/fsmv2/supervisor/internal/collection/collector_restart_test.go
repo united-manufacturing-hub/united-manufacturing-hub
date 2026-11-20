@@ -1,0 +1,75 @@
+// Copyright 2025 UMH Systems GmbH
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package collection_test
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/collection"
+)
+
+func newRestartTestCollector(worker *supervisor.TestWorker, observationInterval time.Duration) *collection.Collector[supervisor.TestObservedState] {
+	return collection.NewCollector[supervisor.TestObservedState](collection.CollectorConfig[supervisor.TestObservedState]{
+		Worker:              worker,
+		Identity:            supervisor.TestIdentity(),
+		Store:               supervisor.CreateTestTriangularStore(),
+		Logger:              deps.NewNopFSMLogger(),
+		ObservationInterval: observationInterval,
+		ObservationTimeout:  5 * time.Second,
+		DesiredStateProvider: func() (fsmv2.DesiredState, error) {
+			return &supervisor.TestDesiredState{}, nil
+		},
+	})
+}
+
+var _ = Describe("Collector.Restart", func() {
+	It("keeps the loop Restart started running and stoppable after the outlived loop exits", func() {
+		collectionStarted := make(chan struct{})
+		releaseCollection := make(chan struct{})
+
+		var startedOnce sync.Once
+
+		worker := &supervisor.TestWorker{
+			CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+				startedOnce.Do(func() { close(collectionStarted) })
+				<-releaseCollection
+
+				return supervisor.CreateTestObservedStateWithID("test-worker"), nil
+			},
+		}
+		collector := newRestartTestCollector(worker, time.Hour)
+
+		Expect(collector.Start(context.Background())).To(Succeed())
+		collector.TriggerNow()
+		Eventually(collectionStarted).Should(BeClosed())
+
+		collector.Restart()
+		close(releaseCollection)
+
+		Consistently(collector.IsRunning, 200*time.Millisecond).Should(BeTrue())
+
+		collector.Stop(context.Background())
+
+		Expect(collector.IsRunning()).To(BeFalse())
+	})
+})
