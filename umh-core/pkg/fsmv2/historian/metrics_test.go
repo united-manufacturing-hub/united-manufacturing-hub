@@ -63,11 +63,11 @@ var failedCheckStatus = TimescaleStatus{
 }
 
 var figureGauges = []deps.GaugeName{
-	GaugeHistorianOccupiedDiskBytes,
-	GaugeHistorianDataSpanSeconds,
-	GaugeHistorianJobs,
-	GaugeHistorianFailedJobs,
-	GaugeHistorianDatabaseOccupiedDiskBytes,
+	gaugeHistorianOccupiedDiskBytes,
+	gaugeHistorianDataSpanSeconds,
+	gaugeHistorianJobs,
+	gaugeHistorianFailedJobs,
+	gaugeHistorianDatabaseOccupiedDiskBytes,
 }
 
 func recordedGauges(status TimescaleStatus) map[string]float64 {
@@ -90,36 +90,36 @@ var _ = Describe("recordStatus", func() {
 	It("sets every gauge from a connected status with its figures read", func() {
 		gauges := recordedGauges(connectedStatus)
 
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthValid), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthInvalid), 0.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthUnknown), 0.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianQueryLatencySeconds), connectedStatus.LatencyMs/1000))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianOccupiedDiskBytes), float64(fullSummary.HistorianOccupiedDiskBytes)))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDataSpanSeconds), float64(fullSummary.DataSpanSeconds)))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianJobs), float64(fullSummary.JobCount)))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianFailedJobs), float64(fullSummary.FailedJobCount)))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseSizeReady), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianReachable), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianAuthValid), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianAuthInvalid), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianAuthUnknown), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianQueryLatencySeconds), connectedStatus.LatencyMs/1000))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianSummaryReady), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianOccupiedDiskBytes), float64(fullSummary.HistorianOccupiedDiskBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianDataSpanSeconds), float64(fullSummary.DataSpanSeconds)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianJobs), float64(fullSummary.JobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianFailedJobs), float64(fullSummary.FailedJobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseSizeReady), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
 	})
 
 	It("sets the ready flags to 0 and no figures before the first read", func() {
 		gauges := recordedGauges(connectedStatusBeforeFirstRead)
 
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseSizeReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianSummaryReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseSizeReady), 0.0))
 		Expect(gauges).NotTo(HaveKey(BeElementOf(gaugeKeys(figureGauges))))
 	})
 
 	It("sets no latency and no figures after a failed connection check", func() {
 		gauges := recordedGauges(failedCheckStatus)
 
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthUnknown), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseSizeReady), 0.0))
-		Expect(gauges).NotTo(HaveKey(string(GaugeHistorianQueryLatencySeconds)),
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianReachable), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianAuthUnknown), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianSummaryReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseSizeReady), 0.0))
+		Expect(gauges).NotTo(HaveKey(string(gaugeHistorianQueryLatencySeconds)),
 			"a failed check measures no latency, and a 0 would read as a fast database")
 		Expect(gauges).NotTo(HaveKey(BeElementOf(gaugeKeys(figureGauges))))
 	})
@@ -158,13 +158,13 @@ var _ = Describe("pollAndRecord", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		gauges := d.MetricsRecorder().Drain().Gauges
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianJobs), float64(fakeJobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianReachable), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianJobs), float64(fakeJobCount)))
 
 		_, err = pollAndRecord(context.Background(), d, historianConfig)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
+		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
 	})
 
 	It("records a failed connection check", func() {
@@ -174,7 +174,7 @@ var _ = Describe("pollAndRecord", func() {
 		_, err := pollAndRecord(context.Background(), d, historianConfig)
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
+		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(gaugeHistorianReachable), 0.0))
 	})
 
 	It("records an unreachable status when the pool cannot be built", func() {
@@ -189,9 +189,9 @@ var _ = Describe("pollAndRecord", func() {
 		Expect(err).To(HaveOccurred())
 
 		gauges := d.MetricsRecorder().Drain().Gauges
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 0.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianAuthUnknown), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianReachable), 0.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianAuthUnknown), 1.0))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianSummaryReady), 0.0))
 	})
 
 	It("records nothing and keeps the cached figures when the context is cancelled after the connection check", func() {
