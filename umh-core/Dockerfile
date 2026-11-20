@@ -189,10 +189,10 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
-# Added manually for Aikido findings: the alpine base image still ships openssl 3.5.7-r0
-# and zlib 1.3.2-r1 (CVE-2026-4738). The zlib floor fails the build rather than shipping an older one.
+# Added manually for Aikido findings: the alpine base image ships openssl 3.5.9-r0 and
+# zlib 1.3.2-r1 (CVE-2026-4738). The floors fail the build rather than ship an older version.
 # Must stay after the COPY --from=downloader, which replaces this stage's root.
-RUN apk add --no-cache --upgrade libcrypto3 libssl3 'zlib>=1.4-r0'
+RUN apk add --no-cache --upgrade 'libcrypto3>=3.5.9-r1' 'libssl3>=3.5.9-r1' 'zlib>=1.4-r0'
 
 # Create non-root user and set ownership at build-time
 RUN adduser -D -u 1000 -s /bin/sh umhuser && \
