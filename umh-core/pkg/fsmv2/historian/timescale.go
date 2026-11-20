@@ -484,34 +484,25 @@ const summaryInterval = 60 * time.Second
 // https://www.postgresql.org/message-id/CAGRY4nz94%2Bq_zVxj%2Bdnk7zqm-McBz4mSza_wALKiw2%3D%3D23MiGQ%40mail.gmail.com
 const databaseSizeInterval = 15 * time.Minute
 
-// failedReadRetryInterval is how long a cache waits to read again after a failed read.
-const failedReadRetryInterval = time.Minute
-
 // The caches match sharedPool: they have to outlive a single Poll.
 var (
-	sharedSummary      = newReadCache[timescalemetrics.Summary](summaryInterval)
-	sharedDatabaseSize = newReadCache[int64](databaseSizeInterval)
+	sharedSummary      = &readCache[timescalemetrics.Summary]{interval: summaryInterval}
+	sharedDatabaseSize = &readCache[int64]{interval: databaseSizeInterval}
 )
-
-func newReadCache[T any](interval time.Duration) *readCache[T] {
-	return &readCache[T]{interval: interval, retryInterval: failedReadRetryInterval}
-}
 
 type readCache[T any] struct {
 	readAt time.Time
 	value  *T
 	// A config edit repoints the pool at another database; holding the value across
 	// that would report one database's figures beside the other's host.
-	dsn            string
-	interval       time.Duration
-	retryInterval  time.Duration
-	lastReadFailed bool
-	mu             sync.Mutex
+	dsn      string
+	interval time.Duration
+	mu       sync.Mutex
 }
 
-// refresh reads again once the interval has elapsed, the retry interval has
-// elapsed after a failed read, or the database changed. A failed read drops the
-// previous value. A cancelled read leaves the cache as it was.
+// refresh reads again once the interval has elapsed or the database changed. A
+// failed read drops the previous value and waits its turn rather than retrying
+// every poll. A cancelled read leaves the cache as it was.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
@@ -524,7 +515,7 @@ func (c *readCache[T]) refresh(
 		c.dsn = dsn
 		c.value = nil
 		c.readAt = time.Time{}
-	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.waitAfterLastRead() {
+	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
 		return c.value
 	}
 
@@ -534,7 +525,6 @@ func (c *readCache[T]) refresh(
 	}
 
 	c.readAt = now
-	c.lastReadFailed = err != nil
 
 	if err != nil {
 		c.value = nil
@@ -547,19 +537,10 @@ func (c *readCache[T]) refresh(
 	return c.value
 }
 
-func (c *readCache[T]) waitAfterLastRead() time.Duration {
-	if c.lastReadFailed {
-		return c.retryInterval
-	}
-
-	return c.interval
-}
-
 func (c *readCache[T]) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.readAt = time.Time{}
 	c.value = nil
-	c.lastReadFailed = false
 }
