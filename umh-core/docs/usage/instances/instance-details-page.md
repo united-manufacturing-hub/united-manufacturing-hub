@@ -4,7 +4,7 @@ This page lists what the instance details page in the Management Console shows: 
 
 The page has two tabs. **Core** shows one card per component of UMH Core. **Plugins** shows the plugins added to the instance.
 
-Each card has a status badge: **Active**, **Neutral** or **Degraded**. Hover over the badge to see the reason. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
+Each card has a status badge: **Active**, **Neutral** or **Degraded**. When the instance sent a reason, an info button next to the badge shows it. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
 
 ## Agent
 
@@ -28,12 +28,12 @@ The Container card shows the CPU, memory and disk of the UMH Core container. Usa
 |---|---|
 | Status badge | The health of the container. See [Container status](#container-status). |
 | CPU | The CPU usage. See [The CPU row](#the-cpu-row). |
-| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the host. |
+| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the host. With the [memory monitor preview](#memory-with-the-memory-monitor-preview), the row shows 60-second means, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. |
 | Disk | The used and total space of the `/data` volume, and the percentage. |
 | Architecture | The CPU architecture UMH Core runs on, `amd64` or `arm64`. |
 | Hardware ID | The ID of this installation. UMH Core creates it on the first start and stores it in `/data/hwid`. It stays the same as long as the `/data` volume is kept. See [Container Layout](../../reference/container-layout.md#hwid). |
 
-The CPU, Memory and Disk rows turn red when that resource is degraded.
+The CPU, Memory and Disk rows turn red when that resource is degraded. The **S6 Logs** button is not available yet.
 
 ### Container status
 
@@ -49,7 +49,9 @@ Memory from 70% and disk from 75% count as a warning. The badge stays Active and
 
 ### The CPU row
 
-From v0.44.46, the CPU row shows the CPU health of the instance. When umh-core cannot measure the CPU, the row reads `N/A` in red. The container is then degraded, and the reason line says why the measurement failed.
+From v0.44.46, the CPU row shows the 60-second mean CPU usage of the instance against its CPU limit, or against the machine's cores when no limit is set, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. The info button next to it shows the usage, its 95th percentile, throttling and pressure of the container, and the busy cores and steal of the machine. The row turns red while the CPU is degraded. When umh-core cannot measure the CPU, the row reads `N/A`.
+
+The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details) appear in the badge reason of the Container card. While the CPU is degraded, the reason line starts with `CPU degraded:`, for example `CPU degraded: CPU limited`. While the whole container is Active, the reason is the CPU status itself, for example `CPU healthy. …`.
 
 With `USE_FSMV2_CPU=false`, the row shows the CPU load of the whole host instead, and the CPU is degraded from 70% host load or from throttling. See [Container: Configuration](container/README.md#configuration).
 
@@ -70,7 +72,7 @@ From v0.44.43, if UMH Core cannot read a file it needs to measure the CPU, the C
 
 ### CPU Technical Details
 
-Below the status, a Technical Details section lists every signal UMH Core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy instance states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
+Below the status, in the same badge reason, a Technical Details section lists every signal UMH Core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy instance states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
 
 ```text
 CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can use 1.5 more before it is marked degraded.
@@ -113,6 +115,8 @@ With the [memory monitor preview](container/how-memory-health-is-judged.md) on, 
 | `memory-pressure` | 0.20: processes in the container waited for memory for 20% of the last minute | 0.12 | `memory_pressure_avg60_ratio` |
 | `oom-kill` | 1 OOM kill in the container within the last hour | 0 for a whole hour | `memory_oom_kills_last_hour` |
 
+The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`.
+
 Memory also counts as degraded whenever no reading from the last three seconds is available. [Metrics](metrics/README.md#memory-gauges) lists the gauges.
 
 ## Communicator
@@ -149,6 +153,7 @@ The Data Flows card counts the data flows of the instance. Usage page: [Data Flo
 
 | Field | Shows |
 |---|---|
+| Status badge | The health of the data flows as a whole. |
 | Data Flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
 | Bridges | The number of bridges. It links to the list of this instance's bridges. |
 | Status Breakdown | How many data flows are **Active**, **Degraded**, **Other** (Neutral) and **Unknown** (no health reported). It appears once the instance has a data flow. |
@@ -159,6 +164,7 @@ The Redpanda card shows the message broker that stores the instance's [Unified N
 
 | Field | Shows |
 |---|---|
+| Status badge | The health of Redpanda. |
 | Incoming Throughput | The data written to Redpanda per second, as a one-minute average, in B, KiB, MiB or a larger binary unit. |
 | Outgoing Throughput | The data read from Redpanda per second, as a one-minute average, in the same units. |
 
@@ -170,6 +176,7 @@ The Topic Browser card shows the topics in the instance's Unified Namespace. Usa
 
 | Field | Shows |
 |---|---|
+| Status badge | The health of the Topic Browser. |
 | Topics | The number of topics. It links to the Topic Browser. |
 
 The **Logs** and **Metrics** buttons open the logs and the metrics of the Topic Browser. They are unavailable when the instance's UMH Core version does not support them.
