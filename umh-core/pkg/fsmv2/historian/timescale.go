@@ -369,7 +369,6 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		deps.Float64("latency_ms", elapsedMs))
 
 	now := time.Now()
-	reads := &figureReads{}
 
 	return TimescaleStatus{
 		Host:                      host,
@@ -377,29 +376,9 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		LatencyMs:                 elapsedMs,
 		Port:                      port,
 		Reachable:                 true,
-		Summary:                   d.summary.refresh(now, dsn, onlyFirstRead(reads, summaryReader(ctx, d, db, host))),
-		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, onlyFirstRead(reads, databaseSizeReader(ctx, d, db, host))),
+		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, db, host)),
+		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, db, host)),
 	}, nil
-}
-
-// figureReads lets one Poll run at most one figure read, so the second read does
-// not get only the time the first one left of the check's deadline.
-type figureReads struct {
-	started bool
-}
-
-func onlyFirstRead[T any](reads *figureReads, read func() (T, error)) func() (T, error) {
-	return func() (T, error) {
-		if reads.started {
-			var none T
-
-			return none, errReadNotStarted
-		}
-
-		reads.started = true
-
-		return read()
-	}
 }
 
 // forgetDatabaseFigures drops the cached figures after a failed connection
@@ -410,8 +389,8 @@ func (d Deps) forgetDatabaseFigures() {
 	d.databaseSize.clear()
 }
 
-// errReadNotStarted means the read did not query the database in this poll and is due again in the next.
-var errReadNotStarted = errors.New("the read did not start in this poll")
+// errReadNotStarted means the poll's deadline passed before the read could query the database.
+var errReadNotStarted = errors.New("the poll's deadline passed before the read started")
 
 // readStartError returns why a read cannot start, or nil when it can.
 func readStartError(ctx context.Context) error {

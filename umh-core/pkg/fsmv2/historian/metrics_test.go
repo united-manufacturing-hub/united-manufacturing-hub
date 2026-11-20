@@ -160,11 +160,7 @@ var _ = Describe("pollAndRecord", func() {
 		gauges := d.MetricsRecorder().Drain().Gauges
 		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianReachable), 1.0))
 		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianJobs), float64(fakeJobCount)))
-
-		_, err = pollAndRecord(context.Background(), d, historianConfig)
-
-		Expect(err).NotTo(HaveOccurred())
-		Expect(d.MetricsRecorder().Drain().Gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(gaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
 	})
 
 	It("records a failed connection check", func() {
