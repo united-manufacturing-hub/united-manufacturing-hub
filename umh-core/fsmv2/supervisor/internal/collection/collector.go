@@ -109,25 +109,30 @@ type CollectorConfig[TObserved any] struct {
 // Collector manages the observation loop lifecycle and data collection.
 // The type parameter TObserved represents the observed state type for this collector.
 type Collector[TObserved any] struct {
-	ctx           context.Context
-	parentCtx     context.Context
-	cancel        context.CancelFunc
-	goroutineDone chan struct{}
-	restartChan   chan struct{}
-	config        CollectorConfig[TObserved]
-	state         collectorState
-	mu            sync.RWMutex
-	collectionMu  sync.Mutex // Serializes collectAndSaveObservedState between observation loop and CollectFinalObservation
-	running       bool
+	ctx                context.Context
+	parentCtx          context.Context
+	cancel             context.CancelFunc
+	goroutineDone      chan struct{}
+	restartChan        chan struct{}
+	workerMetricsClaim *metrics.WorkerMetricsClaim
+	config             CollectorConfig[TObserved]
+	state              collectorState
+	mu                 sync.RWMutex
+	collectionMu       sync.Mutex // Serializes collectAndSaveObservedState between observation loop and CollectFinalObservation
+	running            bool
 }
 
 // NewCollector creates a new collector with the given configuration.
 // The type parameter TObserved is inferred from the config parameter.
+//
+// The collector claims the worker-metric series of the worker's hierarchy path,
+// so build it only for a worker that is being added. Stop deletes the series.
 func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
 	return &Collector[TObserved]{
-		config:      config,
-		state:       collectorStateCreated,
-		restartChan: make(chan struct{}, 1),
+		config:             config,
+		state:              collectorStateCreated,
+		restartChan:        make(chan struct{}, 1),
+		workerMetricsClaim: metrics.ClaimWorkerMetrics(config.Identity.HierarchyPath),
 	}
 }
 
@@ -170,6 +175,11 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	defer c.mu.RUnlock()
 
 	return c.running
+}
+
+// WorkerMetricsClaim returns the claim the collector exports the worker's metrics under.
+func (c *Collector[TObserved]) WorkerMetricsClaim() *metrics.WorkerMetricsClaim {
+	return c.workerMetricsClaim
 }
 
 // TriggerNow signals the observation loop to collect immediately.
@@ -221,7 +231,7 @@ func (c *Collector[TObserved]) Restart() {
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	c.Stop(stopCtx)
+	c.stopObservationLoop(stopCtx)
 
 	// Reset state so we can start again (Stop sets state to stopped)
 	c.mu.Lock()
@@ -243,7 +253,17 @@ func (c *Collector[TObserved]) Restart() {
 	}
 }
 
+// Stop stops the observation loop for good and deletes the worker-metric
+// series the collector exported. A collection that returns after Stop exports
+// nothing.
 func (c *Collector[TObserved]) Stop(ctx context.Context) {
+	c.stopObservationLoop(ctx)
+	c.workerMetricsClaim.Release()
+}
+
+// stopObservationLoop stops the observation loop and waits for it to exit,
+// bounded by ctx and 5 seconds. Restart uses it to keep the worker's metrics.
+func (c *Collector[TObserved]) stopObservationLoop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
@@ -592,7 +612,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, observed)
+	c.workerMetricsClaim.Export(observed)
 
 	if changed {
 		c.logTrace("observation_saved",

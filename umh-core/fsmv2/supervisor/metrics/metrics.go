@@ -44,7 +44,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
@@ -469,53 +468,57 @@ func RecordStuckActionForceRemoved(hierarchyPath, actionName string) {
 //
 // Uses hierarchy_path label for consistent identification across the codebase.
 type WorkerMetricsExporter struct {
-	counters     map[string]*prometheus.CounterVec
-	gauges       map[string]*prometheus.GaugeVec
-	prevCounters map[string]int64 // Key: "hierarchyPath:metricName"
-	mu           sync.Mutex
+	counters                    map[string]*prometheus.CounterVec
+	gauges                      map[string]*prometheus.GaugeVec
+	previousCounterValuesByPath map[string]map[string]int64 // hierarchy path -> counter name -> last value
+	owners                      map[string]*WorkerMetricsClaim
+	registerer                  prometheus.Registerer
+	mu                          sync.Mutex
 }
 
-var workerMetricsExporter = &WorkerMetricsExporter{
-	counters:     make(map[string]*prometheus.CounterVec),
-	gauges:       make(map[string]*prometheus.GaugeVec),
-	prevCounters: make(map[string]int64),
-}
-
-// ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
-// No-op if observed does not implement MetricsHolder.
-func ExportWorkerMetrics(hierarchyPath string, observed fsmv2.ObservedState) {
-	holder, ok := observed.(deps.MetricsHolder)
-	if !ok {
-		return
+func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsExporter {
+	return &WorkerMetricsExporter{
+		counters:                    make(map[string]*prometheus.CounterVec),
+		gauges:                      make(map[string]*prometheus.GaugeVec),
+		previousCounterValuesByPath: make(map[string]map[string]int64),
+		owners:                      make(map[string]*WorkerMetricsClaim),
+		registerer:                  registerer,
 	}
-
-	metrics := holder.GetWorkerMetrics()
-	if metrics.Counters == nil && metrics.Gauges == nil {
-		return
-	}
-
-	workerMetricsExporter.export(hierarchyPath, &metrics)
 }
 
-func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metrics) {
+var workerMetricsExporter = newWorkerMetricsExporter(prometheus.DefaultRegisterer)
+
+func (e *WorkerMetricsExporter) export(claim *WorkerMetricsClaim, metrics *deps.Metrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// a removed worker's late collection must not bring its series back
+	if e.owners[claim.hierarchyPath] != claim {
+		return
+	}
+
+	hierarchyPath := claim.hierarchyPath
 
 	labels := prometheus.Labels{
 		"hierarchy_path": hierarchyPath,
 	}
 
-	for name, value := range metrics.Counters {
-		prevKey := hierarchyPath + ":" + name
-		prevValue := e.prevCounters[prevKey]
+	previousCounterValues := e.previousCounterValuesByPath[hierarchyPath]
+	if previousCounterValues == nil {
+		previousCounterValues = make(map[string]int64)
+		e.previousCounterValuesByPath[hierarchyPath] = previousCounterValues
+	}
 
-		delta := value - prevValue
+	for name, value := range metrics.Counters {
+		previousValue := previousCounterValues[name]
+
+		delta := value - previousValue
 		if delta > 0 {
 			counter := e.getOrCreateCounter(name)
 			counter.With(labels).Add(float64(delta))
 		}
 
-		e.prevCounters[prevKey] = value
+		previousCounterValues[name] = value
 	}
 
 	for name, value := range metrics.Gauges {
@@ -529,7 +532,7 @@ func (e *WorkerMetricsExporter) getOrCreateCounter(name string) *prometheus.Coun
 		return counter
 	}
 
-	counter := promauto.NewCounterVec(
+	counter := promauto.With(e.registerer).NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: subsystem + "_worker",
@@ -548,7 +551,7 @@ func (e *WorkerMetricsExporter) getOrCreateGauge(name string) *prometheus.GaugeV
 		return gauge
 	}
 
-	gauge := promauto.NewGaugeVec(
+	gauge := promauto.With(e.registerer).NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem + "_worker",

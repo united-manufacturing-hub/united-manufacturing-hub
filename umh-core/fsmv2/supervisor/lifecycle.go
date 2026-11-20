@@ -492,11 +492,7 @@ func (s *Supervisor[TObserved, TDesired]) Shutdown() {
 		s.logger.Debug("worker_shutting_down",
 			deps.HierarchyPath(workerCtx.identity.HierarchyPath))
 
-		// Stop the collector's observation loop
-		workerCtx.collector.Stop(shutdownCtx)
-
-		// Shutdown the per-worker action executor
-		workerCtx.executor.Shutdown()
+		s.stopWorker(shutdownCtx, workerCtx)
 	}
 
 	s.mu.Unlock()

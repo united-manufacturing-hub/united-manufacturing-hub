@@ -33,7 +33,7 @@ The port inside the container is always 8080. umh-core sets `agent.metricsPort` 
 
 Most series appear only after umh-core records their first value. The FSMv2 counters, for example, appear after their first count. A missing series therefore does not mean the component is missing. `umh_core_errors_total` is the exception. It exists at 0 from the moment umh-core creates the component.
 
-When you remove a component, such as a bridge, most of its series stay on `/metrics` with their last value. The series disappear when umh-core restarts. umh-core deletes only `umh_fsmv2_state_duration_seconds` together with the component.
+When you remove a component, such as a bridge, most of its series stay on `/metrics` with their last value. The series disappear when umh-core restarts. For a component that runs on FSMv2, umh-core deletes `umh_fsmv2_state_duration_seconds` and the component's own `umh_fsmv2_worker_*` series together with the component.
 
 ## Which framework runs a component
 
