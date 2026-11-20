@@ -16,8 +16,6 @@ package fsmv2benthosmetrics
 
 import (
 	"context"
-	"errors"
-	"sync"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
@@ -79,7 +77,7 @@ func mapFresh(_ config.BenthosMonitorConfig, _ simple.Status[Scrape]) string {
 // dereferences LastScan.BenthosMetrics unchecked.
 //
 // Failures are not copied; FSMv1 has no field for them (see Failures).
-// The worker's health does not read them until ENG-6596.
+// The worker's health ignores them for now (ENG-6596).
 func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[Scrape]) publicfsm.ObservedState {
 	probes, sample := s.Result.Probes, s.Result.Sample
 	fresh := isFresh(probes.At, scrapeClock())
@@ -211,22 +209,11 @@ func isFresh(takenAt, now time.Time) bool {
 	return !takenAt.IsZero() && now.Sub(takenAt) <= staleAfter
 }
 
-// lastGoodFailures, the hold, keeps per Benthos S6 service name the
-// Failures of the last store read that answered for that name, so an unknown
-// read can answer from them (see Failures). The mutex guards the map:
-// concurrent Benthos services read their instance's Failures on their own
-// tick.
-var (
-	lastGoodMu       sync.Mutex
-	lastGoodFailures = map[string]benthosmetrics.Failures{}
-)
-
-// Failures returns the failures last stored for the Benthos instance named
-// s6ServiceName ("benthos-<name>"), whatever their age, and false when it
-// cannot answer. An unknown read (a read error or a read timeout) answers
-// from the last good Failures held for that name, the way
-// HoldLastStatusOnUnknown holds observed state; a missing or deleted
-// worker, or one with no stored sample, answers false.
+// Failures returns the failures the worker last stored for the Benthos
+// instance named s6ServiceName ("benthos-<name>"), whatever their age. It
+// returns false when there is nothing to return: no client, no worker under
+// that name, no sample stored yet, or a store read that failed. The caller
+// then reports "no Benthos metrics yet".
 func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failures, bool) {
 	c := fsmv2client.GetClient()
 	if c == nil {
@@ -238,173 +225,13 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 		dynamicchildren.Ref{WorkerType: WorkerType, Name: s6ServiceName},
 	)
 	if err != nil {
-		// No worker answers under this name — nothing was ever stored for
-		// it, or it was deleted: fail closed, and drop what the hold has.
-		if errors.Is(err, fsmv2client.ErrNotFound) || errors.Is(err, fsmv2client.ErrWorkerDeleted) {
-			forgetLastGoodFailures(s6ServiceName)
-
-			return nil, false
-		}
-
-		// Any other read failure — a read error or a read timeout — is an
-		// unknown read: answer from the last good Failures.
-		return heldFailures(c, s6ServiceName)
+		return nil, false
 	}
 
 	f := obs.Status.Result.Sample.Failures
 	if f == nil {
-		// The worker stored no sample yet, or its sample carries no
-		// Failures: there is nothing good to hold for it.
-		forgetLastGoodFailures(s6ServiceName)
-
 		return nil, false
 	}
-
-	rememberLastGoodFailures(c, s6ServiceName, f)
 
 	return f, true
-}
-
-// rememberLastGoodFailures stores a copy of f as s6ServiceName's last good
-// Failures, unless the hold already has a newer one: two readers of the same
-// name can race, and a slow one must not put an older sample back. A name
-// new to the hold first sweeps out names whose worker is no longer
-// registered, so the hold cannot outgrow the fleet it serves.
-func rememberLastGoodFailures(c *fsmv2client.FSMv2Client, s6ServiceName string, f *benthosmetrics.Failures) {
-	// Snapshot the registry BEFORE taking the mutex: Refs clones every
-	// registered spec, and holding lastGoodMu across it would block every
-	// other flow's lookup for the length of a full registry copy.
-	known, candidates := heldBeforeSweep(s6ServiceName)
-
-	var registered map[string]struct{}
-	if !known {
-		registered = make(map[string]struct{})
-		for _, ref := range c.Refs(WorkerType) {
-			registered[ref.Name] = struct{}{}
-		}
-	}
-
-	lastGoodMu.Lock()
-	defer lastGoodMu.Unlock()
-
-	if registered != nil {
-		sweepUnregistered(lastGoodFailures, candidates, registered)
-	}
-
-	// Ties are the same scrape. A wall clock stepped back stalls the hold
-	// until it catches up, which is safe: the health path rejects a sample
-	// from the future as "no fresh Benthos metrics".
-	if prev, held := lastGoodFailures[s6ServiceName]; held &&
-		f.ObservedAt.Before(prev.ObservedAt) {
-		return
-	}
-
-	// The hold keeps its own copy, so it never shares a pointer with the
-	// Failures a caller is reading.
-	cp := *f
-	cp.Entries = make([]benthosmetrics.FailureEntry, len(f.Entries))
-	copy(cp.Entries, f.Entries)
-	lastGoodFailures[s6ServiceName] = cp
-}
-
-// heldBeforeSweep reports whether the hold already has an entry for
-// s6ServiceName. When it does not, it also returns the ObservedAt of every
-// entry the hold has now, the candidates a sweep may drop.
-func heldBeforeSweep(s6ServiceName string) (bool, map[string]time.Time) {
-	lastGoodMu.Lock()
-	defer lastGoodMu.Unlock()
-
-	if _, known := lastGoodFailures[s6ServiceName]; known {
-		return true, nil
-	}
-
-	candidates := make(map[string]time.Time, len(lastGoodFailures))
-	for name, f := range lastGoodFailures {
-		candidates[name] = f.ObservedAt
-	}
-
-	return false, candidates
-}
-
-// sweepUnregistered drops from hold the candidates whose worker is not in
-// registered. The registry is read without the hold's mutex, so another
-// reader may add or update an entry between that read and this sweep; only
-// entries still as they were in candidates are dropped, so the sweep never
-// removes a sample it has not seen. The caller holds lastGoodMu.
-func sweepUnregistered(hold map[string]benthosmetrics.Failures, candidates map[string]time.Time, registered map[string]struct{}) {
-	for name, seenAt := range candidates {
-		if _, ok := registered[name]; ok {
-			continue
-		}
-
-		if f, ok := hold[name]; ok && f.ObservedAt.Equal(seenAt) {
-			delete(hold, name)
-		}
-	}
-}
-
-// forgetLastGoodFailures drops s6ServiceName's entry from the hold.
-func forgetLastGoodFailures(s6ServiceName string) {
-	lastGoodMu.Lock()
-	defer lastGoodMu.Unlock()
-
-	delete(lastGoodFailures, s6ServiceName)
-}
-
-// heldFailures answers an unknown read of s6ServiceName from the hold, when
-// its worker is still registered. A worker recreated under the same name may
-// get its predecessor's Failures until its first good read; their ObservedAt
-// makes the health path reject them once they are stale.
-func heldFailures(c *fsmv2client.FSMv2Client, s6ServiceName string) (*benthosmetrics.Failures, bool) {
-	registered := false
-
-	for _, ref := range c.Refs(WorkerType) {
-		if ref.Name == s6ServiceName {
-			registered = true
-
-			break
-		}
-	}
-
-	if !registered {
-		return nil, false
-	}
-
-	lastGoodMu.Lock()
-	defer lastGoodMu.Unlock()
-
-	f, held := lastGoodFailures[s6ServiceName]
-	if !held {
-		return nil, false
-	}
-
-	// The caller gets its own copy of the entries, so a reader that changes
-	// its Failures cannot change what the hold later serves.
-	entries := make([]benthosmetrics.FailureEntry, len(f.Entries))
-	copy(entries, f.Entries)
-	f.Entries = entries
-
-	return &f, true
-}
-
-// ErrorsNotClearedCount returns how many of the registered Benthos workers
-// hold an error that should have cleared: their stored Failures answer true
-// for NotCleared(margin). It counts every registered worker of this type:
-// one per bridge side, stand-alone flow, stream processor and topic browser,
-// so a bridge with both sides stuck counts twice.
-func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
-	c := fsmv2client.GetClient()
-	if c == nil {
-		return 0
-	}
-
-	count := 0
-
-	for _, ref := range c.Refs(WorkerType) {
-		if failures, ok := Failures(ctx, ref.Name); ok && failures.NotCleared(margin) {
-			count++
-		}
-	}
-
-	return count
 }
