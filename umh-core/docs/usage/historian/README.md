@@ -36,7 +36,7 @@ The **Database status** card shows what the database holds:
 |---|---|
 | **Database disk used** | Disk used by the whole database. The tooltip shows the part used by the Historian. |
 | **PostgreSQL version**, **TimescaleDB version** | The versions the database runs. |
-| **Historian tables** | Number of tables in the `umh` schema. |
+| **Historian tables** | Number of tables the Historian created: the `value_` and `attribute_` tables of each data contract, and the `tag`, `topic` and `location` tables. |
 | **Historian history covered** | Time between the oldest and the newest stored value. |
 | **Historian growth** | Disk the Historian uses per day, from its disk use and the history covered. |
 | **Historian failing jobs** | Background jobs whose last run failed. The tooltip shows the total number of jobs. |
@@ -55,7 +55,7 @@ Hypertables** table has one row per table:
 | **Size**, **Rows** | Disk use and number of rows. |
 | **Compression**, **Before compression**, **After compression** | How much compression saves. |
 | **Chunks**, **Compressed chunks** | Number of chunks, and how many of them are compressed. |
-| **Earliest timestamp**, **History covered** | The oldest stored value, and the time from it to the newest. |
+| **Earliest timestamp**, **Latest timestamp**, **History covered** | The oldest and the newest stored value, and the time between them. |
 | **Chunk interval**, **Compress after**, **Retention** | The [Historian parameters](how-the-historian-stores-data.md#historian-parameters), as the database holds them. |
 
 The **Background Jobs** table lists TimescaleDB's compression and retention jobs, with their
