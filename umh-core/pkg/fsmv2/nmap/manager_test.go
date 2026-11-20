@@ -30,8 +30,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // stubManagerReader is a deps.StateReader that returns a fixed
@@ -122,7 +120,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		fsmv2client.SetClient(nil)
 	})
 
-	It("maps a Fresh open observation to the fsmv1 open operational state", func() {
+	It("maps a Fresh open observation to the open operational state", func() {
 		stageClient(freshStatus(NmapStatus{PortState: "open", IsRunning: true, Port: port, LatencyMs: 3}), nil)
 
 		mgr := NewFsmv2NmapManager("test")
@@ -132,7 +130,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		state, err := mgr.GetCurrentFSMState(name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(state).To(Equal(nmapfsm.OperationalStateOpen))
+		Expect(state).To(Equal(OperationalStateOpen))
 	})
 
 	It("returns the degraded operational state for a degraded verdict", func() {
@@ -149,7 +147,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		state, err := mgr.GetCurrentFSMState(name)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+		Expect(state).To(Equal(OperationalStateDegraded))
 	})
 
 	It("builds a NmapObservedState reflecting the scan, not the requested config", func() {
@@ -163,8 +161,8 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		observed, err := mgr.GetLastObservedState(name)
 		Expect(err).NotTo(HaveOccurred())
 
-		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
-		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+		nmapObserved, ok := observed.(NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a NmapObservedState")
 
 		Expect(nmapObserved.ObservedNmapServiceConfig.Target).To(Equal(target))
 		Expect(nmapObserved.ObservedNmapServiceConfig.Port).To(Equal(port))
@@ -183,7 +181,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 			Target:      target,
 			PortState:   "closed",
 			Port:        port,
-			DialFailure: new(nmapservice.DialFailureDNSTimeout),
+			DialFailure: new(DialFailureDNSTimeout),
 			DialError:   dialError,
 		}), nil)
 
@@ -195,14 +193,13 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		observed, err := mgr.GetLastObservedState(name)
 		Expect(err).NotTo(HaveOccurred())
 
-		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
-		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+		nmapObserved, ok := observed.(NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a NmapObservedState")
 
 		lastScan := nmapObserved.ServiceInfo.NmapStatus.LastScan
 		Expect(lastScan).NotTo(BeNil())
-		Expect(lastScan.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
+		Expect(lastScan.DialFailure).To(HaveValue(Equal(DialFailureDNSTimeout)))
 		Expect(lastScan.DialError).To(Equal(dialError))
-		Expect(lastScan.Error).To(BeEmpty(), "Error means the scan itself failed and marks fsmv1 nmap unhealthy")
 	})
 
 	It("reports the scan's own time, so a leftover scan cannot read as fresh", func() {
@@ -224,8 +221,8 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		observed, err := mgr.GetLastObservedState(name)
 		Expect(err).NotTo(HaveOccurred())
 
-		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
-		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+		nmapObserved, ok := observed.(NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a NmapObservedState")
 
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Timestamp).To(BeTemporally("==", scannedAt),
 			"the observed timestamp must come from the scan, not from the moment it was mapped")
@@ -242,8 +239,8 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		observed, err := mgr.GetLastObservedState(name)
 		Expect(err).NotTo(HaveOccurred())
 
-		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
-		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+		nmapObserved, ok := observed.(NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a NmapObservedState")
 
 		Expect(nmapObserved.ServiceInfo.NmapStatus.LastScan.Timestamp).To(BeZero(),
 			"a never-polled worker must not report a usable scan time")
@@ -273,8 +270,8 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		observed, err := mgr.GetLastObservedState(name)
 		Expect(err).NotTo(HaveOccurred())
 
-		nmapObserved, ok := observed.(nmapfsm.NmapObservedState)
-		Expect(ok).To(BeTrue(), "expected a nmapfsm.NmapObservedState")
+		nmapObserved, ok := observed.(NmapObservedState)
+		Expect(ok).To(BeTrue(), "expected a NmapObservedState")
 
 		Expect(nmapObserved.ObservedNmapServiceConfig.Port).To(Equal(uint16(502)), "observed port must be the port the scan dialed, not the requested one")
 		Expect(nmapObserved.ObservedNmapServiceConfig.Target).To(Equal("10.0.0.1"), "observed target must be the target the scan dialed, not the requested one")
@@ -342,7 +339,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 		// BOOTSTRAP: no observation yet (NeverObserved) => the starting state.
 		state, gerr := mgr.GetCurrentFSMState(name)
 		Expect(gerr).NotTo(HaveOccurred())
-		Expect(state).To(Equal(nmapfsm.OperationalStateStarting))
+		Expect(state).To(Equal(OperationalStateStarting))
 
 		// DEGRADED verdict on a Fresh observation => the degraded state.
 		reader.err = nil
@@ -353,7 +350,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		state, gerr = mgr.GetCurrentFSMState(name)
 		Expect(gerr).NotTo(HaveOccurred())
-		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+		Expect(state).To(Equal(OperationalStateDegraded))
 
 		// STALE (missed polls) => the degraded state.
 		reader.obs = &fsmv2.Observation[simple.Status[NmapStatus]]{
@@ -363,7 +360,7 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		state, gerr = mgr.GetCurrentFSMState(name)
 		Expect(gerr).NotTo(HaveOccurred())
-		Expect(state).To(Equal(nmapfsm.OperationalStateDegraded))
+		Expect(state).To(Equal(OperationalStateDegraded))
 	})
 
 	It("falls back to the open desired state when a config leaves it empty", func() {
@@ -376,6 +373,6 @@ var _ = Describe("NewFsmv2NmapManager", func() {
 
 		inst, ok := mgr.GetInstance(name)
 		Expect(ok).To(BeTrue())
-		Expect(inst.GetDesiredFSMState()).To(Equal(nmapfsm.OperationalStateOpen))
+		Expect(inst.GetDesiredFSMState()).To(Equal(OperationalStateOpen))
 	})
 })

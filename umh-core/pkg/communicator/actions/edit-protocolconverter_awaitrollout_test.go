@@ -37,13 +37,12 @@ import (
 	benthosfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos"
 	connfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dfcfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 	benthossvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/benthos"
 	connsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/connection"
 	dfcsvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/dataflowcomponent"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	protocolconvertersvc "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -77,17 +76,17 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 				},
 			},
 			ServiceInfo: connsvc.ServiceInfo{
-				NmapObservedState: nmapfsm.NmapObservedState{
+				NmapObservedState: fsmv2nmap.NmapObservedState{
 					ObservedNmapServiceConfig: nmapserviceconfig.NmapServiceConfig{
 						Target: observedTarget,
 						Port:   scannedPort,
 					},
-					ServiceInfo: nmapservice.ServiceInfo{
-						NmapStatus: nmapservice.NmapServiceInfo{
-							LastScan: &nmapservice.NmapScanResult{
+					ServiceInfo: fsmv2nmap.ServiceInfo{
+						NmapStatus: fsmv2nmap.NmapServiceInfo{
+							LastScan: &fsmv2nmap.NmapScanResult{
 								Timestamp: scannedAt,
 								Target:    scannedTarget,
-								PortResult: nmapservice.PortResult{
+								PortResult: fsmv2nmap.PortResult{
 									State: portState,
 									Port:  scannedPort,
 								},
@@ -219,7 +218,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	It("reports a scanned-and-open port as a successful rollout, promptly", func() {
 		// A check that never matches would fail every healthy edit after 30s,
 		// which is worse than the bug it replaces.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(fsmv2nmap.PortStateOpen))
 
 		elapsed, err := runAwaitRollout("dest.example.com")
 		Expect(err).NotTo(HaveOccurred(),
@@ -231,7 +230,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	It("reports failure when the port was scanned but found closed", func() {
 		// Poll stamps the requested port onto a closed result too, so the numbers
 		// match one poll after the edit whether or not anything answered.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateClosed))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(fsmv2nmap.PortStateClosed))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -245,7 +244,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 			"dest.example.com",
 			"dest.example.com",
 			protocolconverter.OperationalStateStartingFailedDFCMissing,
-			string(nmapservice.PortStateOpen),
+			string(fsmv2nmap.PortStateOpen),
 			port,
 			time.Now().Add(-time.Hour),
 		)
@@ -266,7 +265,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 					"dest.example.com",
 					"dest.example.com",
 					"dest.example.com",
-					string(nmapservice.PortStateClosed),
+					string(fsmv2nmap.PortStateClosed),
 					port,
 					time.Now().Add(time.Minute),
 				),
@@ -284,7 +283,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// The connection FSM counts filtered, and every other non-open state, as
 		// down. Requiring open here agrees with that instead of inventing a
 		// second definition.
-		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateFiltered))
+		stageSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(fsmv2nmap.PortStateFiltered))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -297,7 +296,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// accepted by the OLD host's scan: the number matches, that port is
 		// open, and nothing has dialled the new host. If the new host refuses
 		// the connection the edit still reported success.
-		stageSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen))
+		stageSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateStartingFailedDFCMissing, string(fsmv2nmap.PortStateOpen))
 
 		_, err := runAwaitRollout("dest.example.com")
 		Expect(err).To(HaveOccurred(),
@@ -310,17 +309,15 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("reports failure when the observed config names the new host but the fresh open scan does not", func() {
-		// ENG-5586. On fsmv1 the observed nmap config is parsed from the scan
-		// script on disk, so it names the new endpoint from the moment that
-		// script is rewritten. The old scanner keeps reporting the old endpoint
-		// as open until s6 restarts it, so comparing the observed config accepts
-		// a fresh open scan that never dialled the new host.
+		// ENG-5586. Only the endpoint the scan recorded proves the new host was
+		// dialled, so an observed config that names the new host must not be
+		// enough.
 		stageSnapshotScanned(
 			"dest.example.com",
 			"dest.example.com",
 			"src.example.com",
 			protocolconverter.OperationalStateStartingFailedDFCMissing,
-			string(nmapservice.PortStateOpen),
+			string(fsmv2nmap.PortStateOpen),
 			port,
 			time.Now().Add(time.Minute),
 		)
@@ -386,7 +383,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		})
 
 		It("reports a scanned-and-open resolved endpoint as a successful rollout, promptly", func() {
-			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(nmapservice.PortStateOpen), timescalePort)
+			stageSnapshotOnPort(timescaleHost, timescaleHost, protocolconverter.OperationalStateStartingFailedDFCMissing, string(fsmv2nmap.PortStateOpen), timescalePort)
 
 			elapsed, err := runAwaitRolloutOnPort("{{ .historian.timescale.host }}", 0)
 			Expect(err).NotTo(HaveOccurred(),
@@ -572,7 +569,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// the DFC config comparison blocking the check for an unrelated reason, and
 		// would pass while proving nothing. The two specs differ in exactly one
 		// value: the observed nmap target.
-		stageReadDFCSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateActive, string(nmapservice.PortStateOpen))
+		stageReadDFCSnapshot("dest.example.com", "dest.example.com", protocolconverter.OperationalStateActive, string(fsmv2nmap.PortStateOpen))
 
 		elapsed, err, replies := runAwaitRolloutRead("dest.example.com")
 
@@ -585,7 +582,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("rolls back a read-DFC edit that benthos rejects and names the lint message", func() {
-		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(nmapservice.PortStateOpen),
+		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(fsmv2nmap.PortStateOpen),
 			[]s6.LogEntry{{Timestamp: time.Now().Add(time.Minute), Content: startupLine}, {Timestamp: time.Now().Add(time.Minute), Content: lintErrorLine}})
 
 		elapsed, err, _ := runAwaitRolloutRead("dest.example.com")
@@ -596,7 +593,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 	})
 
 	It("does not roll back a starting read-DFC edit on a config error logged before the edit", func() {
-		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(nmapservice.PortStateOpen),
+		stageReadDFCSnapshotWithLogs("dest.example.com", "dest.example.com", protocolconverter.OperationalStateStartingDFC, string(fsmv2nmap.PortStateOpen),
 			[]s6.LogEntry{{Timestamp: time.Now().Add(-time.Minute), Content: lintErrorLine}})
 
 		_, err, _ := runAwaitRolloutRead("dest.example.com")
@@ -616,7 +613,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// CurrentState and accepts on the first tick against the pre-edit
 		// snapshot. This is the deterministic form of a race the container
 		// harness reproduces only intermittently, and it needs no log capture.
-		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(nmapservice.PortStateOpen))
+		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(fsmv2nmap.PortStateOpen))
 
 		elapsed, err, replies := runAwaitRolloutRead("dest.example.com")
 
@@ -657,7 +654,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 				},
 			},
 			ServiceInfo: protocolconvertersvc.ServiceInfo{
-				ConnectionObservedState:       observedConnection("dest.example.com", "src.example.com", "src.example.com", string(nmapservice.PortStateOpen), port, time.Now().Add(time.Minute)),
+				ConnectionObservedState:       observedConnection("dest.example.com", "src.example.com", "src.example.com", string(fsmv2nmap.PortStateOpen), port, time.Now().Add(time.Minute)),
 				DataflowComponentReadFSMState: protocolconverter.OperationalStateActive,
 			},
 		})
@@ -679,7 +676,7 @@ var _ = Describe("EditProtocolConverter awaitRollout (connection check)", func()
 		// The scan here still shows the previous target, the same staging the
 		// read-path spec above rejects. The only difference is that this payload
 		// carries no connection.
-		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(nmapservice.PortStateOpen))
+		stageReadDFCSnapshot("dest.example.com", "src.example.com", protocolconverter.OperationalStateActive, string(fsmv2nmap.PortStateOpen))
 
 		elapsed, err, replies := runAwaitRolloutRead("")
 

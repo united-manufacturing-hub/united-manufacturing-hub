@@ -53,8 +53,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/constants"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/protocolconverter/runtime_config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -1177,21 +1177,15 @@ func (a *EditProtocolConverterAction) connectionCheckWait(
 		return "checking " + wantEndpoint
 	}
 
-	// Never compare against ObservedNmapServiceConfig here: on fsmv1 it is
-	// parsed from the scan script on disk, so it names the new endpoint from the
-	// moment that script is rewritten, while the old scanner keeps reporting the
-	// old endpoint as open until s6 restarts it. Only the scan itself records
-	// what was dialed.
-	//
-	// Comparing the port alone would accept a move to a different host on the
-	// same port for the same reason.
+	// Compare the endpoint the scan itself recorded: together with the
+	// timestamp check above, it proves a scan after the edit dialed the new
+	// endpoint. Comparing the port alone would accept a move to a different
+	// host on the same port.
 	if formatEndpoint(lastScan.Target, lastScan.PortResult.Port) != wantEndpoint {
 		return "checking " + wantEndpoint
 	}
 
-	// Do not use IsRunning instead: it means the port answered on fsmv2 but only
-	// "the scanner process is up" on fsmv1, where a refused port reads true.
-	if lastScan.PortResult.State != string(nmapservice.PortStateOpen) {
+	if lastScan.PortResult.State != string(fsmv2nmap.PortStateOpen) {
 		return "cannot reach " + wantEndpoint + " (port " + lastScan.PortResult.State + ")"
 	}
 
