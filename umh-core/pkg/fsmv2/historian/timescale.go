@@ -279,7 +279,8 @@ const (
 )
 
 func (d Deps) report(ctx context.Context, tag failureTag, host string, err error) {
-	if ctx.Err() != nil {
+	// a read that runs past the poll's deadline is reported, because it keeps the figure unready
+	if errors.Is(ctx.Err(), context.Canceled) {
 		return
 	}
 
