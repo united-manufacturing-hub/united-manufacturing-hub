@@ -400,7 +400,7 @@ func (d Deps) forgetDatabaseFigures() {
 func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
 	return func() (timescalemetrics.Summary, error) {
 		summary, err := timescalemetrics.CollectSummary(ctx, db)
-		if errors.Is(ctx.Err(), context.Canceled) {
+		if ctx.Err() != nil {
 			return timescalemetrics.Summary{}, ctx.Err()
 		}
 
@@ -420,7 +420,7 @@ func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, ho
 func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, error) {
 	return func() (int64, error) {
 		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, db)
-		if errors.Is(ctx.Err(), context.Canceled) {
+		if ctx.Err() != nil {
 			return 0, ctx.Err()
 		}
 
@@ -502,7 +502,9 @@ type readCache[T any] struct {
 
 // refresh reads again once the interval has elapsed or the database changed. A
 // failed read drops the previous value and waits its turn rather than retrying
-// every poll. A cancelled read leaves the cache as it was.
+// every poll. A read cut short by the poll's context observed nothing about the
+// database, so it keeps the previous value; a cancelled read also reads again
+// on the next poll.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
@@ -525,6 +527,10 @@ func (c *readCache[T]) refresh(
 	}
 
 	c.readAt = now
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return c.value
+	}
 
 	if err != nil {
 		c.value = nil

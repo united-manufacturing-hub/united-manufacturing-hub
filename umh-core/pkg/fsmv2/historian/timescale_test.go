@@ -417,6 +417,14 @@ var _ = Describe("the summary cache", func() {
 		}
 	}
 
+	deadlineExpires := func(calls *int) func() (timescalemetrics.Summary, error) {
+		return func() (timescalemetrics.Summary, error) {
+			*calls++
+
+			return timescalemetrics.Summary{}, context.DeadlineExceeded
+		}
+	}
+
 	isCancelled := func(calls *int) func() (timescalemetrics.Summary, error) {
 		return func() (timescalemetrics.Summary, error) {
 			*calls++
@@ -476,6 +484,22 @@ var _ = Describe("the summary cache", func() {
 		cache.refresh(readAt.Add(2*time.Minute+time.Second), dsnA, reads([]string{"value_other"}, &third))
 
 		Expect(third).To(Equal(1), "a cancelled read observed nothing, so the next poll reads again")
+	})
+
+	It("keeps its value and waits its turn when the poll's deadline expired during a read", func() {
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
+		first, expired, third := 0, 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(2*time.Minute), dsnA, deadlineExpires(&expired))
+
+		Expect(expired).To(Equal(1))
+		Expect(summary).NotTo(BeNil(), "an earlier read used up the poll's deadline, and the database said nothing")
+		Expect(summary.TableNames).To(ConsistOf("value_bench"))
+
+		cache.refresh(readAt.Add(2*time.Minute+time.Second), dsnA, reads([]string{"value_other"}, &third))
+
+		Expect(third).To(BeZero(), "a slow read must not be repeated on every poll")
 	})
 
 	It("reports nothing rather than the previous database when the first read of the new one fails", func() {
@@ -631,6 +655,17 @@ var _ = Describe("Sentry reporting", func() {
 			return readErr
 		}),
 	)
+
+	It("returns the poll's deadline error for a database size read cut short by it, whatever the driver returned", func() {
+		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		defer cancel()
+
+		database := &cancelsAfterConnectionCheck{cancel: cancel, driverErr: errors.New("conn closed")}
+
+		_, readErr := databaseSizeReader(ctx, d, database, "db")()
+
+		Expect(readErr).To(MatchError(context.DeadlineExceeded))
+	})
 
 	It("reports a failed database size read", func() {
 		cfg := unreachableConfig().WithDefaults()
