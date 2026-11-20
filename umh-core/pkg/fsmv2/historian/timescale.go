@@ -517,7 +517,7 @@ type readCache[T any] struct {
 	mu       sync.Mutex
 }
 
-// refresh drops the value on a failed read; a cancelled read or one that never started leaves the cache for the next poll.
+// refresh drops the value on a failed read; a cancelled read or one that never started leaves the cache for the next poll and returns nil.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
@@ -535,11 +535,8 @@ func (c *readCache[T]) refresh(
 	}
 
 	value, err := read()
-	if errors.Is(err, context.Canceled) {
-		return c.value
-	}
-
-	if errors.Is(err, errReadNotStarted) {
+	// the cached value is due for a re-read, so it is not current either
+	if errors.Is(err, context.Canceled) || errors.Is(err, errReadNotStarted) {
 		return nil
 	}
 

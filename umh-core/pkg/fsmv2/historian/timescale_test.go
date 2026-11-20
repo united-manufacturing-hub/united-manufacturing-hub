@@ -479,7 +479,7 @@ var _ = Describe("the summary cache", func() {
 			"the summary read before the failed read may no longer hold, and the console would show it as current")
 	})
 
-	It("keeps its value and reads again on the next poll when a read is cancelled", func() {
+	It("reports nothing and reads again on the next poll when a read is cancelled", func() {
 		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		first, cancelled, third := 0, 0, 0
 
@@ -487,8 +487,7 @@ var _ = Describe("the summary cache", func() {
 		summary := cache.refresh(readAt.Add(2*time.Minute), dsnA, isCancelled(&cancelled))
 
 		Expect(cancelled).To(Equal(1))
-		Expect(summary).NotTo(BeNil())
-		Expect(summary.TableNames).To(ConsistOf("value_bench"))
+		Expect(summary).To(BeNil(), "the cached summary was due for a re-read, so it is not current")
 
 		cache.refresh(readAt.Add(2*time.Minute+time.Second), dsnA, reads([]string{"value_other"}, &third))
 
