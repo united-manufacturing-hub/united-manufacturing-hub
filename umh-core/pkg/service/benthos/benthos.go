@@ -40,6 +40,9 @@ import (
 
 	benthos_monitor_fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 	s6fsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/s6"
+
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/env"
+	fsmv2benthosmetrics "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/benthosmetrics"
 	"gopkg.in/yaml.v3"
 
 	s6service "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
@@ -65,6 +68,14 @@ const (
 	// Reference: https://github.com/gopcua/opcua/blob/main/debug/debug.go
 	OPCDebugEnvVar = "OPC_DEBUG"
 )
+
+const envUseFsmv2BenthosMetrics = "USE_FSMV2_BENTHOS_METRICS"
+
+// FSMv2BenthosMetricsEnabled reads USE_FSMV2_BENTHOS_METRICS. A value that is
+// not a boolean returns an error naming the variable, together with false.
+func FSMv2BenthosMetricsEnabled() (bool, error) {
+	return env.LookupBool(envUseFsmv2BenthosMetrics, false)
+}
 
 // IBenthosService is the interface for managing Benthos services.
 type IBenthosService interface {
@@ -194,6 +205,13 @@ func (bs *BenthosStatus) CopyBenthosLogs(src []s6service.LogEntry) error {
 	return nil
 }
 
+// monitorManager is the part of a Benthos monitor backend that BenthosService uses.
+type monitorManager interface {
+	GetLastObservedState(serviceName string) (fsm.ObservedState, error)
+	GetInstance(name string) (fsm.FSMInstance, bool)
+	Reconcile(ctx context.Context, snapshot fsm.SystemSnapshot, services serviceregistry.Provider) (error, bool)
+}
+
 // BenthosService is the default implementation of the IBenthosService interface.
 type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
@@ -201,7 +219,7 @@ type BenthosService struct {
 
 	s6Manager *s6fsm.S6Manager
 
-	benthosMonitorManager *benthos_monitor_fsm.BenthosMonitorManager
+	benthosMonitorManager monitorManager
 
 	// -----------------------------------------------------------------------------
 	// 🌶️  Hot-path YAML-parsing cache
@@ -260,9 +278,13 @@ func WithS6Service(s6Service s6service.Service) BenthosServiceOption {
 }
 
 // WithMonitorManager sets a custom monitor manager for the BenthosService.
-func WithMonitorManager(monitorManager *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
+// It wins over USE_FSMV2_BENTHOS_METRICS; a nil manager means "use the
+// flag's choice".
+func WithMonitorManager(m *benthos_monitor_fsm.BenthosMonitorManager) BenthosServiceOption {
 	return func(s *BenthosService) {
-		s.benthosMonitorManager = monitorManager
+		if m != nil {
+			s.benthosMonitorManager = m
+		}
 	}
 }
 
@@ -278,18 +300,35 @@ func WithS6Manager(s6Manager *s6fsm.S6Manager) BenthosServiceOption {
 func NewDefaultBenthosService(benthosName string, opts ...BenthosServiceOption) *BenthosService {
 	managerName := fmt.Sprintf("%s%s", logger.ComponentBenthosService, benthosName)
 	service := &BenthosService{
-		logger:                logger.For(managerName),
-		s6Manager:             s6fsm.NewS6Manager(managerName),
-		s6Service:             s6service.NewDefaultService(),
-		benthosMonitorManager: benthos_monitor_fsm.NewBenthosMonitorManager(benthosName),
+		logger:    logger.For(managerName),
+		s6Manager: s6fsm.NewS6Manager(managerName),
+		s6Service: s6service.NewDefaultService(),
 	}
 
-	// Apply options
 	for _, opt := range opts {
 		opt(service)
 	}
 
+	if service.benthosMonitorManager == nil {
+		service.benthosMonitorManager = selectBenthosMonitorBackend(benthosName)
+	}
+
 	return service
+}
+
+// selectBenthosMonitorBackend returns the FSMv2 Benthos metrics manager when
+// USE_FSMV2_BENTHOS_METRICS is true, else FSMv1's manager. A non-boolean value
+// is treated as off; main.go logs the value once at start-up.
+func selectBenthosMonitorBackend(benthosName string) monitorManager {
+	useFsmv2, _ := FSMv2BenthosMetricsEnabled()
+
+	if useFsmv2 {
+		return fsmv2benthosmetrics.NewManager(
+			fmt.Sprintf("%s_%s", logger.ComponentBenthosMonitorManager, benthosName),
+		)
+	}
+
+	return benthos_monitor_fsm.NewBenthosMonitorManager(benthosName)
 }
 
 // generateBenthosYaml generates a Benthos YAML configuration from a BenthosServiceConfig.

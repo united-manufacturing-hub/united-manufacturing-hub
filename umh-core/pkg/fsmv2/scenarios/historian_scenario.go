@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
@@ -98,9 +99,9 @@ var HistorianScenario = scenariorunner.Scenario{
 					}
 
 					result := obs.Status.Result
-					seen := fmt.Sprintf("state=%s degraded=%t host=%s reachable=%t auth=%s tables=%v data_span_seconds=%d database_bytes=%d reason=%q",
+					seen := fmt.Sprintf("state=%s degraded=%t host=%s reachable=%t auth=%s summary=%+v database_bytes=%s reason=%q",
 						obs.State, obs.Status.Degraded, result.Host, result.Reachable, result.Auth,
-						result.TableNames, result.DataSpanSeconds, result.DatabaseOccupiedDiskBytes, obs.Status.Reason)
+						result.Summary, readBytes(result.DatabaseOccupiedDiskBytes), obs.Status.Reason)
 
 					return done(obs), seen, nil
 				})
@@ -124,24 +125,22 @@ var HistorianScenario = scenariorunner.Scenario{
 		}
 
 		if err := waitForHistorian("store shows the summary CollectSummary read from the database, and its size",
-			func(obs historianObservation) bool {
-				return slices.Equal(obs.Status.Result.TableNames, []string{"value_scenario", "tag"}) &&
-					obs.Status.Result.DataSpanSeconds == 24*60*60 &&
-					obs.Status.Result.DatabaseOccupiedDiskBytes == historianScenarioDatabase.DatabaseOccupiedDiskBytes
-			}); err != nil {
+			hasScenarioFigures); err != nil {
 			return err
 		}
 
 		env.Step("the database stops answering")
 		fake.SetErr(timescalemetrics.ErrFakeConnectionRefused)
 
-		if err := waitForHistorian("store shows degraded and unreachable",
+		if err := waitForHistorian("store shows degraded and unreachable, without the figures read before",
 			func(obs historianObservation) bool {
 				return obs.State == "degraded" &&
 					obs.Status.Degraded &&
 					!obs.Status.Result.Reachable &&
 					obs.Status.Result.Auth == models.TimescaleAuthUnknown &&
-					obs.Status.Reason == "TimescaleDB is unreachable"
+					obs.Status.Reason == "TimescaleDB is unreachable" &&
+					obs.Status.Result.Summary == nil &&
+					obs.Status.Result.DatabaseOccupiedDiskBytes == nil
 			}); err != nil {
 			return err
 		}
@@ -162,13 +161,35 @@ var HistorianScenario = scenariorunner.Scenario{
 		env.Step("the database accepts the password again; the monitor returns to running with reason \"connected to TimescaleDB\"")
 		fake.SetErr(nil)
 
-		return waitForHistorian("store shows running again",
+		return waitForHistorian("store shows running again, with the figures read again",
 			func(obs historianObservation) bool {
 				return obs.State == "running" &&
 					!obs.Status.Degraded &&
 					obs.Status.Result.Reachable &&
 					obs.Status.Result.Auth == models.TimescaleAuthValid &&
-					obs.Status.Reason == "connected to TimescaleDB"
+					obs.Status.Reason == "connected to TimescaleDB" &&
+					hasScenarioFigures(obs)
 			})
 	},
+}
+
+func hasScenarioFigures(obs historianObservation) bool {
+	summary := obs.Status.Result.Summary
+	databaseBytes := obs.Status.Result.DatabaseOccupiedDiskBytes
+
+	if summary == nil || databaseBytes == nil {
+		return false
+	}
+
+	return slices.Equal(summary.TableNames, []string{"value_scenario", "tag"}) &&
+		summary.DataSpanSeconds == 24*60*60 &&
+		*databaseBytes == historianScenarioDatabase.DatabaseOccupiedDiskBytes
+}
+
+func readBytes(databaseBytes *int64) string {
+	if databaseBytes == nil {
+		return "not read"
+	}
+
+	return strconv.FormatInt(*databaseBytes, 10)
 }

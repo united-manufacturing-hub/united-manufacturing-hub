@@ -43,10 +43,11 @@ var expectedWorkerTypes = []string{"persistence", "application"}
 
 // extraWorkerTypes lists worker types that umh-core starts but that no render
 // function below returns. The application adds configworker as its kernel
-// child. The config worker adds cpu and historian-timescale, and the
-// connection service adds nmap. These types are checked like the walked ones,
-// but they do not count towards expectedWorkerTypes.
-var extraWorkerTypes = []string{"configworker", "cpu", "historian-timescale", "nmap"}
+// child. The config worker adds cpu and historian-timescale, the
+// connection service adds nmap, and the Benthos service adds benthos_metrics
+// when USE_FSMV2_BENTHOS_METRICS is on. These types are checked like the
+// walked ones, but they do not count towards expectedWorkerTypes.
+var extraWorkerTypes = []string{"configworker", "cpu", "historian-timescale", "nmap", "benthos_metrics"}
 
 var _ = Describe("production worker tree", func() {
 	// A worker type can start only if two init functions ran in this binary.
