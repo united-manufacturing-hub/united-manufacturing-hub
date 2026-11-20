@@ -27,6 +27,28 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/persistence/state"
 )
 
+// stoppedSnapshot builds a snapshot that differs between the test cases only
+// in whether shutdown is requested and whether the parent disabled the worker.
+func stoppedSnapshot(shutdownRequested, disabled bool) fsmv2.Snapshot {
+	return fsmv2.Snapshot{
+		Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
+		Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
+			CollectedAt: time.Now(),
+		},
+		Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
+			BaseDesiredState: fsmv2config.BaseDesiredState{
+				ShutdownRequested: shutdownRequested,
+				Disabled:          disabled,
+			},
+			Config: snapshot.PersistenceConfig{
+				CompactionInterval:  5 * time.Minute,
+				RetentionWindow:     24 * time.Hour,
+				MaintenanceInterval: 7 * 24 * time.Hour,
+			},
+		},
+	}
+}
+
 var _ = Describe("StoppedState", func() {
 	var stateObj *state.StoppedState
 
@@ -37,22 +59,7 @@ var _ = Describe("StoppedState", func() {
 	Describe("Next", func() {
 		Context("when shutdown is requested", func() {
 			It("should stay in stopped state with SignalNeedsRemoval", func() {
-				snap := fsmv2.Snapshot{
-					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
-						CollectedAt: time.Now(),
-					},
-					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							ShutdownRequested: true,
-						},
-						Config: snapshot.PersistenceConfig{
-							CompactionInterval:  5 * time.Minute,
-							RetentionWindow:     24 * time.Hour,
-							MaintenanceInterval: 7 * 24 * time.Hour,
-						},
-					},
-				}
+				snap := stoppedSnapshot(true, false)
 
 				result := stateObj.Next(snap)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
@@ -63,22 +70,7 @@ var _ = Describe("StoppedState", func() {
 
 		Context("when the parent disabled the worker", func() {
 			It("should stay in stopped state without signalling removal", func() {
-				snap := fsmv2.Snapshot{
-					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
-						CollectedAt: time.Now(),
-					},
-					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							Disabled: true,
-						},
-						Config: snapshot.PersistenceConfig{
-							CompactionInterval:  5 * time.Minute,
-							RetentionWindow:     24 * time.Hour,
-							MaintenanceInterval: 7 * 24 * time.Hour,
-						},
-					},
-				}
+				snap := stoppedSnapshot(false, true)
 
 				result := stateObj.Next(snap)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
@@ -89,23 +81,7 @@ var _ = Describe("StoppedState", func() {
 
 		Context("when shutdown is requested for a disabled worker", func() {
 			It("should signal needs removal", func() {
-				snap := fsmv2.Snapshot{
-					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
-						CollectedAt: time.Now(),
-					},
-					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{
-							ShutdownRequested: true,
-							Disabled:          true,
-						},
-						Config: snapshot.PersistenceConfig{
-							CompactionInterval:  5 * time.Minute,
-							RetentionWindow:     24 * time.Hour,
-							MaintenanceInterval: 7 * 24 * time.Hour,
-						},
-					},
-				}
+				snap := stoppedSnapshot(true, true)
 
 				result := stateObj.Next(snap)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.StoppedState{}))
@@ -115,20 +91,7 @@ var _ = Describe("StoppedState", func() {
 
 		Context("when shutdown is not requested", func() {
 			It("should transition to TryingToStartState", func() {
-				snap := fsmv2.Snapshot{
-					Identity: deps.Identity{ID: "test", WorkerType: "persistence"},
-					Observed: fsmv2.Observation[snapshot.PersistenceStatus]{
-						CollectedAt: time.Now(),
-					},
-					Desired: &fsmv2.WrappedDesiredState[snapshot.PersistenceConfig]{
-						BaseDesiredState: fsmv2config.BaseDesiredState{},
-						Config: snapshot.PersistenceConfig{
-							CompactionInterval:  5 * time.Minute,
-							RetentionWindow:     24 * time.Hour,
-							MaintenanceInterval: 7 * 24 * time.Hour,
-						},
-					},
-				}
+				snap := stoppedSnapshot(false, false)
 
 				result := stateObj.Next(snap)
 				Expect(result.State).To(BeAssignableToTypeOf(&state.TryingToStartState{}))
