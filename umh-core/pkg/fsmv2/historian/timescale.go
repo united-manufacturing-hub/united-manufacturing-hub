@@ -369,7 +369,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	now := time.Now()
 
-	status := TimescaleStatus{
+	return TimescaleStatus{
 		Host:                      host,
 		Auth:                      models.TimescaleAuthValid,
 		LatencyMs:                 elapsedMs,
@@ -377,13 +377,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		Reachable:                 true,
 		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, db, host)),
 		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, db, host)),
-	}
-
-	if errors.Is(ctx.Err(), context.Canceled) {
-		return status, fmt.Errorf("timescale figures %s cancelled: %w", host, ctx.Err())
-	}
-
-	return status, nil
+	}, nil
 }
 
 // forgetDatabaseFigures drops the cached figures after a failed connection
@@ -456,7 +450,7 @@ func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
 // pollAndRecord records nothing for a cancelled poll, because it observed nothing.
 func pollAndRecord(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	status, err := Poll(ctx, d, cfg)
-	if errors.Is(err, context.Canceled) {
+	if errors.Is(ctx.Err(), context.Canceled) {
 		return status, err
 	}
 

@@ -203,7 +203,7 @@ var _ = Describe("pollAndRecord", func() {
 
 		_, err = pollAndRecord(ctx, d, historianConfig)
 
-		Expect(err).To(MatchError(context.Canceled))
+		Expect(err).NotTo(HaveOccurred(), "the connection check succeeded, and an error would mark the worker degraded")
 		Expect(d.MetricsRecorder().Drain().Gauges).To(BeEmpty())
 		Expect(d.summary.value).NotTo(BeNil(), "a cancelled read must not drop the cached summary")
 	})
