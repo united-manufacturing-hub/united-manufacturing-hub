@@ -387,8 +387,11 @@ func (c *Collector[TObserved]) observationLoop() {
 
 	defer func() {
 		c.mu.Lock()
-		c.state = collectorStateStopped
-		c.running = false
+		// a loop that outlived Restart must not mark the loop Restart started as stopped
+		if doneChan == c.goroutineDone {
+			c.state = collectorStateStopped
+			c.running = false
+		}
 
 		close(doneChan)
 

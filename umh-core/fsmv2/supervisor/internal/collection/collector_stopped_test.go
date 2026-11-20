@@ -106,6 +106,36 @@ var _ = Describe("Collector.Stopped", func() {
 		Eventually(collector.Stopped()).Should(BeClosed())
 	})
 
+	It("keeps the loop Restart started running and stoppable after the outlived loop exits", func() {
+		collectionStarted := make(chan struct{})
+		releaseCollection := make(chan struct{})
+
+		var startedOnce sync.Once
+
+		worker := &supervisor.TestWorker{
+			CollectFunc: func(_ context.Context) (fsmv2.ObservedState, error) {
+				startedOnce.Do(func() { close(collectionStarted) })
+				<-releaseCollection
+
+				return supervisor.CreateTestObservedStateWithID("test-worker"), nil
+			},
+		}
+		collector := newStoppedTestCollector(worker, time.Hour)
+
+		Expect(collector.Start(context.Background())).To(Succeed())
+		collector.TriggerNow()
+		Eventually(collectionStarted).Should(BeClosed())
+
+		collector.Restart()
+		close(releaseCollection)
+
+		Consistently(collector.IsRunning, 200*time.Millisecond).Should(BeTrue())
+
+		collector.Stop(context.Background())
+
+		Eventually(collector.Stopped()).Should(BeClosed())
+	})
+
 	It("is closed for a collector that never started", func() {
 		collector := newStoppedTestCollector(&supervisor.TestWorker{}, 10*time.Millisecond)
 
