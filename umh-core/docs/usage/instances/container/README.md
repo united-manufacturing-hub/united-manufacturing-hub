@@ -33,7 +33,7 @@ If a bridge must start before the resource problem is fixed, use the emergency s
 | **CPU limited** | Raise the CPU limit, or reduce the load on the instance. |
 | **CPU contention** | See [CPU Contention While Cores Are Free](../troubleshooting/cpu-contention-while-cores-are-free.md). |
 | **CPU taken by the server** | On your virtualization platform, give this virtual machine more guaranteed CPU, or move the other virtual machines off the server. |
-| **CPU running near full** | Add CPU capacity, reduce load, or raise the CPU limit. If the machine is full and this container is not the cause, reserve or pin cores for UMH Core and also set a CPU limit (see [Known limitation](how-cpu-health-is-judged.md#known-limitation)), or reduce what else runs on the machine. A CPU limit only caps UMH Core's usage. It reserves no CPU for UMH Core. |
+| **CPU running near full** | Add CPU capacity, reduce load, or raise the CPU limit. If the machine is full and this container is not the cause, reserve or pin cores for UMH Core and also set a CPU limit, or reduce what else runs on the machine. A CPU limit only caps UMH Core's usage. It reserves no CPU for UMH Core. |
 
 When the status says `CPU not measured` and names a file, check whether the container can read that file, for example `docker exec umh-core cat /sys/fs/cgroup/cpu.stat`.
 

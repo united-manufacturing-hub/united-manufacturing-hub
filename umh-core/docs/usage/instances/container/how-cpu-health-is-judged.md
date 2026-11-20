@@ -33,12 +33,6 @@ To start bridges anyway in an emergency, use the emergency setting [Turn off bri
 
 Waiting for CPU health is separate from the bridge limit. [Bridge limit](../../data-flows/bridges-do-not-start.md#bridge-limit) covers the number of bridges a core count can hold. Real CPU use varies per bridge, so a bridge can wait on CPU health before the instance reaches its bridge limit.
 
-## Known limitation
-
-A container pinned to a subset of the machine's CPUs (`cpuset`) with no CPU limit set can print a
-usage pair measured against different core counts, such as "using 6.0 of 2 cores", beside a
-healthy verdict. Set a CPU limit on such a container to get a correct reading.
-
 ## Glossary
 
 | Term | Meaning |
