@@ -238,18 +238,18 @@ func (ft *failureTracker) judge(fired []diagnosis.Fired, current judgedScrape) F
 }
 
 // firedErrorEntries returns one error entry per fired error signal. Its
-// Count is how much the counter went up within ErrorWindow, and its
-// LastErrorAt is the last scrape at which the counter rose.
+// Count is how much the counter went up within ErrorWindow (see
+// recentErrors), and its LastErrorAt is the last scrape at which the counter
+// rose.
 func (ft *failureTracker) firedErrorEntries(fired []diagnosis.Fired, current judgedScrape) []FailureEntry {
 	var entries []FailureEntry
 
 	for _, f := range fired {
 		c := errorCounterOf(f.Signal)
-		n, _ := ft.engine.Reduction(f.Signal, f.Signal).Get() // 0 until the window holds 2 readings
 		entries = append(entries, FailureEntry{
 			Signal:      c.name,
 			Label:       c.label,
-			Count:       int64(n),
+			Count:       ft.recentErrors(c.name),
 			Since:       f.Since,
 			LastErrorAt: ft.lastRise(current, c.name, f.Since),
 		})
@@ -285,8 +285,9 @@ func (ft *failureTracker) notConnectedEntries(current judgedScrape) []FailureEnt
 // longer fires but whose LastErrorAt is still within ErrorWindow. The engine
 // measures a rise from the oldest reading in its window, the one before the
 // error, so after sparse scrapes it stops firing before ErrorWindow has
-// passed since the error itself. ft.lastEntries is nil after a reset, so
-// nothing is held across a restart or a gap longer than ErrorWindow.
+// passed since the error itself. A held entry's Count is recounted, so errors
+// that aged out of the window no longer count. ft.lastEntries is nil after a
+// reset, so nothing is held across a restart or a gap longer than ErrorWindow.
 func (ft *failureTracker) heldErrorEntries(fired []diagnosis.Fired, current judgedScrape) []FailureEntry {
 	var held []FailureEntry
 
@@ -299,6 +300,7 @@ func (ft *failureTracker) heldErrorEntries(fired []diagnosis.Fired, current judg
 			continue
 		}
 
+		previous.Count = ft.recentErrors(previous.Signal)
 		previous.LastErrorAt = redate(current.at, previous.LastErrorAt)
 		held = append(held, previous)
 	}

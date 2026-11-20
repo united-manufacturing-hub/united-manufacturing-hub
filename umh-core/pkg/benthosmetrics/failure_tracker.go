@@ -17,6 +17,7 @@
 package benthosmetrics
 
 import (
+	"slices"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
@@ -31,10 +32,14 @@ type failureTracker struct {
 	engine *diagnosis.Engine[errorReadings]
 
 	// lastCounts holds the previous scrape's error counters, keyed by the
-	// counter's name. It is nil before the first scrape and after a reset
-	// for a restart or a port change, where a counter missing from it reads
-	// as 0.
+	// counter's name. It is nil only before the first scrape, which is the
+	// baseline. After a reset for a restart or a port change it is empty,
+	// and a counter missing from it reads as 0.
 	lastCounts map[string]int64
+
+	// rises holds, per error counter, each rise still within ErrorWindow,
+	// oldest first. An entry's Count is their sum.
+	rises map[string][]errorRise
 
 	// lastEntries holds the previous scrape's failure entries, for carrying
 	// an open entry's LastErrorAt forward. It is nil before the first scrape
@@ -54,6 +59,12 @@ func newFailureTracker() *failureTracker {
 	return &failureTracker{engine: mustNewEngine(errorTable())}
 }
 
+// errorRise is one scrape at which an error counter rose, and by how much.
+type errorRise struct {
+	at time.Time
+	by int64
+}
+
 // reset starts the error state over at time at. The new engine's first
 // reading is each error counter at its value in errorCounts, or 0 when
 // errorCounts has none. Pass nil after a restart or a port change, where
@@ -66,7 +77,13 @@ func newFailureTracker() *failureTracker {
 func (ft *failureTracker) reset(errorCounts map[string]int64, at time.Time) {
 	ft.engine = mustNewEngine(errorTable())
 	ft.engine.Observe(seedErrors(errorCounts), diagnosis.Environment{}, at.Add(-ScrapeInterval))
+
+	if errorCounts == nil {
+		errorCounts = map[string]int64{}
+	}
+
 	ft.lastCounts = errorCounts
+	ft.rises = nil
 	ft.lastEntries = nil
 	ft.notConnectedSince = nil
 }
@@ -93,6 +110,7 @@ func (ft *failureTracker) observe(m Metrics, at time.Time) Failures {
 	}
 
 	ft.notConnectedSince = firstNotConnectedSince(ft.notConnectedSince, current.connections, at)
+	ft.recordRises(current)
 	fired, _ := ft.engine.Observe(errorReadingsOf(current.errorCounts), diagnosis.Environment{}, at)
 	failures := ft.judge(fired, current)
 
@@ -100,4 +118,39 @@ func (ft *failureTracker) observe(m Metrics, at time.Time) Failures {
 	ft.lastEntries = failures.Entries
 
 	return failures
+}
+
+// recordRises adds each error counter's rise since the previous scrape to
+// ft.rises, dated at current, and drops every rise older than ErrorWindow.
+// The first scrape is the baseline, so it records nothing.
+func (ft *failureTracker) recordRises(current judgedScrape) {
+	if ft.rises == nil {
+		ft.rises = make(map[string][]errorRise, len(errorCounters))
+	}
+
+	for _, c := range errorCounters {
+		kept := slices.DeleteFunc(ft.rises[c.name], func(r errorRise) bool {
+			return current.at.Sub(r.at) > ErrorWindow
+		})
+
+		if ft.lastCounts != nil {
+			if by := current.errorCounts[c.name] - ft.lastCounts[c.name]; by > 0 {
+				kept = append(kept, errorRise{at: current.at, by: by})
+			}
+		}
+
+		ft.rises[c.name] = kept
+	}
+}
+
+// recentErrors returns how many errors the counter named signal rose by
+// within ErrorWindow, each rise timed by the scrape that saw it, so a rise
+// whose baseline reading is older than the window still counts.
+func (ft *failureTracker) recentErrors(signal string) int64 {
+	var n int64
+	for _, r := range ft.rises[signal] {
+		n += r.by
+	}
+
+	return n
 }
