@@ -18,12 +18,12 @@ The usage pages mirror the instance details page in the Management Console. That
 
 Subpages follow the component's internal structure in umh-core, the FSMv1 or FSMv2 state machines that run it. The Management Console follows the same structure. For example, a bridge consists of a connection, a read flow and a write flow, and the UI shows each of them. Name a subpage the way the UI names that part. Explain a part that has no subpage through what it does for the user and the metrics it produces.
 
-A part page, such as Bridges, Read Flow or Write Flow, holds no steps. Leave out any section that doesn't apply, and keep this order:
+A component page, such as Bridges, and a part page, such as Read Flow or Write Flow, hold no steps. Leave out any section that doesn't apply, and keep this order:
 
 1. What the part is, in the primary reader's words, with no internals.
 2. What the Management Console shows, and what to do about it.
-3. The rules of the part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this part.
-4. `## Reference`, the last section of the page, with these subsections:
+3. The rules of the part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this section.
+4. `## Reference`, the last section of the page, with these subsections. Only a short list of next steps may follow it.
    - `### Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
    - `### Metrics`: what this part tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there. Do not describe known defects. Add the docs update to the ticket that fixes them.
 
@@ -42,7 +42,7 @@ GitBook builds an anchor from the heading text alone, so `### Metrics` keeps the
 
 ## Terms
 
-Use one word per concept, in every page, and the same word as the Management Console. Literal UI labels, error messages, YAML keys and code identifiers stay as they are, even when they use another word. Quote them as labels or code, and use the term below in the prose around them.
+Use one word per concept on every page. Literal UI labels, error messages, YAML keys and code identifiers stay as they are, even when they use a word the table replaces. Quote them as labels or code, and use the table's term in the prose around them.
 
 ### Bridges and flows
 
@@ -56,7 +56,7 @@ Use one word per concept, in every page, and the same word as the Management Con
 | Location | **bridge location** = instance location plus the bridge's levels | agent location; mixing Level and Location |
 
 - The read flow publishes what it reads to the UNS, and the write flow writes to the external system what it subscribed to. "Reads from the PLC" and "writes to the MES" need no direction words.
-- **Instance location** is `agent.location` in `config.yaml`, or the `LOCATION_<n>` environment variables. The bridge's levels are `protocolConverterServiceConfig.location`, set in the **Level** field of the bridge. They extend the instance location and do not overwrite its levels.
+- **Instance location** is `agent.location` in `config.yaml`, or the `LOCATION_<n>` environment variables. The bridge's levels are `protocolConverterServiceConfig.location`, set in the **Level _n_** fields of the bridge. They extend the instance location and do not overwrite its levels.
 - **Destination** and **Output** are two words on purpose. Destination is the visual layer: the **Destination** card of a write flow and the `destination:` key. Input, processing and output are the Redpanda Connect layer, which a user edits in code mode and in Benthos YAML. Do not use one for the other.
 - "Connection" also keeps its network meaning, for example a TCP connection, a database connection or the connection to the Management Console. Only the thing at the other end of it is the external system.
 - "Device model" is a data modeling term and stays.

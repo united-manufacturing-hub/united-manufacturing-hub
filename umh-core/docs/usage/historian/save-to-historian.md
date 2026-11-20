@@ -3,7 +3,7 @@
 A Historian bridge subscribes to the Unified Namespace and writes one data contract into
 TimescaleDB. You create one bridge per contract you want to keep.
 
-The bridge has only a write flow: it subscribes to UNS topics and writes them to TimescaleDB, so it
+The bridge has only a write flow: it subscribes to UNS topics and writes their messages to TimescaleDB, so it
 has no read flow.
 
 ## Before you start

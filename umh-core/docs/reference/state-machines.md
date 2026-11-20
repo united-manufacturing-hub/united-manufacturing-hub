@@ -75,8 +75,8 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | State           | Meaning                         |
 | --------------- | ------------------------------- |
 | *starting*      | Probe service launching.        |
-| **up**          | Target reachable.               |
-| **down**        | Target unreachable.             |
+| **up**          | External system reachable.      |
+| **down**        | External system unreachable.    |
 | ⚠️ **degraded** | Flaky / intermittent responses. |
 | *stopping*      | Probe shutting down.            |
 | **stopped**     | Probe disabled.                 |

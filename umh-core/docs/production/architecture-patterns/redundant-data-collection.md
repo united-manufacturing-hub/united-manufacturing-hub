@@ -18,7 +18,7 @@ flowchart LR
     B["umh.v1.enterprise.line.PLC-B._historian<br/>(umh-core 2, from its own bridge)"]
 ```
 
-A bridge between the two instances writes umh-core 2's data into umh-core 1's UNS. umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
+umh-core 2's data also reaches umh-core 1's UNS through a bridge. umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
 
 ```mermaid
 flowchart LR
@@ -33,7 +33,7 @@ The higher-level system (a data lake, an MQTT broker, or another factory-wide um
 
 All original data from both collectors is retained in the PLC-specific source topics. Redundancy resolution selects the primary source for downstream processing. It does not delete or modify the original records.
 
-If one instance fails, the other continues collecting into its own UNS. When the failed instance recovers, the bridge between the instances resumes writing and redundancy resolution continues.
+If one instance fails, the other continues collecting into its own UNS. When the failed instance recovers, its data reaches umh-core 1 again and redundancy resolution continues.
 
 ## Prerequisites
 

@@ -206,7 +206,7 @@ location:
   4: cell
 ```
 
-The bridge location is the instance location (`agent.location`) plus the levels set here. The bridge's levels extend the instance location and never overwrite a level that the instance location sets. A missing level between them becomes `unknown`.
+The bridge location is the instance location (`agent.location`) plus the levels set here. The bridge's levels extend the instance location and never overwrite a level that the instance location sets. Any missing level up to the highest one becomes `unknown`.
 
 **Template Variables:**
 ```yaml

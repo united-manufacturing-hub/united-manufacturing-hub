@@ -46,7 +46,7 @@ On the **General** tab:
 - **Name:** `my-first-generator-bridge`
 - **Instance:** Select your UMH Core instance.
 - **IP Address / Port:** The external system to connect to. We have no real PLC for this tutorial, so use `localhost` and `8080`.
-- **Location:** Pre-filled with your instance location. Levels you add here extend it to the bridge location. Leave it as is for now. In the screenshot we define a bridge for `enterprise.siteA`.
+- **Level 0, Level 1, …:** Pre-filled with your instance location. Levels you add here extend it to the bridge location. Leave it as is for now. In the screenshot we define a bridge for `enterprise.siteA`.
 
 Once done, click **"Save & Deploy"**. A popup shows deployment progress and any errors or warnings. If everything goes well, you'll be redirected automatically.
 
