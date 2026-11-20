@@ -7,7 +7,7 @@ This page covers a write flow whose topics break the topic rules: the deploy fai
 The message appears in one of three places:
 
 - **When you deploy or edit a bridge** in the Management Console, the dialog shows **Bridge deploy failed** for a new bridge and **Bridge update failed** for an edit. The message starts with "Failed to deploy Bridge:" or "Failed to update bridge:". Nothing changes on the instance. An edit fails only if it adds a topic that breaks the rules. A bridge whose topics already broke them can still be edited for other reasons.
-- **After an upgrade to umh-core 0.45.0**, a write flow that ran before can stop. UMH Core checks the topics of every write flow when it starts. A write flow whose topics break the rules does not start. The bridge shows as degraded, and its status starts with "flow degraded:". The bridge's connection and read flow keep running.
+- **After an upgrade to umh-core 0.45.0**, a write flow that ran before can stop. UMH Core checks the topics of every write flow when it starts. A write flow whose topics break the rules does not start. The bridge shows as degraded, and its status contains "flow degraded:". The bridge's connection and read flow keep running.
 - **When you change the instance location**, a bridge's topics can end up outside the bridge's new location. UMH Core then rejects the change. The message starts with "Failed to update instance location: the new location moves the write flow topics of these bridges outside their location".
 
 ![The Bridge deploy failed dialog with a rejected topic](../images/write-flows-deploy-failed.png)
@@ -28,7 +28,7 @@ Each problem quotes the topic as written. Some problems end with `available:` an
   - The topic has a plain dot, such as `umh.v1.` instead of `umh\.v1\.`. A plain dot matches any character. Write every dot as `\.`.
 - **must name a data contract beneath the location, followed by \.** — the topic has no data contract, or the contract is not followed by `\.`. Add a contract from the `available:` list, for example `\._pump_v1\.`.
 - **names a data contract that is not declared in dataContracts:** — the contract or its version does not exist on this instance. Create the data model as described in [Data Contracts](../../data-modeling/data-contracts.md), or pick a contract from the `available:` list.
-- **can match more than one data contract** — the contract part is a wildcard, such as `_.*` or `_pump_v\d+`, or it lists two contracts. Name one contract and list its versions, like `_pump_v[1-2]\.`. A comma inside brackets counts as a character, so `_pump_v[1,2]` also matches more than one contract.
+- **can match more than one data contract** — the contract part is a wildcard, such as `_.*` or `_pump_v\d+`, or it lists two contracts. Name one contract and list its versions, like `_pump_v[1-2]\.`. Every version in the list must exist: with only `_pump_v1` declared, `_pump_v[1-2]` gets this message too. List only declared versions, or create the missing version. A comma inside brackets counts as a character, so `_pump_v[1,2]` also matches more than one contract.
 - **data contract "…" has no version** — the contract exists without a version, such as `_pump`. Create a data model with a version, as described in [Data Contracts](../../data-modeling/data-contracts.md), and use `_pump_v1`.
 - **cannot match any topic, so the write flow would receive no messages** — the pattern can never match. Check it for typos.
 - **is not a valid regular expression** — the pattern does not parse. The message ends with the syntax error.
@@ -58,4 +58,4 @@ Add `-e BYPASS_WRITE_FLOW_VALIDATION=true` to the `docker run` command and recre
 
 Each topic must still start with `^umh\.v1\.` and name one data contract, written out in full and followed by `\.`, such as `\._mes_order\.`. A wildcard in place of the contract stays rejected.
 
-A bridge whose topics need the setting shows as degraded, with a status that starts with "flow degraded: BYPASS_WRITE_FLOW_VALIDATION is set". When you edit such a bridge, save it with **Save Anyway**, because a normal **Save & Deploy** waits for a healthy bridge and rolls the edit back.
+A bridge whose topics need the setting shows as degraded, with a status that contains "flow degraded: BYPASS_WRITE_FLOW_VALIDATION is set". When you edit such a bridge, save it with **Save Anyway**, because a normal **Save & Deploy** waits for a healthy bridge and rolls the edit back.
