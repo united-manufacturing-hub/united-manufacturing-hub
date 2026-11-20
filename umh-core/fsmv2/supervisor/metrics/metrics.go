@@ -472,14 +472,25 @@ type WorkerMetricsExporter struct {
 	counters     map[string]*prometheus.CounterVec
 	gauges       map[string]*prometheus.GaugeVec
 	prevCounters map[string]map[string]int64 // hierarchy path -> counter name -> last value
+	owners       map[string]WorkerMetricsClaim
+	lastClaim    WorkerMetricsClaim
 	mu           sync.Mutex
 }
 
-var workerMetricsExporter = &WorkerMetricsExporter{
-	counters:     make(map[string]*prometheus.CounterVec),
-	gauges:       make(map[string]*prometheus.GaugeVec),
-	prevCounters: make(map[string]map[string]int64),
+// WorkerMetricsClaim identifies the worker that currently owns the
+// worker-metric series of a hierarchy path.
+type WorkerMetricsClaim uint64
+
+func newWorkerMetricsExporter() *WorkerMetricsExporter {
+	return &WorkerMetricsExporter{
+		counters:     make(map[string]*prometheus.CounterVec),
+		gauges:       make(map[string]*prometheus.GaugeVec),
+		prevCounters: make(map[string]map[string]int64),
+		owners:       make(map[string]WorkerMetricsClaim),
+	}
 }
+
+var workerMetricsExporter = newWorkerMetricsExporter()
 
 // ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
 // No-op if observed does not implement MetricsHolder.
@@ -529,14 +540,38 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metri
 	}
 }
 
-// CleanupWorkerMetrics deletes the worker-metric series of one worker.
-func CleanupWorkerMetrics(hierarchyPath string) {
-	workerMetricsExporter.cleanup(hierarchyPath)
+// ClaimWorkerMetrics makes a newly added worker the owner of the worker-metric
+// series of hierarchyPath, so the cleanup of a worker removed earlier at the
+// same path leaves them in place.
+func ClaimWorkerMetrics(hierarchyPath string) WorkerMetricsClaim {
+	return workerMetricsExporter.claim(hierarchyPath)
 }
 
-func (e *WorkerMetricsExporter) cleanup(hierarchyPath string) {
+// CleanupWorkerMetrics deletes the worker-metric series of hierarchyPath while
+// claim still owns them.
+func CleanupWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim) {
+	workerMetricsExporter.cleanup(hierarchyPath, claim)
+}
+
+func (e *WorkerMetricsExporter) claim(hierarchyPath string) WorkerMetricsClaim {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	e.lastClaim++
+	e.owners[hierarchyPath] = e.lastClaim
+
+	return e.lastClaim
+}
+
+func (e *WorkerMetricsExporter) cleanup(hierarchyPath string, claim WorkerMetricsClaim) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.owners[hierarchyPath] != claim {
+		return
+	}
+
+	delete(e.owners, hierarchyPath)
 
 	labels := prometheus.Labels{
 		"hierarchy_path": hierarchyPath,

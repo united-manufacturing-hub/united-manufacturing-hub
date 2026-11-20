@@ -529,6 +529,7 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
+	workerCtx.metricsClaim = metrics.ClaimWorkerMetrics(identity.HierarchyPath)
 	s.workers[identity.ID] = workerCtx
 
 	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
@@ -574,7 +575,7 @@ const workerMetricsCleanupWaitLimit = 10 * time.Minute
 func (s *Supervisor[TObserved, TDesired]) cleanupWorkerMetricsOnceStopped(removed *WorkerContext[TObserved, TDesired]) {
 	select {
 	case <-removed.collector.Stopped():
-		metrics.CleanupWorkerMetrics(removed.identity.HierarchyPath)
+		metrics.CleanupWorkerMetrics(removed.identity.HierarchyPath, removed.metricsClaim)
 	default:
 		go s.waitThenCleanupWorkerMetrics(removed, workerMetricsCleanupWaitLimit)
 	}
@@ -593,25 +594,7 @@ func (s *Supervisor[TObserved, TDesired]) waitThenCleanupWorkerMetrics(removed *
 			deps.Duration("wait_limit", waitLimit))
 	}
 
-	// a worker added again at the same path exports under the same labels
-	if s.hasOtherWorkerAt(hierarchyPath, removed) {
-		return
-	}
-
-	metrics.CleanupWorkerMetrics(hierarchyPath)
-}
-
-func (s *Supervisor[TObserved, TDesired]) hasOtherWorkerAt(hierarchyPath string, removed *WorkerContext[TObserved, TDesired]) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for _, workerCtx := range s.workers {
-		if workerCtx != removed && workerCtx.identity.HierarchyPath == hierarchyPath {
-			return true
-		}
-	}
-
-	return false
+	metrics.CleanupWorkerMetrics(hierarchyPath, removed.metricsClaim)
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without
