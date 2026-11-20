@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// NotCleared across a wall-clock step and the store's JSON round-trip.
+// HasErrorNotClearedInTime across a wall-clock step and the store's JSON
+// round-trip.
 
 package benthosmetrics
 
@@ -39,7 +40,7 @@ func wallStepped(t time.Time, elapsed, step time.Duration) time.Time {
 	return s
 }
 
-var _ = Describe("NotCleared after a wall-clock step", func() {
+var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
 	// An error fires, then NTP steps the wall clock forward 15 minutes while
 	// only 2 minutes pass. The entry is still held, and once stored it must
 	// not read as stuck past its window.
@@ -62,11 +63,11 @@ var _ = Describe("NotCleared after a wall-clock step", func() {
 		var stored Failures
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 
-		Expect(stored.NotCleared(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
+		Expect(stored.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
 	})
 })
 
-var _ = Describe("NotCleared on a held entry after a wall-clock step", func() {
+var _ = Describe("HasErrorNotClearedInTime on a held entry after a wall-clock step", func() {
 	// The reading before the error is 9m59s old, so 5s after the error the
 	// engine no longer fires and the entry is only held. NTP steps the wall
 	// clock forward 15 minutes in those 5s.
@@ -87,6 +88,6 @@ var _ = Describe("NotCleared on a held entry after a wall-clock step", func() {
 		var stored Failures
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 
-		Expect(stored.NotCleared(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
+		Expect(stored.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
 	})
 })
