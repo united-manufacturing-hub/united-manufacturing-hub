@@ -41,12 +41,10 @@ const (
 	removalTestCounterMetric = "umh_fsmv2_worker_" + removalTestCounter
 )
 
-// seriesLabels returns the label sets of every series of metricName for
-// hierarchyPath in the default Prometheus registry. callerDepth is how many
-// helper frames sit between the spec and this function.
-func seriesLabels(callerDepth int, metricName, hierarchyPath string) []map[string]string {
+// seriesLabels returns the label sets of metricName's series for hierarchyPath.
+func seriesLabels(helperFramesAboveSpec int, metricName, hierarchyPath string) []map[string]string {
 	families, err := prometheus.DefaultGatherer.Gather()
-	ExpectWithOffset(callerDepth+1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(helperFramesAboveSpec+1, err).NotTo(HaveOccurred())
 
 	var matches []map[string]string
 
@@ -82,9 +80,7 @@ func stateDurationStates(hierarchyPath string) []string {
 	return states
 }
 
-// exportTestWorkerMetrics exports one worker gauge with gaugeValue and one
-// worker counter for hierarchyPath under claim, as the collector does after it
-// saves an observation.
+// exportTestWorkerMetrics exports the way the collector does after it saves an observation.
 func exportTestWorkerMetrics(hierarchyPath string, claim metrics.WorkerMetricsClaim, gaugeValue float64) {
 	workerMetrics := deps.Metrics{
 		Counters: map[string]int64{removalTestCounter: 3},
@@ -206,8 +202,7 @@ var _ = Describe("The worker metrics of a worker", func() {
 	})
 })
 
-// stuckRunningState never asks for removal, so Shutdown reaches its last step
-// with the worker still registered.
+// stuckRunningState never asks for removal, so Shutdown stops it as a registered worker.
 type stuckRunningState struct{}
 
 func (stuckRunningState) String() string { return "running" }
