@@ -61,7 +61,9 @@ The Redpanda Metrics page shows a table with the columns Path, Name and Value. S
 
 `request_bytes_in` and `request_bytes_out` are totals. umh-core computes the throughput on the card from the same totals.
 
-## Settings
+## Reference
+
+### Configuration
 
 Redpanda's settings are under `internal.redpanda` in the [config file](../instances/config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk](../../production/sizing-guide.md#disk) in the sizing guide.
 
@@ -74,7 +76,7 @@ When umh-core starts without a config file, it creates one with the two settings
 
 If your config file was created before umh-core started to write `defaultTopicCleanupPolicy`, it has no such setting, and Redpanda uses `compact`. Under `compact`, Redpanda keeps only the latest message per key once a segment of the topic closes. A segment closes after one hour by default. You cannot replay the older history of a topic then.
 
-## Metrics
+### Metrics
 
 Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them.
 

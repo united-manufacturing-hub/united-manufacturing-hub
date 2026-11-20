@@ -6,7 +6,7 @@ Write and review pages with the `writing-standards:umh-documentation` skill. It 
 
 ## Page types
 
-Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, reference or explanation. Getting Started is tutorials, Reference is reference, and Production is how-to and explanation. A usage page is the one deliberate mix, the skill's troubleshooting/feature shape, so a reader in the middle of a problem needs to open only one page. Child pages under a usage page have a single type, usually how-to or troubleshooting.
+Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, reference or explanation. Getting Started is tutorials, Reference is reference, and Production is how-to and explanation. A usage page is the one deliberate mix: the explanation and the reference of one component or part, so a reader looks up a part on one page. Steps and troubleshooting go to child pages, and each child page has a single type, usually how-to or troubleshooting.
 
 ## Readers
 
@@ -18,18 +18,49 @@ The usage pages mirror the instance details page in the Management Console. That
 
 Subpages follow the component's internal structure in umh-core, the FSMv1 or FSMv2 state machines that run it. The Management Console follows the same structure. For example, a bridge consists of a connection, a read flow and a write flow, and the UI shows each of them. Name a subpage the way the UI names that part. Explain a part that has no subpage through what it does for the user and the metrics it produces.
 
-Leave out any section that doesn't apply, and keep this order:
+A part page, such as Bridges, Read Flow or Write Flow, holds no steps. Leave out any section that doesn't apply, and keep this order:
 
-1. Opening in the primary reader's words, with no internals.
+1. What the part is, in the primary reader's words, with no internals.
 2. What the Management Console shows, and what to do about it.
-3. `## Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
-4. `## Metrics`: what this component tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there. Do not describe known defects. Add the docs update to the ticket that fixes them.
-5. Details for IT or support.
+3. The rules of the part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this part.
+4. `## Reference`, the last section of the page, with these subsections:
+   - `### Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
+   - `### Metrics`: what this part tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there. Do not describe known defects. Add the docs update to the ticket that fixes them.
+
+GitBook builds an anchor from the heading text alone, so `### Metrics` keeps the `#metrics` anchor of a former `## Metrics`.
+
+### Child pages
+
+- Steps live in a guide, a child of the part the steps change. A guide that changes several parts, such as creating a bridge, is a child of the component.
+- A troubleshooting page is a child of the page whose screen shows the symptom.
+- The title tells the kind of page, because the sidebar has no group headings: a noun is something to understand ("Write Flow"), an imperative is something to do ("Set up a write flow"), a symptom is something that went wrong ("Bridges Do Not Start").
+- Order the children the same way: parts first, then explanations, then guides, then troubleshooting.
 
 ## Config snippets
 
 `config.yaml` is parsed strictly: one unknown key rejects the whole file. A few keys are silently ignored in the wrong place instead, such as `debug_level` inside `protocolConverterServiceConfig`. Check every snippet against the structs in `umh-core/pkg/config` on `staging`.
 
 ## Terms
+
+Use one word per concept, in every page, and the same word as the Management Console. Literal UI labels, error messages, YAML keys and code identifiers stay as they are, even when they use another word. Quote them as labels or code, and use the term below in the prose around them.
+
+### Bridges and flows
+
+| Concept | Use | Instead of |
+|---|---|---|
+| What a bridge talks to | **external system**; **device** only when it is hardware, such as a PLC or a sensor | connection, destination, target, data source, endpoint |
+| The reachability check | **connection**, or **connection probe** where the mechanism matters | never the external system itself |
+| Direction | a flow is named after what it does **at the external system**: a read flow reads from it, a write flow writes to it | brings, sends, pushes, pulls, ingests, forwards |
+| Picking UNS topics | the write flow **subscribes to** topics | receives |
+| A regular expression over topics | **topic pattern**; a **topic** is one concrete UNS topic | "a topic is a regular expression" |
+| Location | **bridge location** = instance location plus the bridge's levels | agent location; mixing Level and Location |
+
+- The read flow publishes what it reads to the UNS, and the write flow writes to the external system what it subscribed to. "Reads from the PLC" and "writes to the MES" need no direction words.
+- **Instance location** is `agent.location` in `config.yaml`, or the `LOCATION_<n>` environment variables. The bridge's levels are `protocolConverterServiceConfig.location`, set in the **Level** field of the bridge. They extend the instance location and do not overwrite its levels.
+- **Destination** and **Output** are two words on purpose. Destination is the visual layer: the **Destination** card of a write flow and the `destination:` key. Input, processing and output are the Redpanda Connect layer, which a user edits in code mode and in Benthos YAML. Do not use one for the other.
+- "Connection" also keeps its network meaning, for example a TCP connection, a database connection or the connection to the Management Console. Only the thing at the other end of it is the external system.
+- "Device model" is a data modeling term and stays.
+
+### Access
 
 - **Permission grant**: what the Management Console issues so that a user or an instance can access instances. Never call it a certificate. "Certificate" means TLS only. Describe what the user sees on screen: "permission grant" or "unlocks access to your X".

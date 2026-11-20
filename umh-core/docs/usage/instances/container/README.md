@@ -88,7 +88,9 @@ The `_ring_active` and `_signal_ready` flags work like the [CPU flags](cpu-healt
 
 The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
 
-## Metrics
+## Reference
+
+### Metrics
 
 The Container card reports on port 8080 as `umh_container_*` gauges for CPU, memory and disk, plus `umh_container_health_status`, which holds the health per resource: 0 = Neutral, 1 = Active, 2 = Degraded. The label `component` is `overall`, `cpu`, `memory` or `disk`. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint and why Prometheus renames the `instance` label.
 

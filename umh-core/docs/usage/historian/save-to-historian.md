@@ -3,8 +3,8 @@
 A Historian bridge subscribes to the Unified Namespace and writes one data contract into
 TimescaleDB. You create one bridge per contract you want to keep.
 
-The bridge is a write flow only: it has no read flow, because its source is the UNS rather than a
-device.
+The bridge has only a write flow: it subscribes to UNS topics and writes them to TimescaleDB, so it
+has no read flow.
 
 ## Before you start
 
@@ -62,7 +62,7 @@ Tag identity lives in the shared dimension tables `umh.topic`, `umh.tag`, and `u
 [Query the Historian](querying.md) for the layout and how to read it back.
 
 The bridge subscribes to the whole UNS by default and drops messages whose contract doesn't match
-`data_contract_name`, so there is no topic regex to keep in sync. Narrow the source topics only if
+`data_contract_name`, so there is no topic pattern to keep in sync. Narrow the source topics only if
 you want to stop unrelated messages from reaching the output at all.
 
 ## Connecting to a different database

@@ -86,6 +86,6 @@ The Topic Browser card summarizes the data in the instance's Unified Namespace:
 ## Next Steps
 
 - **Configure your instance**: [Edit the config file](config-file.md)
-- **Connect devices**: [Create bridges](../data-flows/bridges.md)
+- **Connect external systems**: [Create bridges](../data-flows/bridges.md)
 - **View your data**: [Topic Browser](../unified-namespace/topic-browser.md)
 - **Understand states**: [State Machines reference](../../reference/state-machines.md)

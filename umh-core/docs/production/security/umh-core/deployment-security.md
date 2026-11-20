@@ -174,7 +174,7 @@ sudo chown -R 1000:1000 /path/to/data
 
 See [Network Configuration](./network-configuration.md) for details on proxy settings and TLS inspection.
 
-**Data source connections**: Customer-defined connections to industrial devices and data sources.
+**External system connections**: Customer-defined bridge connections to PLCs, MES and other external systems.
 
 **Inbound**: No services designed for internet exposure (edge-only deployment).
 

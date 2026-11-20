@@ -21,12 +21,12 @@ Variables follow a clear precedence hierarchy:
 
 ### Connection Variables
 
-These variables provide device connection information, typically auto-injected from Connection configurations or defined by users.
+These variables hold the host and port of the bridge's external system. The **Connection** section of a bridge in the Management Console sets them, or you define them in `variables:`.
 
 | Variable | Description | Example Value | Source | Status |
 |----------|-------------|---------------|---------|---------|
-| `{{ .IP }}` | Device IP address or hostname | `192.168.1.100` | User/Connection | Current |
-| `{{ .PORT }}` | Device communication port | `4840` | User/Connection | Current |
+| `{{ .IP }}` | IP address or hostname of the external system | `192.168.1.100` | User/Connection | Current |
+| `{{ .PORT }}` | Port of the external system | `4840` | User/Connection | Current |
 
 **Usage Example:**
 ```yaml
@@ -39,7 +39,7 @@ protocolConverter:
 
 ### Location Variables
 
-These variables provide hierarchical location information for data organization and topic routing.
+These variables provide hierarchical location information for data organization and topic routing. In a bridge, they hold the bridge location: the instance location plus the bridge's levels.
 
 | Variable | Description | Example Value | Source | Status |
 |----------|-------------|---------------|---------|---------|
@@ -128,8 +128,8 @@ protocolConverter:
 
 Understanding where variables come from helps with troubleshooting:
 
-- **Connection Variables** (`{{ .IP }}`, `{{ .PORT }}`): Auto-injected from Connection configurations attached to Bridges
-- **Location Variables** (`{{ .location_path }}`, `{{ .location }}.*`): Computed from agent location + bridge location by BuildRuntimeConfig
+- **Connection Variables** (`{{ .IP }}`, `{{ .PORT }}`): Set in the **Connection** section of a bridge, stored in its `variables:`
+- **Location Variables** (`{{ .location_path }}`, `{{ .location }}.*`): The bridge location, computed from the instance location (`agent.location`) plus the bridge's levels (`protocolConverterServiceConfig.location`)
 - **Internal Variables** (`{{ .internal.* }}`): Runtime-injected system metadata
 - **User Variables**: Explicitly defined in `variables:` section
 - **Global Variables**: Fleet-wide settings (**NOT YET IMPLEMENTED**)

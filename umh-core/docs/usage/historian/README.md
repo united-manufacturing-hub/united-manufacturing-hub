@@ -53,7 +53,7 @@ Three steps get you from a running UNS to a dashboard:
   ```
 
 - **Data in the UNS**, already flowing. The Historian archives what is in the namespace; it does not
-  read from devices itself.
+  read from PLCs or other external systems itself.
 
 ## Set up the connection
 
@@ -88,7 +88,7 @@ The overview card shows the connection settings plus three live fields, refreshe
 
 | Field | Meaning |
 |---|---|
-| **Reachable** | The endpoint answered. It stays `true` even when the server rejects the credentials. Only a network fault or timeout makes it `false`. |
+| **Reachable** | The database answered. It stays `true` even when the server rejects the credentials. Only a network fault or timeout makes it `false`. |
 | **Auth** | Whether the server accepted the login role, password, and database name. `unknown` when nothing answered, so authentication could not be checked. |
 | **Latency** | Round-trip time of the check query. |
 

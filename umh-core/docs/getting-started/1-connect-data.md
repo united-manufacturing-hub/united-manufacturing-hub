@@ -1,8 +1,8 @@
-# Step 2: Connect Your First Data Source
+# Step 2: Connect Data
 
-Let's get some data flowing! We'll start with simulated data, then you can connect real devices later.
+Let's get some data flowing! We'll start with simulated data, then you can connect real PLCs and other external systems later.
 
-This guide walks you through connecting your first data source step by step. If you're looking for the complete bridge reference, see [Bridges](../usage/data-flows/bridges.md).
+This guide walks you through creating your first bridge step by step. If you're looking for the complete bridge reference, see [Bridges](../usage/data-flows/bridges.md).
 
 ## Navigate to Data Flows
 
@@ -45,8 +45,8 @@ On the **General** tab:
 
 - **Name:** `my-first-generator-bridge`
 - **Instance:** Select your UMH Core instance.
-- **IP Address / Port:** The device to connect to. We have no real PLC for this tutorial, so use `localhost` and `8080`.
-- **Location:** Pre-filled with your instance location. Leave it as is for now. In the screenshot we define a bridge for `enterprise.siteA`.
+- **IP Address / Port:** The external system to connect to. We have no real PLC for this tutorial, so use `localhost` and `8080`.
+- **Location:** Pre-filled with your instance location. Levels you add here extend it to the bridge location. Leave it as is for now. In the screenshot we define a bridge for `enterprise.siteA`.
 
 Once done, click **"Save & Deploy"**. A popup shows deployment progress and any errors or warnings. If everything goes well, you'll be redirected automatically.
 
@@ -95,7 +95,7 @@ The **Always** section uses JavaScript to process messages. We're not modifying 
 
 ![Bridge Read Output](./images/bridge-read-output.png)
 
-The Output section is auto-generated - it sends data to your Unified Namespace.
+The Output section is auto-generated - it publishes what the read flow reads to your Unified Namespace.
 
 Click **"Save & Deploy"**.
 
@@ -125,7 +125,7 @@ Exactly as we configured it! Click on `my_data` to see details.
 - Topic Details shows your bridge configuration and data location
 - Last Message shows the most recent `hello world` message with timestamp
 - History shows a table of recent messages (would be a chart for numeric data)
-- Metadata contains additional information about the data source (we'll use this later)
+- Metadata contains additional information about where the message came from (we'll use this later)
 
 
 > 💡 **Only seeing one `hello world` row in your topics?** 
@@ -156,10 +156,10 @@ flowchart LR
 
 **Want to organize better?** → [Continue to Step 3: Organize Your Data](2-organize-data.md)
 
-**Connect a real device?** Simply change the protocol from "Generate" to:
+**Connect a real PLC or another external system?** Simply change the protocol from "Generate" to:
 - **OPC UA** for modern PLCs
 - **Modbus** for older equipment
-- **MQTT Subscribe** for existing MQTT devices
+- **MQTT Subscribe** for an existing MQTT broker
 - [See all 50+ supported protocols →](https://docs.umh.app/benthos-umh/input)
 
 Real hardware uses the address-mapping table instead of the generator. The [Bridges reference](../usage/data-flows/bridges.md) covers that, along with logs, metrics, and debug logging.
@@ -169,11 +169,11 @@ Real hardware uses the address-mapping table instead of the generator. The [Brid
 Building on the location path from Step 1, you now understand:
 
 - **Unified Namespace (UNS)** - Event-driven data backbone that eliminates point-to-point connections ([learn more](../usage/unified-namespace/README.md))
-- **Bridge** - Gateway for external data into the UNS (the only way data enters)
+- **Bridge** - Reads from an external system into the UNS, and writes from the UNS to it (the only way data enters)
 - **Bridge Template** - Pre-configured starting point for a bridge (e.g. "Generic via Generate")
 - **Data Flows** - Configuration area for bridges and other data pipelines
 - **Protocol** - Connection method (manufacturing protocols like OPC UA, Modbus, S7, or IT protocols like HTTP)
-- **Connection** - IP/hostname and port settings with latency monitoring
+- **Connection** - Whether the bridge reaches the external system at its IP/hostname and port, with latency monitoring
 - **Tag** - A time-series data point (like a PLC variable)
 - **Tag Processor** - JavaScript-based transformation for time-series data
 - **Topic** - Complete data address: `location_path.data_contract.tag_name` ([topic convention](../usage/unified-namespace/topic-convention.md))
@@ -184,4 +184,4 @@ Building on the location path from Step 1, you now understand:
 
 ---
 
-**Pro tip:** Everything you just configured in the UI is stored as YAML. As you get comfortable, you can copy and modify these configurations for faster setup of similar devices.
+**Pro tip:** Everything you just configured in the UI is stored as YAML. As you get comfortable, you can copy and modify these configurations for faster setup of similar bridges.

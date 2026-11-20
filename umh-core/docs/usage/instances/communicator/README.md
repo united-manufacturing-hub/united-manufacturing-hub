@@ -30,11 +30,13 @@ The Usage and Peak Usage rows appear while the badge is Active or Degraded. Each
 | Neutral | `Communicator not running` | The transport worker is stopped or stopping. |
 | Neutral | `Communicator status unknown` | umh-core could not read the communicator status. |
 
-## Metrics
+## Reference
+
+### Metrics
 
 The communicator reports on port 8080 how many of its requests to the Management Console failed, by cause. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint, and [FSMv2 metrics](../agent/metrics.md#fsmv2-metrics) explains the `hierarchy_path` label. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. A counter appears only after its first count.
 
-### Errors
+#### Errors
 
 Each failed request is counted once, under the cause below. To alert on all failed requests of one cause, add up the counter across the series. A counter series appears with its first error, so it starts at 1, and `rate()` and `increase()` do not count that first step. Add a second part that matches a series that was not there 5 minutes ago. This example covers `umh_fsmv2_worker_network_errors_total`, and the same form works for the other counters, including `umh_fsmv2_worker_auth_failures_total`:
 

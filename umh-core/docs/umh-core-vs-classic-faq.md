@@ -48,7 +48,7 @@ We didn't ditch it—**we de-coupled from it**.
 
 No – the two big ones are still there:
 
-**Scalability**: Deploy one UMH Core instance per production line, each forwarding to a central site instance. This ISA-95 style hierarchy naturally distributes workload across your infrastructure.
+**Scalability**: Deploy one UMH Core instance per production line, each feeding a central site instance. This ISA-95 style hierarchy naturally distributes workload across your infrastructure.
 
 **Failover**: Your container manager restarts crashed containers (30-60 seconds) and reschedules after node failure (2-5 minutes). See [High Availability](../production/high-availability.md).
 
@@ -119,7 +119,7 @@ This offers **finer-grained insight** than Kubernetes' generic `Running/CrashLoo
 ## How do I connect my MQTT devices now?
 
 Run your own broker (Mosquitto, HiveMQ CE, EMQX, etc.), then create a Bridge in UMH Core that subscribes to the topics you care about and inserts the messages into the Unified Namespace.\
-This keeps MQTT exactly where most plants like it—outside the UNS as a "portal" layer—while UMH Core enforces schema and ACLs before data lands in the clean store, and before you forward it to other nodes.
+This keeps MQTT exactly where most plants like it—outside the UNS as a "portal" layer—while UMH Core enforces schema and ACLs before data lands in the clean store, and before a bridge writes it to other nodes.
 
 ## I don't want Kafka / Redpanda — I want MQTT to be **my** UNS
 

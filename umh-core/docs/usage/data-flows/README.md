@@ -17,15 +17,15 @@ Transform existing UNS data into different structures. Part of the [data modelin
 
 ## Quick Start
 
-Most users start with bridges to connect devices:
+Most users start with a bridge that reads from a PLC or another external system:
 
 1. **Data Flows** → **Add Bridge**
 2. Select your protocol (OPC UA, Modbus, S7)
-3. Configure connection and location
+3. Configure the connection and the bridge's levels
 4. Deploy to start data collection
 
 ## Learn More
 
-- [Getting Started Guide](../../getting-started/) - Connect your first device
+- [Getting Started Guide](../../getting-started/) - Create your first bridge
 - [Data Modeling](../data-modeling/) - Structure and validate data
 - [Unified Namespace](../unified-namespace/) - Understanding topics and payloads
