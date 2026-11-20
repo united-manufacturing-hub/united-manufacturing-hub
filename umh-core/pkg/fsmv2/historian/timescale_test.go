@@ -350,6 +350,11 @@ var _ = Describe("Poll on a connection fault", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status.Summary).To(HaveValue(HaveField("TableNames", ConsistOf("value_fresh"))),
 			"the figures cached before the fault are within their interval, and only a read after it shows the database as it is now")
+		Expect(status.DatabaseOccupiedDiskBytes).To(BeNil(), "one check runs one figure read, so the size follows in the next check")
+
+		status, err = Poll(context.Background(), d, cfg)
+
+		Expect(err).NotTo(HaveOccurred())
 		Expect(status.DatabaseOccupiedDiskBytes).To(HaveValue(Equal(freshContents.DatabaseOccupiedDiskBytes)))
 	})
 })
