@@ -4,7 +4,7 @@
 
 Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization. While read flows work with any protocol, write flows are not yet implemented - use [stand-alone flows](stand-alone-flow.md) for writing to external systems.
 
-> **New to UMH?** This page is the reference for setting up real bridges. If you just want to get mock data flowing and learn the basics first, start with [Step 2: Connect Your First Data Source](../../getting-started/1-connect-data.md).
+> **New to UMH?** This page is the reference for setting up real bridges. If you just want to get mock data flowing and learn the basics first, start with [Step 2: Connect Data](../../getting-started/1-connect-data.md).
 
 ## UI Capabilities
 
@@ -36,7 +36,7 @@ Go to **Data Flows** and click **Add Bridge**:
 ![Create a New Bridge](./images/bridges-create-from-scratch-or-existing.png)
 
 - **From Scratch**: start from a pre-configured protocol template, which is functional out of the box, or customize the template to fit your needs.
-- **From Existing Bridge**: pick a healthy bridge from any instance and start with a copy of its configuration. Adapt the bridges name, connection, and addresses.
+- **From Existing Bridge**: pick a healthy bridge from any instance and start with a copy of its configuration. Adapt the bridge's name, connection and addresses.
 
 The remaining steps describe the from-scratch path. Starting from an existing bridge skips the template list and lands on the same screens with the fields already filled in.
 
@@ -64,15 +64,15 @@ Fill in the basic information and proceed with Step 5.
 **General Information:**
 - **Name**: Unique identifier for your bridge
 - **Instance**: Select your UMH instance
-- **Level**: Location path (e.g., enterprise → site → area → line → machine)
+- **Level 0, Level 1, …**: pre-filled with the instance location. A level you add, such as area → line → machine, extends it, and the result is the bridge location.
 
 ![Connection Configuration](./images/bridges-connection-configuration.png)
 
 **Connection:**
-- **IP Address**: Device IP (becomes `{{ .IP }}` variable)
-- **Port**: Connection port (becomes `{{ .PORT }}` variable)
+- **IP Address**: IP address or hostname of the external system (becomes `{{ .IP }}` variable)
+- **Port**: Port of the external system (becomes `{{ .PORT }}` variable)
 
-The protocol itself needs no selection here. It comes from the template you picked in Step 3, and the **Read** tab opens on that protocol's settings.
+The protocol itself needs no selection here. It comes from the template you picked in Step 3, and the **Read Flow** tab opens on that protocol's settings.
 
 ### Step 5: Configure Protocol Settings
 
@@ -90,7 +90,7 @@ With `_historian` or `_raw`, Virtual Path and Tag Name are free-text fields. Sel
 
 ### Step 7: Deploy
 
-Click **Save & Deploy**. The bridge will start connecting to your device.
+Click **Save & Deploy**. The bridge checks the connection to the external system, and the read flow starts reading from it.
 
 ## Managing Bridges
 
@@ -201,12 +201,12 @@ protocolConverter:
 **Location Path:**
 ```yaml
 location:
-  0: enterprise   # Optional: inherits from agent
-  1: site        # Optional: inherits from agent
-  2: area        # Required: your addition
-  3: line        # Required: your addition
-  4: cell        # Optional: further subdivision
+  2: area   # the bridge's levels; assumes agent.location sets levels 0 and 1
+  3: line
+  4: cell
 ```
+
+The bridge location is the instance location (`agent.location`) plus the levels set here. The bridge's levels extend the instance location and never overwrite a level that the instance location sets. Any missing level up to the highest one becomes `unknown`.
 
 **Template Variables:**
 ```yaml
@@ -247,17 +247,17 @@ umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 
 
 For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or restart the container. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
-### Connection Check
+### Connection Probe
 
-Before umh-core starts a bridge, it checks that the device's host and port answer. This connection check runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
+Before umh-core starts a bridge, it checks that the external system answers on its host and port. This connection probe runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
 
-When the device stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the device answers, read the bridge's state.
+When the external system stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the external system answers, read the bridge's state.
 
 The check's series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`.
 
 ## Next Steps
 
-- Try the [Getting Started guide](../../getting-started/) to connect your first device
+- Try the [Getting Started guide](../../getting-started/) to create your first bridge
 - Learn about [Data Models](../data-modeling/data-models.md) to structure your data
 - Explore [Metadata and Tracing](../unified-namespace/metadata-and-tracing.md) for debugging
 - Use [Stand-alone Flows](stand-alone-flow.md) for custom processing

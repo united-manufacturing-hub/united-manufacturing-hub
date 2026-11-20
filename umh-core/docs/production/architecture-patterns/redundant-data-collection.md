@@ -18,7 +18,7 @@ flowchart LR
     B["umh.v1.enterprise.line.PLC-B._historian<br/>(umh-core 2, from its own bridge)"]
 ```
 
-umh-core 2 pushes its data into umh-core 1's UNS. umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
+umh-core 2's data also reaches umh-core 1's UNS through a bridge. umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
 
 ```mermaid
 flowchart LR
@@ -29,11 +29,11 @@ flowchart LR
 
 The higher-level system (a data lake, an MQTT broker, or another factory-wide umh-core instance) consumes this consolidated topic. It does not need to track which PLC provided each reading, but the original source is always traceable through the PLC-specific topics and message metadata.
 
-![Redundant data collection topology: two umh-core instances each collecting from one PLC, umh-core 2 pushes data to umh-core 1 which does redundancy resolution and forwards to the higher-level system](./images/dual-umh-core-topology.png)
+![Redundant data collection topology: two umh-core instances each collecting from one PLC, umh-core 2's data reaches umh-core 1, which does redundancy resolution for the higher-level system](./images/dual-umh-core-topology.png)
 
 All original data from both collectors is retained in the PLC-specific source topics. Redundancy resolution selects the primary source for downstream processing. It does not delete or modify the original records.
 
-If one instance fails, the other continues collecting into its own UNS. When the failed instance recovers, the bridge resumes pushing data and redundancy resolution continues.
+If one instance fails, the other continues collecting into its own UNS. When the failed instance recovers, its data reaches umh-core 1 again and redundancy resolution continues.
 
 ## Prerequisites
 
@@ -60,7 +60,7 @@ RPO is zero in all three cases because the second instance is always collecting 
 
 ## When this pattern does not apply
 
-- **Your PLC is not redundant.** Connecting two bridges to a single PLC doubles the load on it without improving availability. Redundant collection requires two separate endpoints publishing the same data. A single PLC with two IP addresses does not qualify -- if the controller fails, both addresses go down. (If your goal is to avoid data gaps during planned updates rather than hardware failure, a single PLC with multiple addresses may be sufficient for a zero-downtime update strategy instead.)
+- **Your PLC is not redundant.** Connecting two bridges to a single PLC doubles the load on it without improving availability. Redundant collection requires two separate devices publishing the same data. A single PLC with two IP addresses does not qualify -- if the controller fails, both addresses go down. (If your goal is to avoid data gaps during planned updates rather than hardware failure, a single PLC with multiple addresses may be sufficient for a zero-downtime update strategy instead.)
 - **You only need process-level or container-level recovery.** A standard single umh-core deployment already provides sub-second process recovery and 30-60 second container recovery. No additional topology is needed. See [High Availability](../high-availability.md).
 - **You are in discrete manufacturing.** Automotive assembly lines, packaging lines, and machine tools typically use standard PLCs without redundancy. This pattern adds complexity without benefit in those environments.
 

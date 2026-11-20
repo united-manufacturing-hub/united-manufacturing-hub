@@ -77,7 +77,7 @@ This enables flexible workflows:
 - **OT teams**: Use the UI for visual configuration
 - **IT teams**: Use YAML for infrastructure-as-code
 - **Learning**: Create in UI, study the generated YAML
-- **Scaling**: Template in YAML for multiple similar devices
+- **Scaling**: Template in YAML for multiple similar bridges
 
 ## Troubleshooting
 

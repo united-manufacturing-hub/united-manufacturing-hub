@@ -74,5 +74,5 @@ The specific data point or action:
 ## Next Steps
 
 - [Understand payload formats](payload-formats.md) for message structure
-- [Connect devices with bridges](../data-flows/bridges.md)
+- [Connect external systems with bridges](../data-flows/bridges.md)
 - [Explore with Topic Browser](topic-browser.md)

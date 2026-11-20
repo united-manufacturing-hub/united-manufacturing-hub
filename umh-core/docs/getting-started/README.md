@@ -42,7 +42,7 @@ UMH Core runs on any of the above. Its CPU pressure signal also needs Linux pres
 
 Your instance will appear as **"Online"** in the Management Console within seconds.
 
-**Next step:** [Connect your first data source →](1-connect-data.md)
+**Next step:** [Step 2: Connect Data →](1-connect-data.md)
 
 ---
 
@@ -90,4 +90,4 @@ See the [Migration Guide](../production/migration-from-classic.md) for step-by-s
 
 **You've successfully installed UMH Core!** 🚀
 
-**Next step:** [Connect your first data source →](1-connect-data.md)
+**Next step:** [Step 2: Connect Data →](1-connect-data.md)
