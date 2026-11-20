@@ -86,12 +86,23 @@ var _ = Describe("FSMv2 Architecture Validation", func() {
 			})
 		})
 
-		Describe("Shutdown Check First in Next() (Invariant: Lifecycle Overrides Operational)", func() {
-			It("should check IsShutdownRequested as first conditional after type assertion", func() {
-				violations := validator.ValidateShutdownCheckFirst(getFsmv2Dir())
+		Describe("Stop Check First in Next() (Invariant: Lifecycle Overrides Operational)", func() {
+			It("should check ShouldStop() as first conditional after type assertion", func() {
+				violations := validator.ValidateStopCheckFirst(getFsmv2Dir())
 
 				if len(violations) > 0 {
-					message := validator.FormatViolationsWithPattern("Shutdown Check Violations", violations, "SHUTDOWN_CHECK_NOT_FIRST")
+					message := validator.FormatViolationsWithPattern("Stop Check Violations", violations, "STOP_CHECK_NOT_FIRST")
+					Fail(message)
+				}
+			})
+		})
+
+		Describe("Stopped State Handles Disable (Invariant: Disabled Workers Stay Stopped)", func() {
+			It("should stay in Stopped while the worker is disabled", func() {
+				violations := validator.ValidateStoppedStateHandlesDisable(getFsmv2Dir())
+
+				if len(violations) > 0 {
+					message := validator.FormatViolationsWithPattern("Stopped State Disable Violations", violations, "STOPPED_IGNORES_DISABLE")
 					Fail(message)
 				}
 			})
