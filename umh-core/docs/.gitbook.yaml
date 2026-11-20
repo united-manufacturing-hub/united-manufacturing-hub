@@ -25,7 +25,7 @@ redirects:
   production/deployment/docker-compose/advanced: production/deployment/docker-compose/additional-services/README.md
   production/deployment/docker-compose/advanced/nginx: production/deployment/docker-compose/additional-services/nginx.md
   production/corporate-firewalls: production/security/umh-core/network-configuration.md
-  production/cpu-health: usage/instances/container/how-cpu-health-is-judged.md
+  production/cpu-health: usage/instances/container/enable-cpu-pressure-stats.md
   usage/instances/cpu-health: usage/instances/container/how-cpu-health-is-judged.md
   usage/instances/cpu-health/cpu-contention-while-cores-are-free: usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md
   usage/instances/cpu-health/enable-cpu-pressure-stats: usage/instances/container/enable-cpu-pressure-stats.md
