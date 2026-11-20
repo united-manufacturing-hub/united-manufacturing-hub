@@ -195,7 +195,18 @@ func checkStopCheckFirst(filename string) []Violation {
 		}
 
 		firstIf := firstIfAfterConversion(next.decl.Body)
-		if firstIf == nil || isStopCondition(firstIf.Cond) {
+		if firstIf == nil {
+			violations = append(violations, Violation{
+				File:    filename,
+				Line:    fset.Position(next.decl.Pos()).Line,
+				Type:    "STOP_CHECK_NOT_FIRST",
+				Message: "Next() has no conditional, so it never checks snap.ShouldStop()",
+			})
+
+			continue
+		}
+
+		if isStopCondition(firstIf.Cond) {
 			continue
 		}
 
@@ -411,6 +422,10 @@ func disableProblemIn(next nextMethod) (problem string, found bool) {
 		if leavesState(stmt, next.receiverName) {
 			return "Stopped state's Next() can leave Stopped before it checks snap.IsDisabled", true
 		}
+
+		if mentionsRemoval(stmt) && !isShutdownBranch(stmt) {
+			return "Stopped state's Next() can signal removal outside an if snap.IsShutdownRequested branch before it checks snap.IsDisabled", true
+		}
 	}
 
 	return "Stopped state's Next() has no if snap.IsDisabled branch", true
@@ -419,8 +434,8 @@ func disableProblemIn(next nextMethod) (problem string, found bool) {
 // disableBranchProblem describes why an if snap.IsDisabled branch does not
 // keep the worker in Stopped. found is false when it does.
 func disableBranchProblem(disableBranch *ast.IfStmt, receiverName string) (problem string, found bool) {
-	if len(returnStatementsIn(disableBranch.Body)) == 0 {
-		return "the if snap.IsDisabled branch in a Stopped state's Next() does not return", true
+	if !endsWithReturn(disableBranch.Body) {
+		return "the if snap.IsDisabled branch in a Stopped state's Next() does not end with a return", true
 	}
 
 	if leavesState(disableBranch.Body, receiverName) {
@@ -432,6 +447,27 @@ func disableBranchProblem(disableBranch *ast.IfStmt, receiverName string) (probl
 	}
 
 	return "", false
+}
+
+// endsWithReturn reports whether the last statement of block is a return, so
+// that every path through block returns.
+func endsWithReturn(block *ast.BlockStmt) bool {
+	if len(block.List) == 0 {
+		return false
+	}
+
+	_, isReturn := block.List[len(block.List)-1].(*ast.ReturnStmt)
+
+	return isReturn
+}
+
+// isShutdownBranch reports whether stmt is if snap.IsShutdownRequested { ... }
+// without an else branch.
+func isShutdownBranch(stmt ast.Stmt) bool {
+	ifStmt, isIf := stmt.(*ast.IfStmt)
+
+	return isIf && ifStmt.Init == nil && ifStmt.Else == nil &&
+		selectorName(ifStmt.Cond) == "IsShutdownRequested"
 }
 
 // isDisableBranch reports whether ifStmt is if snap.IsDisabled { ... }.

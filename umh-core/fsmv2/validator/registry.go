@@ -96,8 +96,8 @@ deterministic. Dependencies are for actions and observation, not derivation.`,
 WHY: A worker stops for two reasons: a shutdown and a disable by its parent.
 ShouldStop() is true for both. A state that checks only IsShutdownRequested
 keeps running, and keeps its children running, after its parent disabled it.
-The rule accepts snap.ShouldStop() or snap.IsShutdownRequested || snap.IsDisabled.
-States that embed helpers.StoppedBase or helpers.StoppingBase are exempt;
+The rule accepts snap.ShouldStop() or snap.IsShutdownRequested || snap.IsDisabled,
+and rejects a Next() without any conditional. States that embed helpers.StoppedBase or helpers.StoppingBase are exempt;
 STOPPED_IGNORES_DISABLE covers Stopped.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
@@ -116,9 +116,11 @@ IsShutdownRequested moves a disabled worker to its starting state, whose
 ShouldStop() check sends it back to Stopped, so the worker switches between
 the two states on every tick. The rule applies to every state that embeds
 helpers.StoppedBase. Its Next() must reach an if snap.IsDisabled branch before
-any return that leaves Stopped, and that branch must stay in Stopped without
-SignalNeedsRemoval. Removal on ShouldStop() is rejected, because it also
-removes a worker that is only disabled.`,
+any return that leaves Stopped. That branch must end with a return that stays
+in Stopped without SignalNeedsRemoval. Before that branch, SignalNeedsRemoval
+is allowed only inside an if snap.IsShutdownRequested branch. Removal on
+ShouldStop() is rejected, because it also removes a worker that is only
+disabled.`,
 		CorrectCode: `func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
     if snap.IsShutdownRequested {

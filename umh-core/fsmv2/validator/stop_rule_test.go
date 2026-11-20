@@ -42,6 +42,19 @@ func (s *RunningState) Next(snapAny any) any {
 }
 `
 
+const activeStateWithoutConditional = `package state
+
+type RunningState struct {
+	helpers.RunningHealthyBase
+}
+
+func (s *RunningState) Next(snapAny any) any {
+	_ = convert(snapAny)
+
+	return s
+}
+`
+
 const stoppingStateCheckingNothing = `package state
 
 type TryingToStopState struct {
@@ -90,6 +103,28 @@ const stoppedStateCheckingOnlyShutdown = `	if snap.IsShutdownRequested {
 
 const stoppedStateRemovingOnShouldStop = `	if snap.ShouldStop() {
 		return Transition(s, SignalNeedsRemoval)
+	}
+
+	return Transition(&TryingToStartState{}, SignalNone)`
+
+const stoppedStateRemovingOnShouldStopBeforeDisable = `	if snap.ShouldStop() {
+		return Transition(s, SignalNeedsRemoval)
+	}
+
+	if snap.IsDisabled {
+		return Transition(s, SignalNone)
+	}
+
+	return Transition(&TryingToStartState{}, SignalNone)`
+
+const stoppedStateReturningOnlySometimesWhileDisabled = `	if snap.IsShutdownRequested {
+		return Transition(s, SignalNeedsRemoval)
+	}
+
+	if snap.IsDisabled {
+		if snap.Ready {
+			return Transition(s, SignalNone)
+		}
 	}
 
 	return Transition(&TryingToStartState{}, SignalNone)`
@@ -166,6 +201,15 @@ var _ = Describe("ValidateStopCheckFirst", func() {
 		Entry("disable or shutdown", "(snap.IsDisabled || snap.IsShutdownRequested)"),
 	)
 
+	It("rejects an active state whose Next() has no conditional", func() {
+		baseDir := writeStateFile("state_running.go", activeStateWithoutConditional)
+
+		violations := validator.ValidateStopCheckFirst(baseDir)
+
+		Expect(violations).To(HaveLen(1))
+		Expect(violations[0].Type).To(Equal("STOP_CHECK_NOT_FIRST"))
+	})
+
 	It("exempts a state that embeds StoppingBase", func() {
 		baseDir := writeStateFile("state_trying_to_stop.go", stoppingStateCheckingNothing)
 
@@ -197,6 +241,8 @@ var _ = Describe("ValidateStoppedStateHandlesDisable", func() {
 		},
 		Entry("no disable branch", stoppedStateCheckingOnlyShutdown),
 		Entry("removal on ShouldStop()", stoppedStateRemovingOnShouldStop),
+		Entry("removal on ShouldStop() before a disable branch", stoppedStateRemovingOnShouldStopBeforeDisable),
+		Entry("disable branch that returns on only some paths", stoppedStateReturningOnlySometimesWhileDisabled),
 		Entry("disable branch after a start transition", stoppedStateCheckingDisableAfterStart),
 		Entry("disable branch that starts the worker", stoppedStateStartingWhileDisabled),
 		Entry("disable branch that signals removal", stoppedStateRemovingWhileDisabled),
