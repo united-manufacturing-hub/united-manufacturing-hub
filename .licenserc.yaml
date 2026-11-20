@@ -81,5 +81,6 @@ header:
     - "umh-core/coverprofile.out"
     - "umh-core/integration/umh-config/*.yaml"
     - "**/*.excalidraw"
+    - "umh-core/docs/generated/manifest.json"
 
   comment: on-failure
