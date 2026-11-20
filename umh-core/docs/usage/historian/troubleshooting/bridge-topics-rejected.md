@@ -12,7 +12,10 @@ bridge's location and below, so umh-core does not start these bridges.
 ## What to do
 
 1. Open the bridge, select **Edit Config** and the **Write Flow** tab.
-2. In **UMH Topics**, select the data contract the bridge stores and its versions.
+2. In **UMH Topics**, switch to **Code**. The **Visual** mode cannot show the old topic.
+   Replace the topic with one that starts at the bridge's location and names the data contract and
+   its versions. For a bridge at `enterprise.site` that stores `pump` versions 1 and 2:
+   `^umh\.v1\.enterprise\.site\.(?:[^._][^.]*\.)*_pump_v[1-2]\.`
 3. Click **Save & Deploy**.
 
 If the message names another problem, see
