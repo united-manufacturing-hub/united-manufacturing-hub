@@ -1,0 +1,3 @@
+kind: fixes
+body: When umh-core stops a component at runtime, such as the Historian after you remove it from config.yaml, its metrics disappear from the Prometheus endpoint, so an alert on them can resolve
+time: 2026-11-20T10:43:22.327159+01:00
