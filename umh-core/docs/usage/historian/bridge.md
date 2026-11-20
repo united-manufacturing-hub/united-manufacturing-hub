@@ -36,6 +36,6 @@ For the data contract `pump`, the bridge writes two tables in the `umh` schema:
 | Table | Contents |
 |---|---|
 | `umh.value_pump` | One row per tag and timestamp. Numbers and booleans in `value_num`, strings and JSON in `value_text`. |
-| `umh.attribute_pump` | The message metadata as JSON, written when a tag's metadata keys change. |
+| `umh.attribute_pump` | The message metadata as JSON, written when a tag's metadata changes and after the bridge reconnects to the database. |
 
 All versions of the data contract write to these two tables. See [Database schema](database-schema.md).
