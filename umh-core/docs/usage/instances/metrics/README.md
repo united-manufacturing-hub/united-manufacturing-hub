@@ -274,7 +274,7 @@ The communicator counts each failed request to the Management Console once, unde
 |---|---|---|
 | `umh_fsmv2_worker_network_errors_total` | counter | Requests without an answer that umh-core can classify. This includes a refused connection, a timeout and a rejected certificate. It also counts answers with a status no other counter takes, such as 400 or a proxy's 407 Proxy Authentication Required. |
 | `umh_fsmv2_worker_proxy_block_errors_total` | counter | Error answers that look like the block page of a proxy. Ask your IT department to allow `management.umh.app` on the proxy. |
-| `umh_fsmv2_worker_auth_failures_total` | counter | Answers with status 401 or 403. Under the transport series, a rise usually means the Management Console did not accept the `AUTH_TOKEN`. A firewall, a proxy or Cloudflare that answers 403 also counts here. |
+| `umh_fsmv2_worker_auth_failures_total` | counter | Answers with status 401 or 403. Under the transport series, a rise usually means the Management Console did not accept the `AUTH_TOKEN`. A firewall, a proxy or Cloudflare that answers 403 also counts here, unless umh-core recognizes the answer as a proxy block page, which counts in `umh_fsmv2_worker_proxy_block_errors_total`. |
 | `umh_fsmv2_worker_instance_deleted_total` | counter | Answers with status 404. Usually the instance was deleted in the Management Console. A wrong `API_URL` or a 404 from a proxy also counts here. |
 | `umh_fsmv2_worker_server_errors_total` | counter | Requests the Management Console answered with a status of 500 or higher. |
 | `umh_fsmv2_worker_backend_rate_limit_errors_total` | counter | Requests the Management Console rejected with status 429, because the instance sent too many in a short time. |
