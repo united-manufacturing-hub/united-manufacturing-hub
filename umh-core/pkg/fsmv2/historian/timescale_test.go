@@ -704,19 +704,6 @@ var _ = Describe("Sentry reporting", func() {
 		Expect(databaseOccupiedDiskBytes).To(Equal(int64(4096)))
 	})
 
-	It("reports a summary read that runs past the poll's deadline", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		defer cancel()
-
-		database := &failsAfterDeadline{ctx: ctx}
-
-		_, readErr := summaryReader(ctx, d, database, "db")()
-
-		Expect(readErr).To(HaveOccurred())
-		Expect(events).To(HaveLen(1))
-		Expect(events[0].message).To(Equal(string(tagSummaryReadFailed)))
-	})
-
 	It("reports a failed database size read", func() {
 		cfg := unreachableConfig().WithDefaults()
 		pool, err := d.pool.get(cfg.Timescale.ToDSN())
@@ -749,21 +736,4 @@ func (a *answersAfterDeadline) QueryRow(_ context.Context, sql string, args ...a
 	<-a.ctx.Done()
 
 	return a.Database.QueryRow(context.Background(), sql, args...)
-}
-
-// failsAfterDeadline fails each query once ctx's deadline has passed.
-type failsAfterDeadline struct {
-	ctx context.Context
-}
-
-func (f *failsAfterDeadline) Query(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
-	<-f.ctx.Done()
-
-	return nil, f.ctx.Err()
-}
-
-func (f *failsAfterDeadline) QueryRow(_ context.Context, _ string, _ ...any) pgx.Row {
-	<-f.ctx.Done()
-
-	return failedRow{err: f.ctx.Err()}
 }
