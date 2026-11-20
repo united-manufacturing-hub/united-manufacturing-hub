@@ -388,9 +388,7 @@ func (d Deps) forgetDatabaseFigures() {
 	d.databaseSize.clear()
 }
 
-// The error goes to the cache only, not to Poll's result: a summary that cannot
-// be read is not a connection fault, and the worker must not go degraded for a
-// database that is answering.
+// the error reaches the cache only, so an unreadable summary does not mark the worker degraded
 func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
 	return func() (timescalemetrics.Summary, error) {
 		summary, err := timescalemetrics.CollectSummary(ctx, db)
@@ -494,11 +492,7 @@ type readCache[T any] struct {
 	mu       sync.Mutex
 }
 
-// refresh reads again once the interval has elapsed or the database changed. A
-// failed read drops the previous value and waits its turn rather than retrying
-// every poll. A read cut short by the poll's context observed nothing about the
-// database, so it keeps the previous value; a cancelled read also reads again
-// on the next poll.
+// refresh keeps the previous value for a read cut short by the poll's context and drops it for any other failure.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,

@@ -20,8 +20,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// Historian gauges, exported as umh_fsmv2_worker_<name>. A figure that cannot
-// be read keeps its last value, and its _ready flag turns 0.
+// Historian gauges, exported as umh_fsmv2_worker_<name>; a figure is current only while its _ready flag is 1.
 const (
 	GaugeHistorianReachable deps.GaugeName = "historian_reachable"
 
