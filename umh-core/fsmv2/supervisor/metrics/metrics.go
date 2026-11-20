@@ -564,6 +564,10 @@ func (e *WorkerMetricsExporter) claim(hierarchyPath string) WorkerMetricsClaim {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if _, claimedBefore := e.owners[hierarchyPath]; claimedBefore {
+		e.deleteSeries(hierarchyPath)
+	}
+
 	e.lastClaim++
 	e.owners[hierarchyPath] = e.lastClaim
 
@@ -578,8 +582,14 @@ func (e *WorkerMetricsExporter) cleanup(hierarchyPath string, claim WorkerMetric
 		return
 	}
 
-	delete(e.owners, hierarchyPath)
+	// a claim no worker holds rejects late exports under the removed claim and under claim 0
+	e.lastClaim++
+	e.owners[hierarchyPath] = e.lastClaim
 
+	e.deleteSeries(hierarchyPath)
+}
+
+func (e *WorkerMetricsExporter) deleteSeries(hierarchyPath string) {
 	labels := prometheus.Labels{
 		"hierarchy_path": hierarchyPath,
 	}
