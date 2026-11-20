@@ -13,6 +13,9 @@ The output drops rows it can never write and writes the rest of the batch:
 
 Connection loss and a full disk drop nothing; the output retries.
 
+A drop logged as an error marks the bridge as degraded for 10 minutes after the log line, even when
+the rest of the batch is stored.
+
 ## What to do
 
 Follow
