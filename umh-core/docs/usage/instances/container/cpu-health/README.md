@@ -72,7 +72,7 @@ resource that stopped it, here the CPU. For every reason a bridge waits and the 
 
 To start bridges anyway in an emergency, use the emergency setting [Turn off bridge admission](../../../data-flows/troubleshooting/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission). It turns off every admission check, including CPU.
 
-Waiting for CPU health is separate from the bridge limit. [Bridge limit](../../../data-flows/bridges-do-not-start.md#bridge-limit) covers the number of bridges a core count can hold. Real CPU use varies per bridge, so a bridge can wait on CPU health before the instance reaches its bridge limit.
+Waiting for CPU health is separate from the bridge limit. [Bridge limit](../../../data-flows/troubleshooting/bridges-do-not-start.md#bridge-limit) covers the number of bridges a core count can hold. Real CPU use varies per bridge, so a bridge can wait on CPU health before the instance reaches its bridge limit.
 
 ## Thresholds
 
