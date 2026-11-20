@@ -369,7 +369,7 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 
 	now := time.Now()
 
-	return TimescaleStatus{
+	status := TimescaleStatus{
 		Host:                      host,
 		Auth:                      models.TimescaleAuthValid,
 		LatencyMs:                 elapsedMs,
@@ -377,7 +377,13 @@ func Poll(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleSta
 		Reachable:                 true,
 		Summary:                   d.summary.refresh(now, dsn, summaryReader(ctx, d, db, host)),
 		DatabaseOccupiedDiskBytes: d.databaseSize.refresh(now, dsn, databaseSizeReader(ctx, d, db, host)),
-	}, nil
+	}
+
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return status, fmt.Errorf("timescale figures %s cancelled: %w", host, ctx.Err())
+	}
+
+	return status, nil
 }
 
 // forgetDatabaseFigures drops the cached figures after a failed connection
@@ -391,35 +397,43 @@ func (d Deps) forgetDatabaseFigures() {
 // The error is logged and reported, not returned: a summary that cannot be
 // read is not a connection fault, and returning it would drive the worker
 // degraded for a database that is answering.
-func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, bool) {
-	return func() (timescalemetrics.Summary, bool) {
+func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
+	return func() (timescalemetrics.Summary, error) {
 		summary, err := timescalemetrics.CollectSummary(ctx, db)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return timescalemetrics.Summary{}, ctx.Err()
+		}
+
 		if err != nil {
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
 				deps.Err(err))
 			d.report(ctx, tagSummaryReadFailed, host, err)
 
-			return timescalemetrics.Summary{}, false
+			return timescalemetrics.Summary{}, err
 		}
 
-		return summary, true
+		return summary, nil
 	}
 }
 
-func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, bool) {
-	return func() (int64, bool) {
+func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, error) {
+	return func() (int64, error) {
 		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, db)
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return 0, ctx.Err()
+		}
+
 		if err != nil {
 			d.GetLogger().Debug("timescale database size",
 				deps.String("host", host),
 				deps.Err(err))
 			d.report(ctx, tagDatabaseSizeReadFailed, host, err)
 
-			return 0, false
+			return 0, err
 		}
 
-		return databaseOccupiedDiskBytes, true
+		return databaseOccupiedDiskBytes, nil
 	}
 }
 
@@ -439,9 +453,7 @@ func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
 	return simple.Degraded("TimescaleDB answered, but the connection check failed")
 }
 
-// pollAndRecord runs Poll and records its status as worker gauges. A cancelled
-// poll observed nothing, so it records nothing; a pool that cannot be built is
-// recorded as unreachable.
+// pollAndRecord records nothing for a cancelled poll, because it observed nothing.
 func pollAndRecord(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
 	status, err := Poll(ctx, d, cfg)
 	if errors.Is(err, context.Canceled) {
@@ -472,10 +484,13 @@ const summaryInterval = 60 * time.Second
 // https://www.postgresql.org/message-id/CAGRY4nz94%2Bq_zVxj%2Bdnk7zqm-McBz4mSza_wALKiw2%3D%3D23MiGQ%40mail.gmail.com
 const databaseSizeInterval = 15 * time.Minute
 
+// failedReadRetryInterval is how long a cache waits to read again after a failed read.
+const failedReadRetryInterval = time.Minute
+
 // The caches match sharedPool: they have to outlive a single Poll.
 var (
-	sharedSummary      = &readCache[timescalemetrics.Summary]{interval: summaryInterval}
-	sharedDatabaseSize = &readCache[int64]{interval: databaseSizeInterval}
+	sharedSummary      = &readCache[timescalemetrics.Summary]{interval: summaryInterval, retryInterval: failedReadRetryInterval}
+	sharedDatabaseSize = &readCache[int64]{interval: databaseSizeInterval, retryInterval: failedReadRetryInterval}
 )
 
 type readCache[T any] struct {
@@ -483,18 +498,20 @@ type readCache[T any] struct {
 	value  *T
 	// A config edit repoints the pool at another database; holding the value across
 	// that would report one database's figures beside the other's host.
-	dsn      string
-	interval time.Duration
-	mu       sync.Mutex
+	dsn            string
+	interval       time.Duration
+	retryInterval  time.Duration
+	lastReadFailed bool
+	mu             sync.Mutex
 }
 
-// refresh reads again once the interval has elapsed or the database changed. A
-// failed read drops the previous value and waits its turn rather than retrying
-// every poll.
+// refresh reads again once the interval has elapsed, the retry interval has
+// elapsed after a failed read, or the database changed. A failed read drops the
+// previous value. A cancelled read leaves the cache as it was.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
-	read func() (T, bool),
+	read func() (T, error),
 ) *T {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -502,14 +519,20 @@ func (c *readCache[T]) refresh(
 	if dsn != c.dsn {
 		c.dsn = dsn
 		c.value = nil
-	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
+		c.readAt = time.Time{}
+	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.waitAfterLastRead() {
+		return c.value
+	}
+
+	value, err := read()
+	if errors.Is(err, context.Canceled) {
 		return c.value
 	}
 
 	c.readAt = now
+	c.lastReadFailed = err != nil
 
-	value, ok := read()
-	if !ok {
+	if err != nil {
 		c.value = nil
 
 		return nil
@@ -520,10 +543,19 @@ func (c *readCache[T]) refresh(
 	return c.value
 }
 
+func (c *readCache[T]) waitAfterLastRead() time.Duration {
+	if c.lastReadFailed {
+		return c.retryInterval
+	}
+
+	return c.interval
+}
+
 func (c *readCache[T]) clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.readAt = time.Time{}
 	c.value = nil
+	c.lastReadFailed = false
 }

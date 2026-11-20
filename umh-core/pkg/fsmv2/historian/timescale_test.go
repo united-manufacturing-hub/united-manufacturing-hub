@@ -401,19 +401,27 @@ var _ = Describe("the summary cache", func() {
 	})
 
 	// reads answers with one summary and counts how often it was asked.
-	reads := func(tables []string, calls *int) func() (timescalemetrics.Summary, bool) {
-		return func() (timescalemetrics.Summary, bool) {
+	reads := func(tables []string, calls *int) func() (timescalemetrics.Summary, error) {
+		return func() (timescalemetrics.Summary, error) {
 			*calls++
 
-			return timescalemetrics.Summary{TableNames: tables}, true
+			return timescalemetrics.Summary{TableNames: tables}, nil
 		}
 	}
 
-	failsToRead := func(calls *int) func() (timescalemetrics.Summary, bool) {
-		return func() (timescalemetrics.Summary, bool) {
+	failsToRead := func(calls *int) func() (timescalemetrics.Summary, error) {
+		return func() (timescalemetrics.Summary, error) {
 			*calls++
 
-			return timescalemetrics.Summary{}, false
+			return timescalemetrics.Summary{}, errors.New("read failed")
+		}
+	}
+
+	isCancelled := func(calls *int) func() (timescalemetrics.Summary, error) {
+		return func() (timescalemetrics.Summary, error) {
+			*calls++
+
+			return timescalemetrics.Summary{}, context.Canceled
 		}
 	}
 
@@ -452,6 +460,35 @@ var _ = Describe("the summary cache", func() {
 		Expect(second).To(Equal(1), "the interval elapsed, so the cache read again")
 		Expect(summary).To(BeNil(),
 			"the summary read before the failed read may no longer hold, and the console would show it as current")
+	})
+
+	It("keeps its value and reads again on the next poll when a read is cancelled", func() {
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
+		first, cancelled, third := 0, 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(2*time.Minute), dsnA, isCancelled(&cancelled))
+
+		Expect(cancelled).To(Equal(1))
+		Expect(summary).NotTo(BeNil())
+		Expect(summary.TableNames).To(ConsistOf("value_bench"))
+
+		cache.refresh(readAt.Add(2*time.Minute+time.Second), dsnA, reads([]string{"value_other"}, &third))
+
+		Expect(third).To(Equal(1), "a cancelled read observed nothing, so the next poll reads again")
+	})
+
+	It("reads again after the retry interval when a read failed", func() {
+		cache := &readCache[timescalemetrics.Summary]{interval: 15 * time.Minute, retryInterval: time.Minute}
+		failed, early, retried := 0, 0, 0
+
+		cache.refresh(readAt, dsnA, failsToRead(&failed))
+		cache.refresh(readAt.Add(30*time.Second), dsnA, reads([]string{"value_bench"}, &early))
+		summary := cache.refresh(readAt.Add(time.Minute), dsnA, reads([]string{"value_bench"}, &retried))
+
+		Expect(early).To(BeZero(), "the retry interval had not elapsed")
+		Expect(retried).To(Equal(1))
+		Expect(summary).NotTo(BeNil())
 	})
 
 	It("reports nothing rather than the previous database when the first read of the new one fails", func() {
@@ -576,12 +613,37 @@ var _ = Describe("Sentry reporting", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		_, read := summaryReader(ctx, d, pool, cfg.Timescale.Host)()
+		_, readErr := summaryReader(ctx, d, pool, cfg.Timescale.Host)()
 
-		Expect(read).To(BeFalse())
+		Expect(readErr).To(HaveOccurred())
 		Expect(events).To(HaveLen(1))
 		Expect(events[0].message).To(Equal(string(tagSummaryReadFailed)))
 	})
+
+	DescribeTable("a read cancelled during shutdown returns context.Canceled, whatever the driver returned",
+		func(read func(context.Context, timescalemetrics.Database) error) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			database := &cancelsAfterConnectionCheck{
+				cancel:    cancel,
+				driverErr: errors.New("conn closed"),
+			}
+
+			Expect(read(ctx, database)).To(MatchError(context.Canceled))
+			Expect(events).To(BeEmpty())
+		},
+		Entry("summary", func(ctx context.Context, database timescalemetrics.Database) error {
+			_, readErr := summaryReader(ctx, d, database, "db")()
+
+			return readErr
+		}),
+		Entry("database size", func(ctx context.Context, database timescalemetrics.Database) error {
+			_, readErr := databaseSizeReader(ctx, d, database, "db")()
+
+			return readErr
+		}),
+	)
 
 	It("reports a failed database size read", func() {
 		cfg := unreachableConfig().WithDefaults()
@@ -591,9 +653,9 @@ var _ = Describe("Sentry reporting", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		_, read := databaseSizeReader(ctx, d, pool, cfg.Timescale.Host)()
+		_, readErr := databaseSizeReader(ctx, d, pool, cfg.Timescale.Host)()
 
-		Expect(read).To(BeFalse())
+		Expect(readErr).To(HaveOccurred())
 		Expect(events).To(HaveLen(1))
 		Expect(events[0].message).To(Equal(string(tagDatabaseSizeReadFailed)))
 	})

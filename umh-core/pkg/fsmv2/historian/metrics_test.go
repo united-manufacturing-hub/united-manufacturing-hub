@@ -17,6 +17,7 @@ package fsmv2timescale
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -188,6 +189,25 @@ var _ = Describe("pollAndRecord", func() {
 		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianSummaryReady), 0.0))
 	})
 
+	It("records nothing and keeps the cached figures when the context is cancelled after the connection check", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		d := pollDeps()
+		_, err := pollAndRecord(context.Background(), d, historianConfig)
+		Expect(err).NotTo(HaveOccurred())
+		d.MetricsRecorder().Drain()
+
+		d.summary.readAt = d.summary.readAt.Add(-summaryInterval)
+		d.database = &cancelsAfterConnectionCheck{Database: fakeDatabase, cancel: cancel}
+
+		_, err = pollAndRecord(ctx, d, historianConfig)
+
+		Expect(err).To(MatchError(context.Canceled))
+		Expect(d.MetricsRecorder().Drain().Gauges).To(BeEmpty())
+		Expect(d.summary.value).NotTo(BeNil(), "a cancelled read must not drop the cached summary")
+	})
+
 	It("records nothing when the context is cancelled", func() {
 		cfg := config.HistorianConfig{Timescale: config.TimescaleConfig{
 			Host:    "127.0.0.1",
@@ -206,8 +226,7 @@ var _ = Describe("pollAndRecord", func() {
 	})
 })
 
-// isolatedPoolDeps builds Deps with a pool holder of their own, so a spec does
-// not close a pool that sharedPool holds for another spec.
+// isolatedPoolDeps keeps a spec from closing a pool that sharedPool holds for another spec.
 func isolatedPoolDeps() Deps {
 	holder := &poolHolder{}
 	DeferCleanup(closeTestPool, holder)
@@ -225,3 +244,38 @@ func closeTestPool(holder *poolHolder) {
 		holder.pool.Close()
 	}
 }
+
+// cancelsAfterConnectionCheck answers SELECT 1, then cancels the poll's
+// context on the next query and fails it with driverErr, or with the context
+// error when driverErr is nil.
+type cancelsAfterConnectionCheck struct {
+	timescalemetrics.Database
+	cancel    context.CancelFunc
+	driverErr error
+}
+
+func (c *cancelsAfterConnectionCheck) failure(ctx context.Context) error {
+	c.cancel()
+
+	if c.driverErr != nil {
+		return c.driverErr
+	}
+
+	return ctx.Err()
+}
+
+func (c *cancelsAfterConnectionCheck) Query(ctx context.Context, _ string, _ ...any) (pgx.Rows, error) {
+	return nil, c.failure(ctx)
+}
+
+func (c *cancelsAfterConnectionCheck) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	if sql == "SELECT 1" {
+		return c.Database.QueryRow(ctx, sql, args...)
+	}
+
+	return failedRow{err: c.failure(ctx)}
+}
+
+type failedRow struct{ err error }
+
+func (r failedRow) Scan(_ ...any) error { return r.err }
