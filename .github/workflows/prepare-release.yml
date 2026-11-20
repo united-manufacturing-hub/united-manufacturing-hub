@@ -1,0 +1,135 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Keeps the umh-core release PR up to date. On every push to staging, the
+# release branch is reset to staging and `make release-changelog` batches the
+# fragments in umh-core/.changelog/unreleased/ into
+# umh-core/.changelog/<version>.md. Merging the PR releases; see release.yml.
+# Without fragments the PR is closed. A release without user-visible changes
+# needs a maintenance fragment; see umh-core/RELEASING.md.
+#
+# The version is the newest umh-core/.changelog/<version>.md with the patch
+# number bumped. With the minor-release label on the release PR, the minor
+# number is bumped instead (0.45.3 -> 0.46.0); see next-release-version.sh.
+# Adding or removing the label regenerates the PR.
+#
+# The PR is opened with a GitHub App token, because a PR opened with
+# GITHUB_TOKEN does not trigger CI.
+
+name: Prepare Release
+
+on:
+  push:
+    branches: [staging]
+  pull_request:
+    branches: [staging]
+    types: [labeled, unlabeled]
+  workflow_dispatch:
+
+env:
+  RELEASE_BRANCH: release/next
+  MINOR_LABEL: minor-release
+
+jobs:
+  release-pr:
+    name: Update the release PR
+    if: >-
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/staging') ||
+      (github.event.pull_request.head.ref == 'release/next' && github.event.label.name == 'minor-release')
+    # On the job, not the workflow: a label event on any other PR must not
+    # cancel a running update.
+    concurrency:
+      group: prepare-release
+      cancel-in-progress: true
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          # A label event runs for the release PR; the release branch is still
+          # generated from staging.
+          ref: ${{ github.event_name == 'pull_request' && 'staging' || '' }}
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: umh-core/go.mod
+          cache: false
+
+      - name: Batch the changelog fragments
+        id: batch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if ! compgen -G "umh-core/.changelog/unreleased/*.yaml" >/dev/null; then
+            echo "No changelog fragments on staging; the release PR is closed."
+            exit 0
+          fi
+          minor_release=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$RELEASE_BRANCH" --base staging \
+            --state open --json labels --jq "any(.[].labels[]; .name == \"${MINOR_LABEL}\")")
+          version=$(MINOR_RELEASE="$minor_release" .github/scripts/next-release-version.sh)
+          echo "This release: ${version}"
+          make -C umh-core release-changelog VERSION="$version"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      # Commit as the app's bot user, so the release commit is not attributed to
+      # whoever merged the PR that triggered this run.
+      - name: Resolve the bot identity
+        id: bot
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          id=$(gh api "/users/${SLUG}%5Bbot%5D" --jq .id)
+          echo "identity=${SLUG}[bot] <${id}+${SLUG}[bot]@users.noreply.github.com>" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update the release PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: ${{ env.RELEASE_BRANCH }}
+          base: staging
+          add-paths: |
+            umh-core/CHANGELOG.md
+            umh-core/.changelog
+          author: ${{ steps.bot.outputs.identity }}
+          committer: ${{ steps.bot.outputs.identity }}
+          commit-message: "chore(release): v${{ steps.batch.outputs.version }}"
+          title: "Release umh-core v${{ steps.batch.outputs.version }}"
+          body: |
+            Merging this PR releases umh-core **v${{ steps.batch.outputs.version }}**.
+
+            It batches the changelog fragments on staging at ${{ steps.batch.outputs.base }}. The release ships exactly that commit, even if more PRs merge into staging first. Those ship with the next release.
+
+            - Review the changelog in the diff. To fix an entry, fix its fragment on staging; this PR is regenerated on every push to staging.
+            - The version bumps the patch number. For a minor release, add the `minor-release` label.
+            - To stop the release, request changes.
+            - Merge with a merge commit.
+
+            Generated by [prepare-release.yml](https://github.com/${{ github.repository }}/blob/staging/.github/workflows/prepare-release.yml). The steps after merging are in the header of [release.yml](https://github.com/${{ github.repository }}/blob/staging/.github/workflows/release.yml).
+          delete-branch: true

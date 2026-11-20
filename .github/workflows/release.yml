@@ -1,0 +1,150 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Releases umh-core when the release PR is merged into staging. This workflow
+# checks whether a push to staging is a release PR merge and, if so, runs
+# release-pipeline.yml: resolve -> build -> tag -> {notify the Management
+# Console, changelog.umh.app -> release notes, Linear}.
+#
+# prepare-release.yml keeps one release PR open ("Release umh-core vX.Y.Z"). It
+# batches the fragments in umh-core/.changelog/unreleased/ into
+# umh-core/.changelog/X.Y.Z.md and is regenerated on every push to staging.
+#
+# How to release:
+# 1. Review the changelog in the release PR, approve it and merge it with a
+#    merge commit. To stop a release, request changes on the release PR. To fix
+#    an entry, fix its fragment on staging; the bot regenerates the release PR.
+#    For a minor release, add the minor-release label to the release PR.
+# 2. The pipeline ships the commit the release PR was generated from, not the
+#    staging tip. PRs that merged after it ship with the next release.
+#    resolve-release.sh describes how that commit is found.
+# 3. If a job fails, the alert job comments on the release PR and mentions
+#    whoever merged it. Re-run the failed jobs. The retry ships the same
+#    commit. If that commit is broken, merge a fix into staging. The next
+#    release supersedes the failed version: only the newest version is tagged
+#    and published. If a tagged version's run cannot be re-run, run this
+#    workflow by hand with that version to resume its release.
+# The vX.Y.Z tag is created only after its image is built and verified.
+# Only a release PR merge starts a stable release. Pre-releases (vX.Y.Z-pre.N)
+# are published by hand; see umh-core/RELEASING.md.
+
+name: Release
+
+on:
+  push:
+    branches: [staging]
+    # Only a push that touches a version file can be a release PR merge.
+    paths: ["umh-core/.changelog/*.md"]
+  # Resumes the release of a tagged version whose run cannot be re-run; see
+  # release-pipeline.yml and umh-core/RELEASING.md.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tagged version whose release to resume (vX.Y.Z)"
+        required: true
+        type: string
+
+jobs:
+  detect:
+    name: Detect a release PR merge
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ github.event_name == 'workflow_dispatch' || steps.resolve.outputs.release == 'true' }}
+      merge: ${{ steps.resolve.outputs.merge }}
+    steps:
+      - name: Checkout
+        if: github.event_name == 'push'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          # The full history is too big to fetch. The script deepens this
+          # one-commit clone only as far as it needs, without file contents.
+          filter: blob:none
+
+      # Only finds the merge. release-pipeline.yml validates and resolves the
+      # release under the lock.
+      - name: Check the push for a release PR merge
+        if: github.event_name == 'push'
+        id: resolve
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          DETECT_ONLY: "true"
+        run: .github/scripts/resolve-release.sh
+
+  # Only one release runs at a time, and a running release is never cancelled
+  # (that could abandon a half-published release). GitHub keeps one pending run
+  # per concurrency group and cancels an older pending one. The lock is taken
+  # only by pushes that release, so a push that only edits a released version
+  # file cannot cancel a pending release. If a newer release cancels a pending
+  # one, the newer one supersedes it.
+  release:
+    name: Release
+    needs: detect
+    if: needs.detect.outputs.release == 'true'
+    concurrency:
+      group: release-pipeline
+      cancel-in-progress: false
+    # Ceiling for the called jobs: the build pushes images, and the tag job
+    # creates tags and releases.
+    permissions:
+      contents: write
+      packages: write
+    secrets: inherit
+    uses: ./.github/workflows/release-pipeline.yml
+    with:
+      version: ${{ inputs.version }}
+
+  # Tells whoever merged the release PR that the release failed. A re-run of
+  # the failed jobs re-runs this job too, and it is skipped once they pass.
+  # Without a merge commit (a failed detect job, or a resumed release) there is
+  # no PR to comment on; the run's summary holds the failure.
+  alert:
+    name: Alert on failure
+    needs: [detect, release]
+    if: failure()
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Comment on the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MERGE: ${{ needs.detect.outputs.merge }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GUIDE_URL: ${{ github.server_url }}/${{ github.repository }}/blob/staging/umh-core/RELEASING.md#troubleshooting
+        run: |
+          set -euo pipefail
+          if [ -z "$MERGE" ]; then
+            echo "::error::The release failed. No release PR merge is known, so no PR gets a comment."
+            echo "The release failed. No release PR merge is known, so no PR gets a comment. See [Troubleshooting in umh-core/RELEASING.md](${GUIDE_URL})." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${MERGE}/pulls" \
+            --jq "[.[] | select(.merge_commit_sha == \"${MERGE}\")][0].number // empty")
+          if [ -z "$pr" ]; then
+            echo "::error::No PR was merged as ${MERGE}. The release failed: ${RUN_URL}"
+            exit 1
+          fi
+          merged_by=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq .merged_by.login)
+          # The release PR's title is "Release umh-core vX.Y.Z".
+          version=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}" --jq .title | sed -nE 's/^Release umh-core (v[0-9]+\.[0-9]+\.[0-9]+)$/\1/p')
+          gh pr comment "$pr" --body "@${merged_by} The release ${version:-of this PR} failed: ${RUN_URL}
+
+          Re-run the failed jobs of that run. If they fail again, see [Troubleshooting in umh-core/RELEASING.md](${GUIDE_URL})."

@@ -12,13 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# NOTE: This workflow only sets nightly/stable versions through the management console webhook.
-# Enterprise versions are NOT set here - they must be set directly in the database.
+# Builds the umh-core image. Runs for PRs (called by pull-request.yml), for
+# every push to staging, for pre-release tags (vX.Y.Z-pre.N), which also notify
+# the Management Console's nightly channel, and for stable releases (called by
+# release-pipeline.yml with a commit and a version).
 
 name: Build UMH Core
 
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: "Commit to build. Defaults to the commit of the calling event."
+        required: false
+        type: string
+        default: ""
+      version:
+        description: "Release version (vX.Y.Z). Set only by release-pipeline.yml; tags the image with it instead of the branch."
+        required: false
+        type: string
+        default: ""
     outputs:
       short-sha:
         description: "Short SHA for the image tag"
@@ -29,8 +42,9 @@ on:
   push:
     branches:
       - staging
+    # Stable versions are released only by release-pipeline.yml.
     tags:
-      - "v*"
+      - "v*-pre.*"
 
 env:
   REGISTRY: ghcr.io
@@ -47,18 +61,43 @@ jobs:
     outputs:
       short-sha: ${{ steps.short-sha.outputs.sha }}
       digest: ${{ steps.digest.outputs.digest }}
+      image-tag: ${{ steps.short-sha.outputs.image-tag }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
           filter: blob:none
+          ref: ${{ inputs.ref }}
           sparse-checkout: |
             umh-core
             .github
 
       - name: Compute short SHA
         id: short-sha
-        run: echo "sha=$(echo '${{ github.sha }}' | cut -c1-7)" >> "$GITHUB_OUTPUT"
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          sha=$(git rev-parse HEAD | cut -c1-7)
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+          # A release image has no sha tag (see Docker meta), so it is found by
+          # its version tag.
+          echo "image-tag=${RELEASE_VERSION:-sha-${sha}}" >> "$GITHUB_OUTPUT"
+
+      # Rebuilding a released version from its own commit is harmless.
+      # Building it from a different commit would overwrite its image.
+      - name: Check that the build does not replace a released image
+        if: inputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          head=$(git rev-parse HEAD)
+          if tagged=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${VERSION}" --jq .sha 2>/dev/null) \
+            && [ "$tagged" != "$head" ]; then
+            echo "::error::${VERSION} is tagged on ${tagged}. Building it from ${head} would overwrite its image."
+            exit 1
+          fi
 
       - name: Check that no Management Console source is committed
         run: |
@@ -99,18 +138,29 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # latest is the newest stable release. release-pipeline.yml moves it
+          # only after the image is verified and the release is published.
+          # A release build runs on a push to staging, but must not move the
+          # staging or sha tags. Its version tag replaces them.
+          flavor: |
+            latest=false
           tags: |
-            type=ref,event=branch
+            type=ref,event=branch,enable=${{ inputs.version == '' }}
             type=ref,event=tag
-            type=sha
+            type=raw,value=sha-${{ steps.short-sha.outputs.sha }},enable=${{ inputs.version == '' }}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
 
       - name: Determine version
         id: version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [ -n "$RELEASE_VERSION" ]; then
+            echo "VERSION=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "VERSION=${{ github.ref_name }}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=0.0.0-dev-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "VERSION=0.0.0-dev-$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           fi
 
       # Runs visibly, so a download failure shows its real error; the build below hides its output.
@@ -147,7 +197,7 @@ jobs:
       - name: Get image digest
         id: digest
         run: |
-          DIGEST=$(docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.short-sha.outputs.sha }}" --format '{{json .Manifest}}' | jq -r '.manifests[] | select(.platform.architecture=="amd64") | .digest')
+          DIGEST=$(docker buildx imagetools inspect "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.short-sha.outputs.image-tag }}" --format '{{json .Manifest}}' | jq -r '.manifests[] | select(.platform.architecture=="amd64") | .digest')
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
   verify-binaries:
@@ -201,8 +251,7 @@ jobs:
           retry_wait_seconds: 10
           command: |
             set -euo pipefail
-            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-            IMAGE="ghcr.io/united-manufacturing-hub/umh-core:sha-${SHORT_SHA}"
+            IMAGE="ghcr.io/united-manufacturing-hub/umh-core:${{ needs.build.outputs.image-tag }}"
             echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
             echo "Pulling ${{ matrix.arch }} image: $IMAGE"
@@ -275,61 +324,21 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
 
+  # Stable versions notify the Management Console from release-pipeline.yml.
   notify-management-console:
     needs: [build]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') && inputs.version == ''
     runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
       - name: Notify management console
         env:
           UMH_MC_WEBHOOK_SECRET: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}
-        run: |
-          set -euo pipefail
-          VERSION="${{ github.ref_name }}"
-          SECRET="$UMH_MC_WEBHOOK_SECRET"
-
-          notify_mc() {
-            local base_url=$1
-
-            echo "Notifying $base_url of new version: $VERSION"
-
-            if [[ "$VERSION" == *-pre.* ]]; then
-              CHANNEL="nightly"
-            else
-              CHANNEL="stable"
-            fi
-
-            if [[ "$CHANNEL" == "nightly" ]]; then
-              # Pre-release, simply update the channel
-              curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/api/v2/webhook/versions/umh-core/update" \
-              -H "X-Webhook-Secret: $SECRET" \
-              -H "Content-Type: application/json" \
-              -d "{\"channel\":\"${CHANNEL}\",\"version\":\"${VERSION}\"}"
-            else
-              # Fetch current nightly to check if we can promote it
-              NIGHTLY_VERSION=$(curl --fail --silent --show-error --max-time 10 -X GET "$base_url/api/v2/versions/umh-core/nightly" | jq -r '.version')
-
-              # Extract base version from nightly version
-              # v0.0.0-pre.1 -> v0.0.0
-              NIGHTLY_BASE_VERSION=$(echo "$NIGHTLY_VERSION" | sed -E 's/(-pre\.[0-9]+)$//')
-
-              if [[ "$VERSION" == "$NIGHTLY_BASE_VERSION" ]]; then
-                # Promote nightly to stable
-                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/api/v2/webhook/versions/umh-core/update" \
-                -H "X-Webhook-Secret: $SECRET" \
-                -H "Content-Type: application/json" \
-                -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\",\"isPromotion\":true,\"promotedFrom\":\"nightly\"}"
-              else
-                # New stable release without promotion
-                curl --fail --silent --show-error --max-time 30 --retry 3 -X POST "$base_url/api/v2/webhook/versions/umh-core/update" \
-                -H "X-Webhook-Secret: $SECRET" \
-                -H "Content-Type: application/json" \
-                -d "{\"channel\":\"stable\",\"version\":\"${VERSION}\"}"
-              fi
-            fi
-
-            echo "Successfully notified $base_url"
-          }
-
-          notify_mc "https://staging.management.umh.app"
-          notify_mc "https://management.umh.app"
+          VERSION: ${{ github.ref_name }}
+        run: .github/scripts/notify-management-console.sh
