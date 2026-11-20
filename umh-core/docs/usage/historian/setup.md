@@ -35,7 +35,7 @@ historian:
     port: 5432
     database: umh
     username: postgres
-    password: change-me
+    password: postgres
     sslmode: disable
 ```
 
@@ -54,7 +54,7 @@ the database or PgBouncer has no TLS, as in the Getting Started Stack. To verify
 `sslrootcert`, `sslcert` and `sslkey`. These three keys are allowed only with `verify-full`.
 
 A change applies without a restart: umh-core reloads `config.yaml` and restarts every Historian bridge
-with the new values. Removing the section stops the Historian bridges.
+with the new values. Removing the section makes every Historian bridge fail with a config error.
 
 ## PgBouncer
 
