@@ -83,7 +83,7 @@ On the overview page, select **Edit Config** and then the **Write Flow** tab. A 
 The **UMH Topics** card builds the topics for you in **Visual** mode. Each row receives one data contract, in one or more versions, at the bridge's location.
 
 1. Select **Add Topic**.
-2. In **Data contract**, pick the contract, for example `_pump_v1 · user defined`.
+2. In **Data contract**, pick the contract, for example `_pump · user defined`.
 3. In **Location Path Suffix**, pick **Any suffix** to include every level below the bridge's location, or **No suffix** for the bridge's location only.
 4. In **Versions**, keep the latest version or add older ones.
 5. In **Tags**, keep **All tags**, or type tag names and press Enter to receive only those tags.
@@ -133,7 +133,7 @@ The **Destination** card holds the settings of the system you write to, for exam
 {% endhint %}
 
 1. Turn on **Activate Flow** on the **Write Flow** card.
-2. Select **Save & Deploy**. The dialog shows **Update successful** once the bridge runs.
+2. Select **Save & Deploy**. Once the bridge runs, the dialog shows **Deploy successful** for a new bridge, or **Update successful** for an existing one.
 3. Open the bridge's overview page. The **Write Flow** card shows the health and the throughput in msg/sec.
 4. Check that the destination receives the messages. Select **Logs** on the **Write Flow** card to see errors from the destination.
 
