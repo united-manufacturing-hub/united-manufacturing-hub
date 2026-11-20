@@ -144,9 +144,21 @@ This alert fires when the connection has been down for more than a minute:
 umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(historian-timescale\\)", state="degraded"} > 60
 ```
 
-A rising `umh_fsmv2_state_transitions_total` for this path shows a connection that keeps dropping. Both state series are defined in [`fsmv2/supervisor/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/supervisor/metrics/metrics.go). The database size and job details appear only in the Management Console. The Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
+A rising `umh_fsmv2_state_transitions_total` for this path shows a connection that keeps dropping. Both state series are defined in [`fsmv2/supervisor/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/supervisor/metrics/metrics.go). The database size and job details appear in the Management Console and as the metrics in [Database figures](#database-figures). The Historian bridges report like any other bridge. See [Bridges: Metrics](../data-flows/bridges.md#metrics).
 
 The Historian output inside each Historian bridge counts its own writes. The bridge's Benthos process keeps these counters. Neither port 8080 nor the Management Console's Metrics view shows them. The [Historian output reference](https://docs.umh.app/benthos-umh/output/historian) describes them.
+
+### Database figures
+
+The connection check also exports the figures the Management Console shows for the Historian as `umh_fsmv2_worker_historian_*` series. They tell you whether TimescaleDB answers and accepts the credentials, how fast the disk fills, and whether TimescaleDB keeps compressing and deleting old data on schedule. The figures read from the database refresh once a minute, the database size every 15 minutes. While the database cannot be read, the figures keep their last value, and `umh_fsmv2_worker_historian_summary_ready` or `umh_fsmv2_worker_historian_database_size_ready` is 0. After a failed read, the ready series stays 0 until the next read, a minute later for the figures and 15 minutes later for the database size. A figure is current only while its ready series is 1. The query latency is current only while `umh_fsmv2_worker_historian_auth_valid` is 1. `umh_fsmv2_worker_historian_reachable` is 0 while TimescaleDB does not answer, and also when umh-core cannot build a connection from the `historian:` section, for example because of an invalid `sslmode`. All series disappear when you remove the `historian:` section.
+
+This alert fires when a background job on the Historian tables failed its last run, for example a compression or retention job:
+
+```promql
+umh_fsmv2_worker_historian_failed_jobs > 0 and umh_fsmv2_worker_historian_summary_ready == 1
+```
+
+The series are defined in [`pkg/fsmv2/historian/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/fsmv2/historian/metrics.go). See [Read the metrics](../instances/agent/metrics.md#read-the-metrics) for how to query them.
 
 ## Next steps
 
