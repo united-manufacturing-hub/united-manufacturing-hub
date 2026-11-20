@@ -138,4 +138,18 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 
 		Expect(counterValues()).To(ConsistOf(3.0))
 	})
+
+	It("drops an export for a path no worker has claimed", func() {
+		exportGauge(0, 1)
+
+		Expect(gaugeValues()).To(BeEmpty())
+	})
+
+	It("forgets the owner of a removed worker's path", func() {
+		removedWorker := exporter.claim(claimTestPath)
+
+		exporter.cleanup(claimTestPath, removedWorker)
+
+		Expect(exporter.owners).NotTo(HaveKey(claimTestPath))
+	})
 })

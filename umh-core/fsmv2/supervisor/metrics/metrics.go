@@ -478,8 +478,7 @@ type WorkerMetricsExporter struct {
 	mu           sync.Mutex
 }
 
-// WorkerMetricsClaim identifies the worker that currently owns the
-// worker-metric series of a hierarchy path.
+// WorkerMetricsClaim identifies the worker that owns the worker-metric series of a hierarchy path.
 type WorkerMetricsClaim uint64
 
 func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsExporter {
@@ -494,9 +493,7 @@ func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsEx
 
 var workerMetricsExporter = newWorkerMetricsExporter(prometheus.DefaultRegisterer)
 
-// ExportWorkerMetrics exports metrics from ObservedState to Prometheus while
-// claim owns hierarchyPath. A path no worker has claimed accepts claim 0.
-// No-op if observed does not implement MetricsHolder.
+// ExportWorkerMetrics exports observed's worker metrics to Prometheus while claim owns hierarchyPath.
 func ExportWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim, observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
@@ -516,7 +513,8 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, claim WorkerMetrics
 	defer e.mu.Unlock()
 
 	// a removed worker's late collection must not bring its series back
-	if e.owners[hierarchyPath] != claim {
+	owner, claimed := e.owners[hierarchyPath]
+	if !claimed || owner != claim {
 		return
 	}
 
@@ -548,22 +546,12 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, claim WorkerMetrics
 	}
 }
 
-// ClaimWorkerMetrics makes a newly added worker the only one that exports and
-// deletes the worker-metric series of hierarchyPath.
+// ClaimWorkerMetrics makes a newly added worker the only one that exports and deletes hierarchyPath's series.
 func ClaimWorkerMetrics(hierarchyPath string) WorkerMetricsClaim {
 	return workerMetricsExporter.claim(hierarchyPath)
 }
 
-// OwnsWorkerMetrics reports whether claim still owns hierarchyPath; a path no worker has claimed accepts claim 0.
-func OwnsWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim) bool {
-	workerMetricsExporter.mu.Lock()
-	defer workerMetricsExporter.mu.Unlock()
-
-	return workerMetricsExporter.owners[hierarchyPath] == claim
-}
-
-// CleanupWorkerMetrics deletes the worker-metric series of hierarchyPath while
-// claim still owns them.
+// CleanupWorkerMetrics deletes hierarchyPath's worker-metric series while claim still owns them.
 func CleanupWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim) {
 	workerMetricsExporter.cleanup(hierarchyPath, claim)
 }
@@ -590,10 +578,7 @@ func (e *WorkerMetricsExporter) cleanup(hierarchyPath string, claim WorkerMetric
 		return
 	}
 
-	// a claim no worker holds rejects late exports under the removed claim and under claim 0
-	e.lastClaim++
-	e.owners[hierarchyPath] = e.lastClaim
-
+	delete(e.owners, hierarchyPath)
 	e.deleteSeries(hierarchyPath)
 }
 
