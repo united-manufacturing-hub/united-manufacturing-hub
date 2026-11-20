@@ -2,7 +2,7 @@
 
 The Topic Browser can show an empty tree, `No topics have arrived yet.`, while the instance is connected and producing data. A single topic can also stay missing while its bridge keeps sending it. The last step on this page needs access to the Docker host of the instance.
 
-An empty tree does not mean your data stopped. The Topic Browser is a view the instance builds from the messages it receives (see [Topic Browser](topic-browser.md)); the messages themselves keep flowing through your bridges into [Redpanda](redpanda.md). If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration).
+An empty tree does not mean your data stopped. The Topic Browser is a view the instance builds from the messages it receives (see [Topic Browser](topic-browser.md)); the messages themselves can keep flowing through your bridges and stream processors into [Redpanda](redpanda.md). [Check whether the data is still flowing](#check-whether-the-data-is-still-flowing) explains how to check. If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration).
 
 ![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
 
@@ -22,16 +22,21 @@ If the instance that reports the topic has gone offline, the browser says so abo
 
 ## Check whether the data is still flowing
 
-Select the topic in the Topic Browser and read the **Bridge** or **Stream** row to find out what produces it. Then open that bridge under [Bridges](../data-flows/bridges.md) and select **Metrics**. While data flows, the counts of messages received and sent keep rising.
+If the topic shows in the tree, select it and read the **Bridge** or **Stream** row to find out what produces it. If it does not show, find the bridge or stream processor that should produce it under **Data Flows**.
 
-If the bridge shows errors, or its count of messages sent stands still, the topic is missing upstream of the Topic Browser. See [Bridges Do Not Start](../data-flows/bridges-do-not-start.md) for a bridge that never starts, and the [Bridges](../data-flows/bridges.md) page for one that starts and sends nothing. To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
+- For a bridge, open it and select **Metrics**, as [Bridges](../data-flows/bridges.md) describes.
+- For a stream processor, open it and select **Metrics** on its Monitoring card, as [Stream Processors](../data-flows/stream-processor.md#metrics) describes.
+
+While data flows, the counts of messages received and sent keep rising.
+
+If the bridge or stream processor shows errors, or its count of messages sent stands still, the topic is missing upstream of the Topic Browser. See [Bridges Do Not Start](../data-flows/bridges-do-not-start.md) for a bridge that never starts, the [Bridges](../data-flows/bridges.md) page for one that starts and sends nothing, and [Stream Processors](../data-flows/stream-processor.md) for a stream processor. To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
 
 The [Redpanda](redpanda.md) card on the instance's detail page shows the state of the broker the messages go to. If it does not read **Active**, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
 ## Restart the container
 
 {% hint style="warning" %}
-Restarting the container stops umh-core and every bridge in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
+Restarting the container stops umh-core and every data flow in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
 {% endhint %}
 
 If the data is flowing and the topic is still missing, restart the container of the instance. On the Docker host, run:
@@ -41,6 +46,8 @@ docker restart umh-core
 ```
 
 Replace `umh-core` with the name of your container if you named it differently.
+
+After the restart, a topic shows again only when a message for it arrives that the Topic Browser has not read yet. A topic that publishes rarely can stay absent until it next publishes.
 
 ## Getting help
 
