@@ -609,7 +609,11 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
+	// a collection that returns after its worker was removed must not recreate the save series
+	if metrics.OwnsWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim()) {
+		metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
+	}
+
 	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim(), observed)
 
 	if changed {

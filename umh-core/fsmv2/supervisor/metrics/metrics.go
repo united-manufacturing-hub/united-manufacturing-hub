@@ -554,6 +554,14 @@ func ClaimWorkerMetrics(hierarchyPath string) WorkerMetricsClaim {
 	return workerMetricsExporter.claim(hierarchyPath)
 }
 
+// OwnsWorkerMetrics reports whether claim still owns hierarchyPath; a path no worker has claimed accepts claim 0.
+func OwnsWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim) bool {
+	workerMetricsExporter.mu.Lock()
+	defer workerMetricsExporter.mu.Unlock()
+
+	return workerMetricsExporter.owners[hierarchyPath] == claim
+}
+
 // CleanupWorkerMetrics deletes the worker-metric series of hierarchyPath while
 // claim still owns them.
 func CleanupWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim) {
