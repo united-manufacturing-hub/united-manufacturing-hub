@@ -1,121 +1,114 @@
 # Topic Browser
 
-Real-time exploration of your Unified Namespace data via Management Console or GraphQL API.
+The Topic Browser shows the topics of the instances selected in the header filter as a tree, with the current value and the recent history of the topic you select. Use it to find a data point, to see where it sits in your hierarchy, and to check what it last reported. It runs in the Management Console under **Use** → **Topic browser**. This page is not about the Topic Browser of UMH Classic. To read topics from a program, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
 
-## Management Console
+If the tree stays empty while your instance is producing data, or a topic you expect never appears, see [Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md).
 
-Access via `management.umh.app` → **Topic Browser** (not the Classic version).
+## The Topic Browser screen
 
-### Interface Overview
-- **Left panel**: Hierarchical topic tree following ISA-95 structure
-- **Right panel**: Details for selected topic (metadata, values, history)
-- **Auto-aggregation**: Combines data from all your UMH instances
-- **Live updates**: Real-time data without manual refresh
+The screen splits into two panels. The left panel searches and shows your topics as a tree. The right panel shows the topic you select. Both update on their own, without a reload.
 
-### Key Features
+![The Topic Browser with a numeric topic selected](../../generated/topic-browser-main.png)
 
-**Topic Tree Navigation:**
-- Expand/collapse hierarchy levels (Enterprise → Site → Area → Line → Equipment)
-- See data contracts (`_raw`, `_pump_v1`) and virtual paths
-- Search bar for filtering by topic name or metadata
+The instance filter in the Management Console header decides which instances the tree draws from. It applies to every page, it accepts more than one instance at a time, and its menu is headed **Filtering N of M instances**.
 
-**Topic Details Panel:**
-When selecting a topic, view:
-- **Location**: Physical hierarchy path
-- **Data Contract**: Applied schema (`_raw`, `_pump_v1`, etc.)
-- **Current Value**: Latest data with timestamp
-- **Metadata**: Including original device tags (see [Metadata and Tracing](metadata-and-tracing.md))
-- **History**: Last 100 values as chart (time-series) or table (boolean/string)
+## The topic tree
 
-![Topic Browser showing DB1.DW20](../../getting-started/images/2-topic-browser-DB1.DW20.png)
+The tree follows your topic structure, which [Topic Convention](topic-convention.md) explains: the location path comes first (enterprise, site, area, line, machine), then the data contract, then the tag. A data contract is the schema applied to the data, for example `_raw` or a device model such as `_metal_forming_v1`. A virtual path, if the topic has one, shows up as further folders between the contract and the tag.
 
-## GraphQL API
+Each branch shows the number of topics beneath it. Individual topics show no count.
 
-Programmatic access at `http://localhost:8090/graphql` (per instance).
+The search box narrows the tree. It matches parts of topic names.
 
-{% hint style="info" %}
-**Early Access.** We built the GraphQL API for developers who want to query the Unified Namespace programmatically. It's experimental, so it's off by default. See the instructions below and give it a try. Tell us what you think.
-{% endhint %}
+## The selected topic
 
-### Configuration
+The right panel opens with the full topic string and a button that copies it. Below it:
 
-```yaml
-internal:
-  topicbrowser:
-    desiredState: "active"  # Enable/disable
+| Field | Shows |
+|---|---|
+| **Current value** | The latest value, with how long ago it arrived beside it. |
+| **Instance** | The instances that reported the topic, as a dropdown. An instance is marked `(offline)` when it is not reachable, and `(not in the filter)` when the header filter excludes it. |
+| **Bridge** or **Stream** | What produced the topic. The row reads **Stream** when a stream processor produced it and **Bridge** when a protocol converter did. It is absent when neither did. |
+| **Data contract** | The contract applied to the data. |
 
-agent:
-  graphql:
-    enabled: true           # Enable GraphQL API (required!)
-    port: 8090             # API port
-    debug: false           # Set true for GraphiQL UI
-```
+A numeric topic also draws a chart of its recent values, with a note of the window they cover.
 
-### Basic Query
-```graphql
-{
-  topics(filter: {
-    text: "temperature",
-    meta: [{ key: "data_contract", eq: "_pump_v1" }]
-  }) {
-    topic
-    metadata {
-      key
-      value
-    }
-    lastEvent {
-      ... on TimeSeriesEvent {
-        producedAt
-        numericValue
-        scalarType
-      }
-    }
-  }
-}
-```
+Below that are two tabs, **History** and **Details**. A third, **SQL query**, appears when the historian feature is enabled on your instance.
 
-### cURL Example
-```bash
-curl -X POST http://localhost:8090/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query": "{ topics(limit: 10) { topic } }"}'
-```
+### History
 
-## Common Use Cases
+The History tab lists the values the browser is holding: the last 100 of that topic, newest first.
 
-### Finding Specific Data
-1. Use search bar for partial matches (e.g., "temp" finds all temperature topics)
-2. Filter by metadata like data contract or location
-3. Check metadata section for original device tags
+The instance sends at most one value per topic per emit interval, which umh-core adapts between one and fifteen seconds. Values measured between two emits do not reach the browser, so the History tab is a sample of the signal rather than every reading of it. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
 
-### Verifying Data Flow
-1. Select topic to see current value
-2. Check "Produced At" timestamp for freshness
-3. Review history chart for patterns
-4. Inspect metadata for source bridge
+A text or boolean topic has no chart. Its History tab has two views instead. **Changes** collapses runs of the same value into one row, with the time it held and how many values it stored. **All values** lists them individually.
 
-### Debugging Issues
-1. Verify topic exists in tree
-2. Check metadata for `bridged_by` to identify source
-3. Look for original tag names (e.g., `opcua_tag_name`, `s7_address`)
-4. Compare timestamps to detect delays
+![A text topic, showing the Changes view of its history](../../generated/topic-browser-text-topic.png)
 
-## Performance Notes
+### Details
 
-- Topic Browser stores last 100 values per topic
-- Extremely rapid updates are batched for display
-- Large namespaces (>10,000 topics) may load progressively
-- Each UMH instance has its own Topic Browser service
+The Details tab describes the last message rather than the series.
+
+| Field | Shows |
+|---|---|
+| **Virtual path** | The folders between the data contract and the tag, if the topic has any. |
+| **Payload type** | `Time-Series` for a single value, or `Relational` for a JSON object. [Payload Formats](payload-formats.md) explains both. |
+| **Data type** | `number`, `string`, `boolean`, `JSON` for a relational topic, or `unknown`. |
+| **Value** | The value itself. A relational topic shows no **Value** or **Measured** row. |
+| **Measured** | When the device recorded it. |
+| **Arrived in UMH** | When UMH received it. The gap between the two is your pipeline's latency. |
+| **Headers** | The Kafka headers of the message, including what produced it, the data contract, the location path and the original tag name. The section is absent when the message carries no headers. [Metadata and Tracing](metadata-and-tracing.md) explains each field. |
+
+![The Details tab, showing the fields and the message headers](../../generated/topic-browser-details-panel.png)
+
+### SQL query
+
+The SQL query tab writes the query that reads this tag out of the historian database, for **Grafana** or for **TimescaleDB** directly. The tab appears only when the historian feature is enabled on your instance.
+
+**Aggregate** is a switch. Turn it on and choose an **Interval**, and the query groups the readings into buckets of that length, returning the average, minimum and maximum of each.
+
+![The SQL query tab, with a Grafana query for the selected tag](../../generated/topic-browser-sql-query.png)
+
+The query returns rows only once the tag has been saved to the historian database. Until then it returns nothing, however much data the Topic Browser itself is showing.
+
+## Relational topics
+
+A relational topic, for example `_erp.orders`, is a JSON document rather than a measurement. It shows **Latest payload** in place of a current value, and has two tabs, **Payload** and **Details**. The browser keeps only the most recent payload, so there is no history and no chart.
+
+![A relational topic, showing its latest JSON payload](../../generated/topic-browser-relational-topic.png)
+
+## Topics from several instances
+
+Each instance runs its own Topic Browser and reports its own topics, and the Management Console merges them into one tree. When more than one instance reports the same topic, the **Instance** dropdown lists all of them.
+
+![A topic reported by three instances, one of them offline](../../generated/topic-browser-several-instances.png)
+
+## The Topic Browser card
+
+The **Topic Browser** card on the instance's detail page shows one value. **Topics** counts the different topics the instance has seen since umh-core started. Once a topic stops receiving messages it stays in the count. When umh-core restarts, the count can start from zero again. The **Metrics** button on the card opens the counters of the [Benthos](../data-flows/bridges.md) process that consumes the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
+
+While that process runs, the card's badge reads **Active**. When it does not, the information icon beside the badge gives the reason: `benthos degraded` when the Benthos process fails, `redpanda degraded` when Redpanda is degraded. The Redpanda card shows the cause of a Redpanda failure; see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+
+## Configuration
+
+One key controls the Topic Browser, in the `config.yaml` of the instance. [Configuration reference](../../reference/configuration-reference.md) lists it with the rest of `internal`, under a warning that the `internal` section is not meant to be edited without guidance from UMH support.
+
+| Key | Default | Effect |
+|---|---|---|
+| `internal.topicbrowser.desiredState` | `active` | `stopped` turns off the Topic Browser on this instance: it collects no topics, and both the tree and the [GraphQL API](#graphql-api) stop updating. The change takes effect without a restart. |
 
 ## Metrics
 
-The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process that reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
+The Topic Browser reports on port 8080 and runs on FSMv1, so it uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains how to reach the endpoint. Its series carry these labels:
 
-The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+| Part of the Topic Browser | `component` | `instance` |
+|---|---|---|
+| The Topic Browser | `topic_browser_instance` | `topic-browser` |
+| Its Benthos process | `benthos_instance` | `topicbrowser-topic-browser` |
 
-On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
+Prometheus renames the `instance` label to `exported_instance` when it scrapes, unless the scrape job sets `honor_labels: true`. Queries therefore use `exported_instance`, as the alert below does.
 
-To alert when the Benthos process of the Topic Browser is degraded, use:
+To raise an alert while the Benthos process of the Topic Browser is degraded, use:
 
 ```promql
 umh_core_service_current_state{component="benthos_instance", exported_instance="topicbrowser-topic-browser"} == 5
@@ -123,6 +116,6 @@ umh_core_service_current_state{component="benthos_instance", exported_instance="
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
-## Next Steps
+## GraphQL API
 
-- [**Metadata and Tracing**](metadata-and-tracing.md) - Understanding metadata fields
+The GraphQL API is documented on its own reference page. For the endpoint, the schema, example queries and every configuration option, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
