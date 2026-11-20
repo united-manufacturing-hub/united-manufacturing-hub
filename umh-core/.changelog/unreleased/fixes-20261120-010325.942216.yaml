@@ -1,0 +1,7 @@
+kind: fixes
+body: |-
+    Updated dependencies with known vulnerabilities:
+      - OpenSSL (libcrypto3 and libssl3), now 3.5.9-r1 (CVE-2026-88822, CVE-2026-88823, CVE-2026-95691, CVE-2026-95692)
+
+      Update to reduce your attack surface.
+time: 2026-11-20T01:03:25.942216699Z
