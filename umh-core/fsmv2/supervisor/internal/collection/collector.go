@@ -178,6 +178,7 @@ func (c *Collector[TObserved]) IsRunning() bool {
 func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RLock()
 	running := c.state == collectorStateRunning
+	restartChan := c.restartChan
 	c.mu.RUnlock()
 
 	if !running {
@@ -191,7 +192,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.config.Logger.Debug("collector_trigger_now_requested")
 
 	select {
-	case c.restartChan <- struct{}{}:
+	case restartChan <- struct{}{}:
 		c.config.Logger.Debug("collector_trigger_now_signal_sent")
 	default:
 		c.config.Logger.Debug("collector_trigger_now_already_pending")
@@ -350,6 +351,8 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 func (c *Collector[TObserved]) observationLoop() {
 	c.mu.RLock()
 	doneChan := c.goroutineDone
+	// a loop that outlived Restart keeps its own channel, so it cannot take the new loop's trigger
+	restartChan := c.restartChan
 	ctx := c.ctx
 	interval := c.config.ObservationInterval
 	timeout := c.config.ObservationTimeout
@@ -387,7 +390,7 @@ func (c *Collector[TObserved]) observationLoop() {
 
 			return
 
-		case <-c.restartChan:
+		case <-restartChan:
 			c.config.Logger.Debug("collector_restart_triggered")
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
