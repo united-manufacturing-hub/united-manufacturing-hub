@@ -60,10 +60,9 @@ type CollectorConfig[TObserved any] struct {
 	Worker                    fsmv2.Worker
 	Store                     storage.TriangularStoreInterface
 	Logger                    deps.FSMLogger
-	StateProvider             func() string // Returns current FSM state name (injected by supervisor)
-	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
-	// MetricsClaim returns the claim the worker's metrics are exported under; nil exports under claim 0.
-	MetricsClaim func() metrics.WorkerMetricsClaim
+	StateProvider             func() string                     // Returns current FSM state name (injected by supervisor)
+	ShutdownRequestedProvider func() bool                       // Returns current shutdown requested status (injected by supervisor)
+	MetricsClaim              func() metrics.WorkerMetricsClaim // nil exports no worker metrics
 	// ChildrenCountsProvider is the legacy two-int interface. New workers should
 	// consume ChildrenView instead and read HealthyCount / UnhealthyCount as fields.
 	// The collector still calls both setters during migration; counts agree because
@@ -188,7 +187,6 @@ func (c *Collector[TObserved]) metricsClaim() metrics.WorkerMetricsClaim {
 func (c *Collector[TObserved]) TriggerNow() {
 	c.mu.RLock()
 	running := c.state == collectorStateRunning
-	restartChan := c.restartChan
 	c.mu.RUnlock()
 
 	if !running {
@@ -202,7 +200,7 @@ func (c *Collector[TObserved]) TriggerNow() {
 	c.config.Logger.Debug("collector_trigger_now_requested")
 
 	select {
-	case restartChan <- struct{}{}:
+	case c.restartChan <- struct{}{}:
 		c.config.Logger.Debug("collector_trigger_now_signal_sent")
 	default:
 		c.config.Logger.Debug("collector_trigger_now_already_pending")
@@ -361,8 +359,6 @@ func (c *Collector[TObserved]) CollectFinalObservation(ctx context.Context) erro
 func (c *Collector[TObserved]) observationLoop() {
 	c.mu.RLock()
 	doneChan := c.goroutineDone
-	// a loop that outlived Restart keeps its own channel, so it cannot take the new loop's trigger
-	restartChan := c.restartChan
 	ctx := c.ctx
 	interval := c.config.ObservationInterval
 	timeout := c.config.ObservationTimeout
@@ -370,20 +366,15 @@ func (c *Collector[TObserved]) observationLoop() {
 
 	defer func() {
 		c.mu.Lock()
-		// a loop that outlived Restart must not mark the loop Restart started as stopped
-		superseded := doneChan != c.goroutineDone
-		if !superseded {
-			c.state = collectorStateStopped
-			c.running = false
-		}
+		c.state = collectorStateStopped
+		c.running = false
 
 		close(doneChan)
 		// Read state string while holding lock to avoid race with Restart()
 		finalState := c.state.String()
 		c.mu.Unlock()
 		c.config.Logger.Debug("collector_loop_stopped",
-			deps.String("final_state", finalState),
-			deps.Bool("superseded_by_restart", superseded))
+			deps.String("final_state", finalState))
 	}()
 
 	c.config.Logger.Debug("collector_loop_starting",
@@ -400,7 +391,7 @@ func (c *Collector[TObserved]) observationLoop() {
 
 			return
 
-		case <-restartChan:
+		case <-c.restartChan:
 			c.config.Logger.Debug("collector_restart_triggered")
 
 			collectCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -609,11 +600,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 
 	saveDuration := time.Since(saveStartTime)
 
-	// a collection that returns after its worker was removed must not recreate the save series
-	if metrics.OwnsWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim()) {
-		metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	}
-
+	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
 	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim(), observed)
 
 	if changed {
