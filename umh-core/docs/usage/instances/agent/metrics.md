@@ -45,7 +45,7 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
 | Bridge connection check | FSMv2 | none. `NMAP_BACKEND` is ignored |
-| CPU health | FSMv2 from v0.44.46. On v0.44.37 to v0.44.45, FSMv1 unless `USE_FSMV2_CPU=true` | `USE_FSMV2_CPU=false` switches to FSMv1 on v0.44.46 and later. See [CPU Health](../container/cpu-health/README.md#turn-the-check-on-or-off) |
+| CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
