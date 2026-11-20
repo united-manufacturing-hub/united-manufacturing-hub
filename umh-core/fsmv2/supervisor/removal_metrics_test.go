@@ -16,13 +16,19 @@ package supervisor_test
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/cse/storage"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence/memory"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/metrics"
 )
@@ -140,5 +146,176 @@ var _ = Describe("The worker metrics of a worker", func() {
 		Expect(s.ListWorkers()).To(BeEmpty())
 		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(BeEmpty())
 		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(BeEmpty())
+	})
+})
+
+// blockableWorker is a running worker whose collections block once block is
+// called, until release is called.
+type blockableWorker struct {
+	initialState      fsmv2.State[any, any]
+	blocked           chan struct{}
+	collectionStarted chan struct{}
+	released          chan struct{}
+	startedOnce       sync.Once
+	id                string
+}
+
+func newBlockableWorker(id string, initialState fsmv2.State[any, any]) *blockableWorker {
+	return &blockableWorker{
+		id:                id,
+		initialState:      initialState,
+		blocked:           make(chan struct{}),
+		collectionStarted: make(chan struct{}),
+		released:          make(chan struct{}),
+	}
+}
+
+func (w *blockableWorker) block()   { close(w.blocked) }
+func (w *blockableWorker) release() { close(w.released) }
+
+func (w *blockableWorker) CollectObservedState(_ context.Context, _ fsmv2.DesiredState) (fsmv2.ObservedState, error) {
+	select {
+	case <-w.blocked:
+		w.startedOnce.Do(func() { close(w.collectionStarted) })
+		<-w.released
+	default:
+	}
+
+	return &supervisor.TestObservedState{ID: w.id, CollectedAt: time.Now(), Desired: &supervisor.TestDesiredState{}}, nil
+}
+
+func (w *blockableWorker) DeriveDesiredState(_ interface{}) (fsmv2.DesiredState, error) {
+	return &config.DesiredState{State: "running"}, nil
+}
+
+func (w *blockableWorker) GetInitialState() fsmv2.State[any, any] {
+	return w.initialState
+}
+
+// stuckRunningState never asks for removal, so Shutdown reaches its last step
+// with the worker still registered.
+type stuckRunningState struct{}
+
+func (stuckRunningState) String() string { return "running" }
+
+func (stuckRunningState) LifecyclePhase() config.LifecyclePhase { return config.PhaseRunningHealthy }
+
+func (s stuckRunningState) Next(_ any) fsmv2.NextResult[any, any] {
+	return fsmv2.NextResult[any, any]{Signal: fsmv2.SignalNone, State: s, Reason: "running"}
+}
+
+const removalRunningType = "removalmetrics"
+
+func removalRunningIdentity(id string) deps.Identity {
+	return deps.Identity{
+		ID:            id,
+		Name:          id,
+		WorkerType:    removalRunningType,
+		HierarchyPath: id + "(" + removalRunningType + ")",
+	}
+}
+
+// startRemovalSupervisor starts a supervisor that runs worker and returns once
+// the worker is registered. Shutdown runs after the spec.
+func startRemovalSupervisor(identity deps.Identity, worker fsmv2.Worker) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+	ctx := context.Background()
+
+	basicStore := memory.NewInMemoryStore()
+	for _, suffix := range []string{"_identity", "_desired", "_observed"} {
+		ExpectWithOffset(1, basicStore.CreateCollection(ctx, removalRunningType+suffix, nil)).To(Succeed())
+	}
+	triangularStore := storage.NewTriangularStore(basicStore, deps.NewNopFSMLogger())
+
+	root := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
+		WorkerType:              removalRunningType,
+		Store:                   triangularStore,
+		Logger:                  deps.NewNopFSMLogger(),
+		TickInterval:            20 * time.Millisecond,
+		GracefulShutdownTimeout: 200 * time.Millisecond,
+	})
+	ExpectWithOffset(1, root.AddWorker(identity, worker)).To(Succeed())
+
+	_, err := triangularStore.SaveDesired(ctx, removalRunningType, identity.ID, persistence.Document{
+		supervisor.FieldID:  identity.ID,
+		"ShutdownRequested": false,
+		"state":             "running",
+	})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	runCtx, cancel := context.WithCancel(ctx)
+	_ = root.Start(runCtx)
+
+	DeferCleanup(func() {
+		root.Shutdown()
+		cancel()
+	})
+
+	EventuallyWithOffset(1, root.ListWorkers, 5*time.Second).Should(HaveLen(1))
+
+	return root
+}
+
+func cancelledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	return ctx
+}
+
+var _ = Describe("The worker metrics of a running worker", func() {
+	It("are gone after RemoveWorkerForRestart, once a collection that outlived Stop returns", func() {
+		identity := removalRunningIdentity("removal-metrics-late-collection")
+		worker := newBlockableWorker(identity.ID, stuckRunningState{})
+		root := startRemovalSupervisor(identity, worker)
+
+		exportTestWorkerMetrics(identity.HierarchyPath)
+		worker.block()
+		Eventually(worker.collectionStarted, 5*time.Second).Should(BeClosed())
+
+		Expect(root.RemoveWorkerForRestart(cancelledContext(), identity.ID)).To(Succeed())
+
+		Consistently(func() []map[string]string {
+			return seriesLabels(1, removalTestGaugeMetric, identity.HierarchyPath)
+		}, 100*time.Millisecond).Should(HaveLen(1))
+
+		worker.release()
+
+		Eventually(func() []map[string]string {
+			return seriesLabels(1, removalTestGaugeMetric, identity.HierarchyPath)
+		}, 5*time.Second).Should(BeEmpty())
+		Expect(seriesLabels(0, removalTestCounterMetric, identity.HierarchyPath)).To(BeEmpty())
+	})
+
+	It("stay when a worker is added again at the same path before the late collection returns", func() {
+		identity := removalRunningIdentity("removal-metrics-readded")
+		worker := newBlockableWorker(identity.ID, stuckRunningState{})
+		root := startRemovalSupervisor(identity, worker)
+
+		worker.block()
+		Eventually(worker.collectionStarted, 5*time.Second).Should(BeClosed())
+
+		Expect(root.RemoveWorkerForRestart(cancelledContext(), identity.ID)).To(Succeed())
+		Expect(root.AddWorker(identity, newBlockableWorker(identity.ID, stuckRunningState{}))).To(Succeed())
+		exportTestWorkerMetrics(identity.HierarchyPath)
+
+		worker.release()
+
+		Consistently(func() []map[string]string {
+			return seriesLabels(1, removalTestGaugeMetric, identity.HierarchyPath)
+		}, 300*time.Millisecond).Should(HaveLen(1))
+	})
+
+	It("are gone after Shutdown stops a worker that never asked for removal", func() {
+		identity := removalRunningIdentity("removal-metrics-shutdown")
+		root := startRemovalSupervisor(identity, newBlockableWorker(identity.ID, stuckRunningState{}))
+
+		exportTestWorkerMetrics(identity.HierarchyPath)
+		Expect(seriesLabels(0, removalTestGaugeMetric, identity.HierarchyPath)).To(HaveLen(1))
+
+		root.Shutdown()
+
+		Expect(root.ListWorkers()).To(HaveLen(1))
+		Expect(seriesLabels(0, removalTestGaugeMetric, identity.HierarchyPath)).To(BeEmpty())
+		Expect(seriesLabels(0, removalTestCounterMetric, identity.HierarchyPath)).To(BeEmpty())
 	})
 })

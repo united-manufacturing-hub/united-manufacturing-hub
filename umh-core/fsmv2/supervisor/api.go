@@ -561,24 +561,57 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 
 	workerCtx.mu.RUnlock()
 
-	cleanupWorkerMetricsOnceStopped(workerCtx.collector.Stopped(), workerCtx.identity.HierarchyPath)
+	s.cleanupWorkerMetricsOnceStopped(workerCtx)
 }
+
+// workerMetricsCleanupWaitLimit bounds how long a removed worker's metrics wait
+// for its collector to exit.
+const workerMetricsCleanupWaitLimit = 10 * time.Minute
 
 // cleanupWorkerMetricsOnceStopped deletes the worker-metric series after the
 // collector goroutine exits, because a collection that outlived Stop can still
 // export them.
-func cleanupWorkerMetricsOnceStopped(collectorStopped <-chan struct{}, hierarchyPath string) {
+func (s *Supervisor[TObserved, TDesired]) cleanupWorkerMetricsOnceStopped(removed *WorkerContext[TObserved, TDesired]) {
 	select {
-	case <-collectorStopped:
-		metrics.CleanupWorkerMetrics(hierarchyPath)
+	case <-removed.collector.Stopped():
+		metrics.CleanupWorkerMetrics(removed.identity.HierarchyPath)
 	default:
-		go waitThenCleanupWorkerMetrics(collectorStopped, hierarchyPath)
+		go s.waitThenCleanupWorkerMetrics(removed, workerMetricsCleanupWaitLimit)
 	}
 }
 
-func waitThenCleanupWorkerMetrics(collectorStopped <-chan struct{}, hierarchyPath string) {
-	<-collectorStopped
+func (s *Supervisor[TObserved, TDesired]) waitThenCleanupWorkerMetrics(removed *WorkerContext[TObserved, TDesired], waitLimit time.Duration) {
+	hierarchyPath := removed.identity.HierarchyPath
+
+	waitTimer := time.NewTimer(waitLimit)
+	defer waitTimer.Stop()
+
+	select {
+	case <-removed.collector.Stopped():
+	case <-waitTimer.C:
+		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_metrics_cleanup_wait_exceeded",
+			deps.Duration("wait_limit", waitLimit))
+	}
+
+	// a worker added again at the same path exports under the same labels
+	if s.hasOtherWorkerAt(hierarchyPath, removed) {
+		return
+	}
+
 	metrics.CleanupWorkerMetrics(hierarchyPath)
+}
+
+func (s *Supervisor[TObserved, TDesired]) hasOtherWorkerAt(hierarchyPath string, removed *WorkerContext[TObserved, TDesired]) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, workerCtx := range s.workers {
+		if workerCtx != removed && workerCtx.identity.HierarchyPath == hierarchyPath {
+			return true
+		}
+	}
+
+	return false
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without
