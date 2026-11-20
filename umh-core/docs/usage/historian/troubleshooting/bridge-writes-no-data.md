@@ -12,5 +12,6 @@ these messages and does not write them to the database.
 
 ## What to do
 
-Pick the data contract in the topic table and save. Messages refused before the fix are not written
-later.
+Pick the data contract in the topic table and save. Until then, the bridge stores nothing from a
+batch that contains a refused message. After the fix, the refused messages are delivered again and
+stored.
