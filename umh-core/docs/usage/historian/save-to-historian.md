@@ -17,7 +17,7 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 2. In the template list, pick **TimescaleDB (PostgreSQL, auto-connect) — Historian**. The **Vendor**
    filter narrows the list to the TimescaleDB templates.
 3. Select the instance. The connection host and port are prefilled read-only from that instance's
-   Historian connection, so the bridge's health check always targets the configured database.
+   Historian connection, so the bridge's connection probe always checks the configured database.
 4. In the write flow's output, set `data_contract_name` to the contract you want to store, written
    **without the version suffix**: `pump`, not `pump_v1`.
 5. Deploy.

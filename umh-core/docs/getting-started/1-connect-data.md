@@ -46,7 +46,7 @@ On the **General** tab:
 - **Name:** `my-first-generator-bridge`
 - **Instance:** Select your UMH Core instance.
 - **IP Address / Port:** The external system to connect to. We have no real PLC for this tutorial, so use `localhost` and `8080`.
-- **Level 0, Level 1, …:** Pre-filled with your instance location. Levels you add here extend it to the bridge location. Leave it as is for now. In the screenshot we define a bridge for `enterprise.siteA`.
+- **Level 0, Level 1, …:** Pre-filled with your instance location. A level you add here extends it, and the result is the bridge location. Keep the pre-filled values for now. In the screenshot we define a bridge for `enterprise.siteA`.
 
 Once done, click **"Save & Deploy"**. A popup shows deployment progress and any errors or warnings. If everything goes well, you'll be redirected automatically.
 
@@ -169,7 +169,7 @@ Real hardware uses the address-mapping table instead of the generator. The [Brid
 Building on the location path from Step 1, you now understand:
 
 - **Unified Namespace (UNS)** - Event-driven data backbone that eliminates point-to-point connections ([learn more](../usage/unified-namespace/README.md))
-- **Bridge** - Reads from an external system into the UNS, and writes from the UNS to it (the only way data enters)
+- **Bridge** - Reads from an external system and publishes to the UNS; its write flow writes UNS data to the external system. Bridges are the only way data enters the UNS.
 - **Bridge Template** - Pre-configured starting point for a bridge (e.g. "Generic via Generate")
 - **Data Flows** - Configuration area for bridges and other data pipelines
 - **Protocol** - Connection method (manufacturing protocols like OPC UA, Modbus, S7, or IT protocols like HTTP)

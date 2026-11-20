@@ -138,7 +138,7 @@ protocolConverter:
   debug_level: false  # Set to true for detailed logging while troubleshooting
   protocolConverterServiceConfig:
     location:
-      2: press1
+      3: press1
     config:
       connection:
         nmap:

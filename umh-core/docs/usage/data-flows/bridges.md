@@ -64,7 +64,7 @@ Fill in the basic information and proceed with Step 5.
 **General Information:**
 - **Name**: Unique identifier for your bridge
 - **Instance**: Select your UMH instance
-- **Level**: the bridge's levels below the instance location, such as area → line → machine. The instance location plus these levels is the bridge location.
+- **Level 0, Level 1, …**: pre-filled with the instance location. A level you add, such as area → line → machine, extends it, and the result is the bridge location.
 
 ![Connection Configuration](./images/bridges-connection-configuration.png)
 
@@ -201,7 +201,7 @@ protocolConverter:
 **Location Path:**
 ```yaml
 location:
-  2: area   # the bridge's levels
+  2: area   # the bridge's levels; assumes agent.location sets levels 0 and 1
   3: line
   4: cell
 ```
@@ -247,9 +247,9 @@ umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 
 
 For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or restart the container. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
-### Connection Check
+### Connection Probe
 
-Before umh-core starts a bridge, it checks that the external system answers on its host and port. This connection check runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
+Before umh-core starts a bridge, it checks that the external system answers on its host and port. This connection probe runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
 
 When the external system stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the external system answers, read the bridge's state.
 

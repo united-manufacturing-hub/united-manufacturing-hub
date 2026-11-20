@@ -131,8 +131,9 @@ Bridge templates read it through the reserved `{{ .historian.timescale.* }}` sco
 [Variables](../../reference/variables.md).
 
 A bridge counts as a Historian bridge when its write flow's destination protocol is `historian`.
-umh-core then targets the bridge's connection probe at the shared connection rather than at a host and
-port entered on the bridge, so the check follows the connection whenever you change it.
+umh-core then points the bridge's connection probe at the host and port of the Historian connection
+instead of the ones entered on the bridge, so the probe follows the Historian connection whenever you
+change it.
 
 ## Metrics
 
