@@ -35,9 +35,13 @@ import (
 	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/factory"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
+	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
+	benthosmonitorfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
 
 	"gopkg.in/yaml.v3"
 )
@@ -235,4 +239,204 @@ var _ = Describe("The framework cycle", func() {
 		Expect(rateOf(second.Result.Sample.InputMessagesPerSecond)).To(Equal(10.0),
 			"A's rate is 20 messages over its own 2 s, untouched by B's scrape")
 	})
+
+	// The worker's per-instance window state survives a Benthos process
+	// restart, an error entry from before the restart clears at the first
+	// scrape where the counter is back to 0, and errors counted between the
+	// restart and that scrape still degrade the flow.
+	It("keeps the window across a Benthos restart and clears pre-restart errors", func() {
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
+
+		spec := userSpecFor("scenario-restart", s.Port())
+
+		t0 := time.Now().Truncate(time.Second)
+		clockNow := t0
+
+		defer swapScrapeClock(func() time.Time { return clockNow })()
+
+		worker, err := factory.NewWorkerByType(
+			WorkerType,
+			deps.Identity{ID: "scenario-restart", Name: "scenario-restart", WorkerType: WorkerType},
+			deps.NewNopFSMLogger(),
+			nil,
+			nil,
+		)
+		Expect(err).NotTo(HaveOccurred(), "factory.NewWorkerByType")
+
+		// No error yet.
+		s.SetCounters(100, 100, 0)
+
+		clockNow = t0
+		first := observeOneCycle(worker, spec)
+		ok, _ := first.Result.Sample.Failures.ErrorFree()
+		Expect(ok).To(BeTrue(), "errors before the first scrape are not backfilled")
+
+		// One output error fires the entry.
+		s.SetCounters(100, 100, 1)
+
+		clockNow = t0.Add(time.Second)
+		fired := observeOneCycle(worker, spec)
+		ok, _ = fired.Result.Sample.Failures.ErrorFree()
+		Expect(ok).To(BeFalse(), "the error entry degrades the flow")
+
+		// Benthos restarts and counts no error since: the counters are back
+		// at 0, and the pre-restart entry clears at once.
+		s.SetCounters(0, 0, 0)
+
+		clockNow = t0.Add(2 * time.Second)
+		restarted := observeOneCycle(worker, spec)
+		Expect(restarted.Result.Sample.Metrics.InputReceivedTotal()).To(Equal(int64(0)),
+			"the restart reset the counters")
+		ok, _ = restarted.Result.Sample.Failures.ErrorFree()
+		Expect(ok).To(BeTrue(), "a restart clears the errors from before it")
+
+		// Benthos runs error-free for a while.
+		s.SetCounters(40, 40, 0)
+
+		clockNow = t0.Add(3 * time.Second)
+		_ = observeOneCycle(worker, spec)
+
+		// Benthos restarts again and counts three errors before the first
+		// scrape after the restart. They still degrade the flow, and the
+		// entry carries their count: the worker kept its window state across
+		// the restart and compares the new counters with 0.
+		s.SetCounters(0, 0, 3)
+
+		clockNow = t0.Add(4 * time.Second)
+		degraded := observeOneCycle(worker, spec)
+		ok, _ = degraded.Result.Sample.Failures.ErrorFree()
+		Expect(ok).To(BeFalse(),
+			"errors counted between the restart and the first scrape after it still degrade")
+		Expect(degraded.Result.Sample.Failures.Entries).To(HaveLen(1))
+		Expect(degraded.Result.Sample.Failures.Entries[0].Count).To(Equal(int64(3)))
+	})
+
+	// A Benthos whose metrics stop arriving counts as stale: the worker
+	// reports degraded after three missed scrapes (3 s).
+	It("degrades on stale metrics after three missed scrapes", func() {
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
+
+		s.SetCounters(100, 80, 0)
+
+		spec := userSpecFor("scenario-stale", s.Port())
+
+		worker, err := factory.NewWorkerByType(
+			WorkerType,
+			deps.Identity{ID: "scenario-stale", Name: "scenario-stale", WorkerType: WorkerType},
+			deps.NewNopFSMLogger(),
+			nil,
+			nil,
+		)
+		Expect(err).NotTo(HaveOccurred(), "factory.NewWorkerByType")
+
+		// One fresh scrape; its observation is what the store holds from now
+		// on, because the scrapes after it stop arriving.
+		status := observeOneCycle(worker, spec)
+
+		reader := &stubManagerReader{obs: &fsmv2.Observation[simple.Status[Scrape]]{
+			CollectedAt: time.Now(),
+			Status:      status,
+		}}
+		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader))
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+
+		mgr := NewManager("scenario")
+		snapshot := fsmv2testSnapshot("scenario-stale", s.Port())
+		rerr, _ := mgr.Reconcile(context.Background(), snapshot, nil)
+		Expect(rerr).NotTo(HaveOccurred(), "Reconcile")
+
+		stateAt := func(age time.Duration) string {
+			reader.obs.CollectedAt = time.Now().Add(-age)
+			state, gerr := mgr.GetCurrentFSMState("scenario-stale")
+			Expect(gerr).NotTo(HaveOccurred(), "GetCurrentFSMState at age %v", age)
+
+			return state
+		}
+
+		Expect(stateAt(2*time.Second)).To(Equal(benthosmonitorfsm.OperationalStateActive),
+			"two missed scrapes must not degrade")
+		Expect(stateAt(3500*time.Millisecond)).To(Equal(benthosmonitorfsm.OperationalStateDegraded),
+			"three missed scrapes must degrade")
+	})
+
+	// With the flag on, IsMetricsErrorFree reads the failures the worker
+	// computed, through the package's Failures lookup. Once the instance is
+	// removed, the lookup answers nothing.
+	It("serves the worker's own error window state through the Failures lookup", func() {
+		s := benthosmetricstest.NewServer()
+		defer s.Close()
+
+		s.SetCounters(100, 80, 0)
+
+		spec := userSpecFor("scenario-window", s.Port())
+
+		t0 := time.Now().Truncate(time.Second)
+		clockNow := t0
+
+		defer swapScrapeClock(func() time.Time { return clockNow })()
+
+		worker, err := factory.NewWorkerByType(
+			WorkerType,
+			deps.Identity{ID: "scenario-window", Name: "scenario-window", WorkerType: WorkerType},
+			deps.NewNopFSMLogger(),
+			nil,
+			nil,
+		)
+		Expect(err).NotTo(HaveOccurred(), "factory.NewWorkerByType")
+
+		// The window state the worker's deps hold: seeded by the first scrape,
+		// degraded by the error the second finds.
+		clockNow = t0
+		_ = observeOneCycle(worker, spec)
+
+		s.SetCounters(100, 80, 2)
+
+		clockNow = t0.Add(time.Second)
+		fired := observeOneCycle(worker, spec)
+		Expect(fired.Result.Sample.Failures).NotTo(BeNil())
+		Expect(fired.Result.Sample.Failures.Entries).To(HaveLen(1),
+			"the worker's deps hold the error window state")
+
+		// The readers reach that one copy through the package's Failures
+		// lookup: the stored observation answers with the worker's own
+		// failures.
+		client := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), &stubManagerReader{
+			obs: &fsmv2.Observation[simple.Status[Scrape]]{
+				CollectedAt: time.Now(),
+				Status:      fired,
+			},
+		})
+		fsmv2client.SetClient(client)
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+
+		f, ok := Failures(context.Background(), "scenario-window")
+		Expect(ok).To(BeTrue(), "the lookup answers from the worker's stored state")
+		Expect(f).To(Equal(fired.Result.Sample.Failures),
+			"the lookup returns the failures the worker computed")
+
+		// The state is dropped when the instance is removed.
+		client.Delete(dynamicchildren.Ref{WorkerType: WorkerType, Name: "scenario-window"})
+
+		f, ok = Failures(context.Background(), "scenario-window")
+		Expect(ok).To(BeFalse(), "a removed instance has no state left")
+		Expect(f).To(BeNil())
+	})
 })
+
+// fsmv2testSnapshot puts one enabled BenthosMonitorConfig at the real
+// snapshot path the manager's ExtractConfigs reads.
+func fsmv2testSnapshot(name string, port uint16) publicfsm.SystemSnapshot {
+	return publicfsm.SystemSnapshot{
+		CurrentConfig: config.FullConfig{
+			Internal: config.InternalConfig{BenthosMonitor: []config.BenthosMonitorConfig{{
+				FSMInstanceConfig: config.FSMInstanceConfig{
+					Name:            name,
+					DesiredFSMState: "active",
+				},
+				MetricsPort: port,
+			}}},
+		},
+	}
+}

@@ -27,6 +27,7 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	publicfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	benthosmonitorfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/benthos_monitor"
@@ -286,5 +287,66 @@ var _ = Describe("GetLastObservedState across a failing store read", func() {
 		defer restore()
 		Expect(readIsLive()).To(BeFalse(),
 			"past three seconds of failed reads the Benthos must read not live")
+	})
+})
+
+var _ = Describe("The Failures lookup", func() {
+	// Failures returns the failures of the named instance's stored sample,
+	// false for an unknown instance, false when the instance has no sample
+	// yet, and false when the store read fails.
+	It("looks up one instance's stored failures", func() {
+		// No client: no answer.
+		f, ok := Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeFalse(), "no client")
+		Expect(f).To(BeNil())
+
+		// A registered client whose store holds nothing for the instance: an
+		// unknown instance, or a worker that stored no sample yet.
+		reader := &stubManagerReader{err: persistence.ErrNotFound}
+		fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader))
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+
+		f, ok = Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeFalse(), "nothing stored for the instance")
+		Expect(f).To(BeNil())
+
+		// A stored sample carries its Failures.
+		stored := &benthosmetrics.Failures{
+			Entries: []benthosmetrics.FailureEntry{{
+				Signal: "output_error", Label: "output error", Count: 1,
+			}},
+		}
+		reader.err = nil
+		reader.obs = &fsmv2.Observation[simple.Status[Scrape]]{
+			CollectedAt: time.Now().Add(-100 * time.Millisecond),
+			Status: simple.Status[Scrape]{
+				Result: Scrape{Sample: benthosmetrics.Sample{Failures: stored}},
+			},
+		}
+
+		f, ok = Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeTrue(), "a stored sample answers")
+		Expect(f).To(Equal(stored))
+
+		// A minute-old sample still answers. Judging its age is the
+		// caller's job.
+		reader.obs.CollectedAt = time.Now().Add(-time.Minute)
+		f, ok = Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeTrue(), "a sample a minute old still answers")
+		Expect(f).To(Equal(stored))
+
+		// An observation whose sample has no Failures — a worker whose first
+		// scrape failed — answers nothing.
+		reader.obs.Status.Result = Scrape{}
+		f, ok = Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeFalse(), "a sample without Failures answers nothing")
+		Expect(f).To(BeNil())
+
+		// A store read that fails answers nothing, even after a good read.
+		reader.obs.Status.Result = Scrape{Sample: benthosmetrics.Sample{Failures: stored}}
+		reader.err = errors.New("store read timed out")
+		f, ok = Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeFalse(), "a failed store read answers nothing")
+		Expect(f).To(BeNil())
 	})
 })
