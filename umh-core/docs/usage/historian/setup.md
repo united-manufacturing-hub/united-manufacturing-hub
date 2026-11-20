@@ -54,7 +54,8 @@ the database or PgBouncer has no TLS, as in the Getting Started Stack. To verify
 `sslrootcert`, `sslcert` and `sslkey`. These three keys are allowed only with `verify-full`.
 
 A change applies without a restart: umh-core reloads `config.yaml` and restarts every Historian bridge
-with the new values. Removing the section makes every Historian bridge fail with a config error.
+with the new values. Removing the section does not stop the Historian bridges: they keep running
+with the last connection values, and umh-core logs a config error. To stop writing, stop the bridges.
 
 ## PgBouncer
 
@@ -68,4 +69,5 @@ Editing the connection updates every Historian bridge on the instance. Leave the
 empty to keep the stored password.
 
 **Delete** in the menu of the Historian card removes the connection. Historian bridges on the
-instance then fail, and the stored data stays in the database.
+instance keep running and writing with the last connection values until you stop or delete them. The
+stored data stays in the database.
