@@ -9,19 +9,19 @@ An instance is a running UMH Core container: a single Docker container that host
 | Column | Shows |
 |---|---|
 | Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance that the instance filter leaves out shows **Not in the filter** and no other values. |
-| Instance name | The name of the instance. Click it to open the instance details page. |
+| Instance name | The name of the instance. While the instance is online, click it to open the instance details page. |
 | Type | **Core** for UMH Core, **Classic** for UMH Classic. `n/a` while the instance is offline. |
-| Version | The UMH Core version, or for UMH Classic the version of the companion. A marker shows when a newer version is available. |
+| Version | The UMH Core version, or for UMH Classic the version of the companion. A marker shows when a newer version is available, or that the version is no longer supported and needs an upgrade. |
 | Data flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
 | Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser. |
 | Read throughput (msg/sec) | The messages per second of all data flows on the instance, input and output added together, as a one-minute average. |
 
 The row menu has these entries:
 
-- **Instance details**, available while the instance is online.
+- **Instance details**, disabled while the instance is offline.
 - **Config file**, only for a UMH Core instance that is online.
 - **Upgrade**, only for a UMH Classic instance whose companion is not up to date.
-- **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license.
+- **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license and audit logs enabled for your organization.
 - **Delete**.
 
 ## The instance details page
