@@ -91,16 +91,17 @@ func setBenthosMetricsFlag(v string) {
 }
 
 // stubStoredFailures registers a client whose store holds the observation
-// with the given failures, under the given Benthos S6 name, as the last good
-// sample the worker stored.
-func stubStoredFailures(s6Name string, failures *benthosmetrics.Failures) {
-	stubStoredFailuresAt(s6Name, failures, time.Now())
+// with the given failures, under the given Benthos S6 name, as the last
+// sample the worker stored. Setting the returned reader's err makes every
+// later read fail.
+func stubStoredFailures(s6Name string, failures *benthosmetrics.Failures) *stubFailuresReader {
+	return stubStoredFailuresAt(s6Name, failures, time.Now())
 }
 
 // stubStoredFailuresAt is stubStoredFailures for a sample collected at
 // collectedAt. A Failures without its own ObservedAt is stamped with
 // collectedAt, as a real scrape stamps it.
-func stubStoredFailuresAt(s6Name string, failures *benthosmetrics.Failures, collectedAt time.Time) {
+func stubStoredFailuresAt(s6Name string, failures *benthosmetrics.Failures, collectedAt time.Time) *stubFailuresReader {
 	if failures != nil && failures.ObservedAt.IsZero() {
 		failures.ObservedAt = collectedAt
 	}
@@ -117,6 +118,8 @@ func stubStoredFailuresAt(s6Name string, failures *benthosmetrics.Failures, coll
 	}}
 	fsmv2client.SetClient(fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader))
 	DeferCleanup(func() { fsmv2client.SetClient(nil) })
+
+	return reader
 }
 
 // fsmv2BackendService builds a BenthosService wired like the flag-on default:
@@ -142,116 +145,6 @@ func outputErrorMetrics(n int64) benthos_monitor.BenthosMetrics {
 		},
 	}
 }
-
-// stubFailuresLookup wires, for the hold specs, a client whose registry
-// holds the worker under s6Name and whose store holds one observation
-// with the given failures, collected at collectedAt. It returns the
-// reader, whose err field makes every read fail once set, the way a
-// wedged store does.
-func stubFailuresLookup(s6Name string, failures *benthosmetrics.Failures, collectedAt time.Time) *stubFailuresReader {
-	if failures != nil && failures.ObservedAt.IsZero() {
-		failures.ObservedAt = collectedAt
-	}
-
-	obs := &fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]]{
-		CollectedAt: collectedAt,
-		Status: simple.Status[fsmv2benthosmetrics.Scrape]{
-			Result: fsmv2benthosmetrics.Scrape{Sample: benthosmetrics.Sample{Failures: failures}},
-		},
-	}
-
-	reader := &stubFailuresReader{obs: map[string]*fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]]{
-		fsmv2config.ChildID(s6Name): obs,
-	}}
-	c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-	Expect(c.Upsert(dynamicchildren.Ref{WorkerType: fsmv2benthosmetrics.WorkerType, Name: s6Name}, map[string]any{})).To(Succeed())
-	fsmv2client.SetClient(c)
-	DeferCleanup(func() { fsmv2client.SetClient(nil) })
-
-	return reader
-}
-
-var _ = Describe("The Failures hold across a failing store read", func() {
-	const name = "benthos-dataflow-hold"
-
-	// One failed store read is an unknown read, not a missing worker, so a
-	// healthy flow stays healthy: each of good, read error, good reads ok.
-	It("holds a healthy flow error-free through one failed read", func() {
-		setBenthosMetricsFlag("true")
-
-		reader := stubFailuresLookup(name, &benthosmetrics.Failures{}, time.Now())
-
-		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "a good read answers error-free")
-		Expect(reason).To(BeEmpty())
-
-		reader.err = context.DeadlineExceeded
-		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "one failed store read must not degrade a healthy flow")
-		Expect(reason).To(BeEmpty(), "the held Failures answer, not a failure reason")
-
-		reader.err = nil
-		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "the next good read answers error-free")
-		Expect(reason).To(BeEmpty())
-	})
-
-	// Sustained read errors keep answering from the held Failures, and the
-	// freshness rule ages that answer out on its own: once the held sample
-	// is older than constants.BenthosMaxMetricsAndConfigAge, the read
-	// answers "no fresh Benthos metrics".
-	It("answers 'no fresh Benthos metrics' once held Failures age out under sustained read errors", func() {
-		setBenthosMetricsFlag("true")
-
-		// margin is how much life the sample has left when the spec
-		// starts: enough for two reads on a loaded machine, and short
-		// enough that the spec waits it out in a second or two.
-		const margin = 2 * time.Second
-
-		// Its own worker name. The hold is process-wide and keeps the
-		// newest sample it has seen per name, so a spec that backdates its
-		// sample must not reuse a name another spec stamped with time.Now().
-		const agingName = "benthos-dataflow-hold-aging"
-
-		// A sample with margin to spare is fresh; the read after it fails,
-		// so only the hold answers.
-		reader := stubFailuresLookup(agingName, &benthosmetrics.Failures{},
-			time.Now().Add(margin-constants.BenthosMaxMetricsAndConfigAge))
-
-		ok, _ := fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "a sample inside the health age is fresh")
-
-		reader.err = context.DeadlineExceeded
-		ok, reason := fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "the failed read answers from the fresh held Failures")
-		Expect(reason).To(BeEmpty())
-
-		// The read errors are sustained while the held sample ages past
-		// the health age.
-		time.Sleep(margin + 200*time.Millisecond)
-
-		ok, reason = fsmv2BackendService(agingName).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeFalse(), "held Failures past the health age fail closed")
-		Expect(reason).To(Equal("no fresh Benthos metrics"),
-			"the freshness rule ages the held answer out on its own")
-	})
-
-	// A not-found read says the worker is gone, not unknown: it stays
-	// fail-closed, hold or no hold.
-	It("still fails closed on a not-found read", func() {
-		setBenthosMetricsFlag("true")
-
-		reader := stubFailuresLookup(name, &benthosmetrics.Failures{}, time.Now())
-
-		ok, _ := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeTrue(), "a good read fills the hold")
-
-		reader.err = persistence.ErrNotFound
-		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
-		Expect(ok).To(BeFalse(), "a not-found read fails closed even with a fresh hold")
-		Expect(reason).To(Equal("no Benthos metrics yet"))
-	})
-})
 
 var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	const name = "benthos-dataflow-delegation"
@@ -347,13 +240,27 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		Expect(reason).To(Equal("no Benthos metrics yet"))
 	})
 
-	// With the flag on, a failed last scrape keeps answering from the last
-	// good Failures until they age past the health freshness rule: a sample
-	// two seconds old still answers with its entry's reason, one past
-	// BenthosMaxMetricsAndConfigAge answers "no fresh Benthos metrics", so a
-	// scrape outage does not
-	// keep reporting the last error's reason.
-	It("keeps answering from the last good Failures until they age out", func() {
+	// With the flag on, a failed store read reports the same as no sample
+	// at all, even right after a good read.
+	It("answers 'no Benthos metrics yet' when the store read fails", func() {
+		setBenthosMetricsFlag("true")
+
+		reader := stubStoredFailures(name, &benthosmetrics.Failures{})
+		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
+		Expect(ok).To(BeTrue(), "a fresh error-free sample is error-free")
+		Expect(reason).To(BeEmpty())
+
+		reader.err = context.DeadlineExceeded
+		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
+		Expect(ok).To(BeFalse(), "a failed store read is not error-free")
+		Expect(reason).To(Equal("no Benthos metrics yet"))
+	})
+
+	// With the flag on, when scrapes stop, the worker's last sample keeps
+	// answering until it is more than ten seconds old. A sample two seconds
+	// old still gives its error's reason. An older one gives "no fresh
+	// Benthos metrics", so an outage does not keep showing an old error.
+	It("answers from the last sample until it is more than ten seconds old", func() {
 		setBenthosMetricsFlag("true")
 
 		collectedAt := time.Now().Add(-2 * time.Second)
