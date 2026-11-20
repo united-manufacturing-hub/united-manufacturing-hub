@@ -471,14 +471,14 @@ func RecordStuckActionForceRemoved(hierarchyPath, actionName string) {
 type WorkerMetricsExporter struct {
 	counters     map[string]*prometheus.CounterVec
 	gauges       map[string]*prometheus.GaugeVec
-	prevCounters map[string]int64 // Key: "hierarchyPath:metricName"
+	prevCounters map[string]map[string]int64 // hierarchy path -> counter name -> last value
 	mu           sync.Mutex
 }
 
 var workerMetricsExporter = &WorkerMetricsExporter{
 	counters:     make(map[string]*prometheus.CounterVec),
 	gauges:       make(map[string]*prometheus.GaugeVec),
-	prevCounters: make(map[string]int64),
+	prevCounters: make(map[string]map[string]int64),
 }
 
 // ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
@@ -505,9 +505,14 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metri
 		"hierarchy_path": hierarchyPath,
 	}
 
+	prevValues := e.prevCounters[hierarchyPath]
+	if prevValues == nil {
+		prevValues = make(map[string]int64)
+		e.prevCounters[hierarchyPath] = prevValues
+	}
+
 	for name, value := range metrics.Counters {
-		prevKey := hierarchyPath + ":" + name
-		prevValue := e.prevCounters[prevKey]
+		prevValue := prevValues[name]
 
 		delta := value - prevValue
 		if delta > 0 {
@@ -515,7 +520,7 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metri
 			counter.With(labels).Add(float64(delta))
 		}
 
-		e.prevCounters[prevKey] = value
+		prevValues[name] = value
 	}
 
 	for name, value := range metrics.Gauges {
@@ -537,10 +542,11 @@ func (e *WorkerMetricsExporter) cleanup(hierarchyPath string) {
 		"hierarchy_path": hierarchyPath,
 	}
 
-	for name, counter := range e.counters {
+	for _, counter := range e.counters {
 		counter.Delete(labels)
-		delete(e.prevCounters, hierarchyPath+":"+name)
 	}
+
+	delete(e.prevCounters, hierarchyPath)
 
 	for _, gauge := range e.gauges {
 		gauge.Delete(labels)
