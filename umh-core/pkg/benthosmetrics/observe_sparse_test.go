@@ -100,6 +100,48 @@ var _ = Describe("An error after a gap in successful scrapes", func() {
 		Expect(ok).To(BeTrue(), "ten minutes after the second error, the flow is clear")
 	})
 
+	// Each rise counts until ErrorWindow after the scrape that saw it, even
+	// once the reading before it has aged out of the engine's window.
+	It("counts every error within the window when the readings are sparse", func() {
+		start := failureT
+		t := NewTracker(func() time.Time { return start })
+
+		t.observe(testPort, outputErrors(0), start)
+		t.observe(testPort, outputErrors(1), start.Add(9*time.Minute))
+
+		// At T+18m the T reading is older than the window, but both errors
+		// were seen within the last ten minutes.
+		f := t.observe(testPort, outputErrors(2), start.Add(18*time.Minute)).Failures
+		Expect(f.Entries).To(HaveLen(1))
+		Expect(f.Entries[0].Count).To(Equal(int64(2)))
+		_, reason := f.ErrorFree()
+		Expect(reason).To(HavePrefix("benthos reported 2 output errors in the last 10m"))
+
+		// At T+20m the error seen at T+9m is 11m old and no longer counts.
+		f = t.observe(testPort, outputErrors(2), start.Add(20*time.Minute)).Failures
+		Expect(f.Entries).To(HaveLen(1))
+		Expect(f.Entries[0].Count).To(Equal(int64(1)), "only the error seen at T+18m is left")
+	})
+
+	It("recounts a held entry as its errors age out", func() {
+		start := failureT
+		t := NewTracker(func() time.Time { return start })
+
+		t.observe(testPort, outputErrors(0), start)
+		t.observe(testPort, outputErrors(2), start.Add(9*time.Minute))
+		t.observe(testPort, outputErrors(3), start.Add(12*time.Minute))
+
+		f := t.observe(testPort, outputErrors(3), start.Add(18*time.Minute)).Failures
+		Expect(f.Entries).To(HaveLen(1))
+		Expect(f.Entries[0].Count).To(Equal(int64(3)), "all three errors are within the window")
+
+		// At T+20m the engine's window holds only the T+12m reading and
+		// stops firing, so the entry is held; the rise at T+12m still counts.
+		f = t.observe(testPort, outputErrors(3), start.Add(20*time.Minute)).Failures
+		Expect(f.Entries).To(HaveLen(1))
+		Expect(f.Entries[0].Count).To(Equal(int64(1)), "the two errors seen at T+9m are 11m old")
+	})
+
 	It("drops a sparse error when Benthos restarts", func() {
 		t, roseAt := errorAfterGap(9 * time.Minute)
 
