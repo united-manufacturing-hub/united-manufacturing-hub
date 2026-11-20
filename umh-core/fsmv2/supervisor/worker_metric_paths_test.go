@@ -98,7 +98,7 @@ func expectNoMetricsAfterSpec(hierarchyPath string) {
 // twoWorkerSupervisor returns a supervisor running the mockIdentity worker
 // first and a second worker after it, with both workers ticked once.
 func twoWorkerSupervisor(first, second *mockState) (*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState], deps.Identity) {
-	s, _ := supervisorWithState(first)
+	s := supervisorWithState(first)
 	second.nextState = second
 	secondIdentity := deps.Identity{ID: "second-worker", Name: "Second Worker", WorkerType: "test", HierarchyPath: "second-worker(test)"}
 
@@ -145,7 +145,7 @@ var _ = Describe("Supervisor metrics", func() {
 	})
 
 	It("record the open circuit breaker on a worker added while it is open", func() {
-		s, _ := supervisorWithState(&mockState{signal: fsmv2.SignalNone})
+		s := supervisorWithState(&mockState{signal: fsmv2.SignalNone})
 		s.TestSetStarted(true)
 
 		openChild := supervisor.NewSupervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState](supervisor.Config{
