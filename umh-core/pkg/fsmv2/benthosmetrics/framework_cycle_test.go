@@ -361,9 +361,9 @@ var _ = Describe("The framework cycle", func() {
 			"three missed scrapes must degrade")
 	})
 
-	// With the flag on, IsMetricsErrorFree and the not-cleared count read the
-	// error window state the worker's deps hold, through the package's
-	// Failures lookup, and the state is dropped when the instance is removed.
+	// With the flag on, IsMetricsErrorFree reads the failures the worker
+	// computed, through the package's Failures lookup. Once the instance is
+	// removed, the lookup answers nothing.
 	It("serves the worker's own error window state through the Failures lookup", func() {
 		s := benthosmetricstest.NewServer()
 		defer s.Close()
@@ -414,7 +414,7 @@ var _ = Describe("The framework cycle", func() {
 		f, ok := Failures(context.Background(), "scenario-window")
 		Expect(ok).To(BeTrue(), "the lookup answers from the worker's stored state")
 		Expect(f).To(Equal(fired.Result.Sample.Failures),
-			"the lookup returns the one live copy the worker's deps hold")
+			"the lookup returns the failures the worker computed")
 
 		// The state is dropped when the instance is removed.
 		client.Delete(dynamicchildren.Ref{WorkerType: WorkerType, Name: "scenario-window"})

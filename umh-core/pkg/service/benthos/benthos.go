@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
@@ -219,9 +220,15 @@ type BenthosService struct {
 	s6Service s6service.Service // S6 service for direct S6 operations
 	logger    *zap.SugaredLogger
 
-	// s6ServiceName is this instance's S6 service name, "benthos-<name>". Both
-	// monitor backends store the instance under it.
+	// s6ServiceName is this instance's S6 service name, "benthos-<name>".
+	// With USE_FSMV2_BENTHOS_METRICS on, IsMetricsErrorFree looks up the
+	// instance's failures under this name, so the service stores it.
 	s6ServiceName string
+
+	// metricsStale is true while the last check found the Benthos metrics
+	// sample too old. It makes fsmv2MetricsErrorFree log that once, not on
+	// every check.
+	metricsStale atomic.Bool
 
 	s6Manager *s6fsm.S6Manager
 
@@ -1125,11 +1132,10 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 	return true, ""
 }
 
-// usesFsmv2Metrics reports whether this service's monitor backend is the
-// FSMv2 Benthos metrics worker. selectBenthosMonitorBackend put it there
-// with USE_FSMV2_BENTHOS_METRICS on, and a caller-supplied manager
-// overrides it, so the backend answers the flag question without re-reading
-// the environment on every call.
+// usesFsmv2Metrics reports whether this service reads Benthos metrics
+// through the FSMv2 worker. That is the case when USE_FSMV2_BENTHOS_METRICS
+// was on at startup, or a caller passed in the FSMv2 manager. Checking the
+// manager's type answers this without reading the environment on every call.
 func (s *BenthosService) usesFsmv2Metrics() bool {
 	_, isFsmv2 := s.benthosMonitorManager.(*fsmv2adapter.WorkerManager[
 		config.BenthosMonitorConfig, fsmv2simple.Status[fsmv2benthosmetrics.Scrape],
@@ -1138,13 +1144,15 @@ func (s *BenthosService) usesFsmv2Metrics() bool {
 	return isFsmv2
 }
 
-// fsmv2MetricsErrorFree answers IsMetricsErrorFree from the stored
-// Failures of this instance's FSMv2 worker. Failures older than
-// constants.BenthosMaxMetricsAndConfigAge, the age at which the FSMv1
-// monitor also stops trusting Benthos metrics, answer "no fresh Benthos
-// metrics". That is wider than the worker's three-scrape liveness rule, so a
-// scrape a second late on a loaded instance does not flip the flow to
-// degraded.
+// fsmv2MetricsErrorFree answers IsMetricsErrorFree from the failures the
+// FSMv2 worker stored for this instance. Error totals only go up, so the
+// worker reports an error only if its total rose in the last ten minutes.
+// This function reads that result.
+//
+// A sample more than ten seconds old (constants.BenthosMaxMetricsAndConfigAge,
+// the same limit the FSMv1 monitor uses) reports "no fresh Benthos
+// metrics". That limit is looser than the worker's own three-second one, so
+// one late scrape on a busy machine does not mark the flow degraded.
 func (s *BenthosService) fsmv2MetricsErrorFree() (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), fsmv2FailuresTimeout)
 	defer cancel()
@@ -1154,21 +1162,24 @@ func (s *BenthosService) fsmv2MetricsErrorFree() (bool, string) {
 		return false, "no Benthos metrics yet"
 	}
 
-	// A negative age means the wall clock stepped back after the sample was
-	// taken: the stored time has no monotonic reading left to correct it, so
-	// the sample's age is unknown and it is not trusted either.
+	// A negative age means the clock was set back after the sample was
+	// taken. The sample's real age is then unknown, so it is not trusted.
 	if age := time.Since(failures.ObservedAt); age < 0 || age > constants.BenthosMaxMetricsAndConfigAge {
-		s.logger.Warnf("last Benthos metrics sample is %s old, reporting no fresh metrics", age)
+		if !s.metricsStale.Swap(true) {
+			s.logger.Warnf("last Benthos metrics sample is %s old, reporting no fresh metrics", age)
+		}
 
 		return false, "no fresh Benthos metrics"
 	}
 
+	s.metricsStale.Store(false)
+
 	return failures.ErrorFree()
 }
 
-// fsmv2FailuresTimeout bounds the store reads fsmv2MetricsErrorFree makes.
-// The reads are in-process and non-blocking, so the bound only guards a
-// wedged store.
+// fsmv2FailuresTimeout limits how long fsmv2MetricsErrorFree waits for the
+// store. The store runs in the same process and does not block, so the
+// limit only matters if the store hangs.
 const fsmv2FailuresTimeout = time.Second
 
 // HasProcessingActivity reports true when metrics (or other status signals)
