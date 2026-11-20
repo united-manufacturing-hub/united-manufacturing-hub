@@ -317,9 +317,8 @@ Two consequences to be aware of:
   before running a high-throughput instance, and cap the topic with
   `defaultTopicRetentionBytes` if disk is tighter than the retention window.
 * **The Topic Browser reads the retained window only when it has no committed offset,**
-  normally on its first run. After that it resumes from the offset it committed, so after
-  a restart a tag shows in the tree again only when it publishes a message the Topic
-  Browser has not read yet.
+  normally on its first run. After that it resumes from the offset it committed, so a
+  restart does not replay older records.
 
 Instances that already have a `config.yaml` keep the policy they run on today, which is
 `compact` unless it was set explicitly — upgrading never changes their retention. To move

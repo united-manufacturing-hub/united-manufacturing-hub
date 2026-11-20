@@ -51,7 +51,7 @@ docker restart umh-core
 
 Replace `umh-core` with the name of your container if you named it differently.
 
-After the restart, a topic shows again only when a message for it arrives that the Topic Browser has not read yet. A topic that publishes rarely can stay absent until it next publishes.
+The restart does not replay past messages: the Topic Browser continues from the last message it read. A missing topic shows once it publishes again, so a topic that publishes rarely can stay absent until then.
 
 ## Getting help
 
