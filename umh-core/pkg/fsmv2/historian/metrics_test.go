@@ -132,8 +132,8 @@ var _ = Describe("pollAndRecord", func() {
 			BaseDependencies: baseUnder("parent-a"),
 			pool:             &poolHolder{},
 			database:         fakeDatabase,
-			summary:          &readCache[timescalemetrics.Summary]{interval: summaryInterval},
-			databaseSize:     &readCache[int64]{interval: databaseSizeInterval},
+			summary:          newReadCache[timescalemetrics.Summary](summaryInterval),
+			databaseSize:     newReadCache[int64](databaseSizeInterval),
 		}
 	}
 
@@ -234,8 +234,8 @@ func isolatedPoolDeps() Deps {
 	return Deps{
 		BaseDependencies: baseUnder("parent-a"),
 		pool:             holder,
-		summary:          &readCache[timescalemetrics.Summary]{interval: summaryInterval},
-		databaseSize:     &readCache[int64]{interval: databaseSizeInterval},
+		summary:          newReadCache[timescalemetrics.Summary](summaryInterval),
+		databaseSize:     newReadCache[int64](databaseSizeInterval),
 	}
 }
 

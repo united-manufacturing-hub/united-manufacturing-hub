@@ -394,9 +394,9 @@ func (d Deps) forgetDatabaseFigures() {
 	d.databaseSize.clear()
 }
 
-// The error is logged and reported, not returned: a summary that cannot be
-// read is not a connection fault, and returning it would drive the worker
-// degraded for a database that is answering.
+// The error goes to the cache only, not to Poll's result: a summary that cannot
+// be read is not a connection fault, and the worker must not go degraded for a
+// database that is answering.
 func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
 	return func() (timescalemetrics.Summary, error) {
 		summary, err := timescalemetrics.CollectSummary(ctx, db)
@@ -489,9 +489,13 @@ const failedReadRetryInterval = time.Minute
 
 // The caches match sharedPool: they have to outlive a single Poll.
 var (
-	sharedSummary      = &readCache[timescalemetrics.Summary]{interval: summaryInterval, retryInterval: failedReadRetryInterval}
-	sharedDatabaseSize = &readCache[int64]{interval: databaseSizeInterval, retryInterval: failedReadRetryInterval}
+	sharedSummary      = newReadCache[timescalemetrics.Summary](summaryInterval)
+	sharedDatabaseSize = newReadCache[int64](databaseSizeInterval)
 )
+
+func newReadCache[T any](interval time.Duration) *readCache[T] {
+	return &readCache[T]{interval: interval, retryInterval: failedReadRetryInterval}
+}
 
 type readCache[T any] struct {
 	readAt time.Time
