@@ -469,13 +469,13 @@ func RecordStuckActionForceRemoved(hierarchyPath, actionName string) {
 //
 // Uses hierarchy_path label for consistent identification across the codebase.
 type WorkerMetricsExporter struct {
-	counters     map[string]*prometheus.CounterVec
-	gauges       map[string]*prometheus.GaugeVec
-	prevCounters map[string]map[string]int64 // hierarchy path -> counter name -> last value
-	owners       map[string]WorkerMetricsClaim
-	registerer   prometheus.Registerer
-	lastClaim    WorkerMetricsClaim
-	mu           sync.Mutex
+	counters                    map[string]*prometheus.CounterVec
+	gauges                      map[string]*prometheus.GaugeVec
+	previousCounterValuesByPath map[string]map[string]int64 // hierarchy path -> counter name -> last value
+	owners                      map[string]WorkerMetricsClaim
+	registerer                  prometheus.Registerer
+	lastClaim                   WorkerMetricsClaim
+	mu                          sync.Mutex
 }
 
 // WorkerMetricsClaim identifies the worker that owns the worker-metric series of a hierarchy path.
@@ -483,11 +483,11 @@ type WorkerMetricsClaim uint64
 
 func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsExporter {
 	return &WorkerMetricsExporter{
-		counters:     make(map[string]*prometheus.CounterVec),
-		gauges:       make(map[string]*prometheus.GaugeVec),
-		prevCounters: make(map[string]map[string]int64),
-		owners:       make(map[string]WorkerMetricsClaim),
-		registerer:   registerer,
+		counters:                    make(map[string]*prometheus.CounterVec),
+		gauges:                      make(map[string]*prometheus.GaugeVec),
+		previousCounterValuesByPath: make(map[string]map[string]int64),
+		owners:                      make(map[string]WorkerMetricsClaim),
+		registerer:                  registerer,
 	}
 }
 
@@ -522,16 +522,16 @@ func (e *WorkerMetricsExporter) export(hierarchyPath string, claim WorkerMetrics
 		"hierarchy_path": hierarchyPath,
 	}
 
-	previousCounterValues := e.prevCounters[hierarchyPath]
+	previousCounterValues := e.previousCounterValuesByPath[hierarchyPath]
 	if previousCounterValues == nil {
 		previousCounterValues = make(map[string]int64)
-		e.prevCounters[hierarchyPath] = previousCounterValues
+		e.previousCounterValuesByPath[hierarchyPath] = previousCounterValues
 	}
 
 	for name, value := range metrics.Counters {
-		prevValue := previousCounterValues[name]
+		previousValue := previousCounterValues[name]
 
-		delta := value - prevValue
+		delta := value - previousValue
 		if delta > 0 {
 			counter := e.getOrCreateCounter(name)
 			counter.With(labels).Add(float64(delta))
@@ -591,7 +591,7 @@ func (e *WorkerMetricsExporter) deleteSeries(hierarchyPath string) {
 		counter.Delete(labels)
 	}
 
-	delete(e.prevCounters, hierarchyPath)
+	delete(e.previousCounterValuesByPath, hierarchyPath)
 
 	for _, gauge := range e.gauges {
 		gauge.Delete(labels)

@@ -548,7 +548,6 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 }
 
 // stopWorker stops the worker's collector and executor and deletes its state-duration and worker-metric series.
-// Shutdown also calls it for workers that are still registered.
 func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	ctx context.Context,
 	workerCtx *WorkerContext[TObserved, TDesired],

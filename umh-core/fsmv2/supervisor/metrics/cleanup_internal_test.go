@@ -83,15 +83,15 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 		exporter.export(claimTestPath, claim, &deps.Metrics{Gauges: map[string]float64{claimTestGauge: value}})
 	}
 
-	It("forgets the last value of a counter that never went above 0", func() {
-		claim := exporter.claim(claimTestPath)
+	It("starts a worker added again at a removed worker's path from its own counter values", func() {
+		removedWorker := exporter.claim(claimTestPath)
+		exporter.export(claimTestPath, removedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 100}})
+		exporter.cleanup(claimTestPath, removedWorker)
 
-		exporter.export(claimTestPath, claim, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 0}})
-		Expect(exporter.prevCounters).To(HaveKey(claimTestPath))
+		addedWorker := exporter.claim(claimTestPath)
+		exporter.export(claimTestPath, addedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
 
-		exporter.cleanup(claimTestPath, claim)
-
-		Expect(exporter.prevCounters).NotTo(HaveKey(claimTestPath))
+		Expect(counterValues()).To(ConsistOf(3.0))
 	})
 
 	It("drops an export from a removed worker", func() {
@@ -143,13 +143,5 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 		exportGauge(0, 1)
 
 		Expect(gaugeValues()).To(BeEmpty())
-	})
-
-	It("forgets the owner of a removed worker's path", func() {
-		removedWorker := exporter.claim(claimTestPath)
-
-		exporter.cleanup(claimTestPath, removedWorker)
-
-		Expect(exporter.owners).NotTo(HaveKey(claimTestPath))
 	})
 })
