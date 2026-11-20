@@ -31,7 +31,9 @@ The Agent card on the instance details page shows the name, the location path, t
 
 The Agent shows Degraded while the emergency setting *Turn off bridge admission* is on. The badge reason then starts with `Bridge admission is off (agent.enableResourceLimitBlocking: false).` New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit.
 
-To clear it, fix the resource problem first. Then set `agent.enableResourceLimitBlocking: true` in the config file. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
+The Agent also shows Degraded when `config.yaml` has no `agent.location`, or when umh-core cannot read the agent logs or its release information.
+
+To clear the emergency setting, fix the resource problem first. Then set `agent.enableResourceLimitBlocking: true` in the config file. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
 
 A degraded Agent also marks the whole instance as degraded. In the instance list, hover over the status dot of the instance to see the line `Agent: <reason>`.
 
