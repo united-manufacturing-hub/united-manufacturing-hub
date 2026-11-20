@@ -200,7 +200,7 @@ func checkStopCheckFirst(filename string) []Violation {
 				File:    filename,
 				Line:    fset.Position(next.decl.Pos()).Line,
 				Type:    "STOP_CHECK_NOT_FIRST",
-				Message: "Next() has no conditional, so it never checks snap.ShouldStop()",
+				Message: "Next() has no if statement after the conversion, so it never checks snap.ShouldStop()",
 			})
 
 			continue

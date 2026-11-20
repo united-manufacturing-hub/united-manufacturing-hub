@@ -97,7 +97,8 @@ WHY: A worker stops for two reasons: a shutdown and a disable by its parent.
 ShouldStop() is true for both. A state that checks only IsShutdownRequested
 keeps running, and keeps its children running, after its parent disabled it.
 The rule accepts snap.ShouldStop() or snap.IsShutdownRequested || snap.IsDisabled,
-and rejects a Next() without any conditional. States that embed helpers.StoppedBase or helpers.StoppingBase are exempt;
+and rejects a Next() without an if statement after the conversion. States
+that embed helpers.StoppedBase or helpers.StoppingBase are exempt;
 STOPPED_IGNORES_DISABLE covers Stopped.`,
 		CorrectCode: `func (s *MyState) Next(snapAny any) fsmv2.NextResult[any, any] {
     snap := fsmv2.ConvertWorkerSnapshot[MyConfig, MyStatus](snapAny)
