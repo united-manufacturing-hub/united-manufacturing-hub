@@ -12,7 +12,7 @@ The write flow is one part of a [bridge](bridges.md). The bridge's read flow bri
 
 This page shows how to set up a write flow in the Management Console. It then lists which UNS topics a write flow may receive, and shows the same write flow in `config.yaml`. When the Management Console rejects your topics, or the bridge shows as degraded, see [Write Flow Topics Rejected](troubleshooting/write-flow-topics-rejected.md).
 
-Write flows need umh-core 0.45.0 or later. On an instance with an older version, the **Write Flow** tab is disabled, with the tooltip "This instance does not support write flows yet. Update umh-core."
+Write flows need umh-core TODO-WRITE-FLOW-VERSION or later. On an instance with an older version, the **Write Flow** tab is disabled, with the tooltip "This instance does not support write flows yet. Update umh-core."
 
 {% hint style="warning" %}
 **Write flows do not guarantee delivery yet.** The Management Console shows this warning on every write flow that does not write to the Historian. A message can be lost when the destination rejects it or is unreachable. Do not use a write flow for data that must arrive, such as production orders or quality records.
@@ -133,13 +133,13 @@ The **Destination** card holds the settings of the system you write to, for exam
 {% endhint %}
 
 1. Turn on **Activate Flow** on the **Write Flow** card.
-2. Select **Save & Deploy**. The dialog shows **Deploy successful** once the bridge runs.
+2. Select **Save & Deploy**. The dialog shows **Update successful** once the bridge runs.
 3. Open the bridge's overview page. The **Write Flow** card shows the health and the throughput in msg/sec.
 4. Check that the destination receives the messages. Select **Logs** on the **Write Flow** card to see errors from the destination.
 
 ![The Write Flow card on the bridge overview page](images/write-flows-overview-page.png)
 
-If the dialog shows **Bridge deploy failed** and names your topics, see [Write Flow Topics Rejected](troubleshooting/write-flow-topics-rejected.md). After an upgrade to umh-core 0.45.0, a write flow that ran before can stop for the same reason. The same page covers that case.
+If the dialog shows **Bridge update failed** and names your topics, see [Write Flow Topics Rejected](troubleshooting/write-flow-topics-rejected.md). After an upgrade to umh-core 0.45.0, a write flow that ran before can stop for the same reason. The same page covers that case.
 
 To stop only the write flow, turn off **Activate Flow** and deploy again. The read flow keeps running.
 
