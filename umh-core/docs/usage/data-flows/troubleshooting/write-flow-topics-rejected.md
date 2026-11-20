@@ -6,7 +6,7 @@ This page covers a write flow whose topics break the topic rules: the deploy fai
 
 The message appears in one of three places:
 
-- **When you deploy or edit a bridge** in the Management Console, the dialog shows **Bridge deploy failed**. The message starts with "Failed to deploy Bridge:" or "Failed to update bridge:". Nothing changes on the instance. An edit fails only if it adds a topic that breaks the rules. A bridge whose topics already broke them can still be edited for other reasons.
+- **When you deploy or edit a bridge** in the Management Console, the dialog shows **Bridge deploy failed** for a new bridge and **Bridge update failed** for an edit. The message starts with "Failed to deploy Bridge:" or "Failed to update bridge:". Nothing changes on the instance. An edit fails only if it adds a topic that breaks the rules. A bridge whose topics already broke them can still be edited for other reasons.
 - **After an upgrade to umh-core 0.45.0**, a write flow that ran before can stop. UMH Core checks the topics of every write flow when it starts. A write flow whose topics break the rules does not start. The bridge shows as degraded, and its status starts with "flow degraded:". The bridge's connection and read flow keep running.
 - **When you change the instance location**, a bridge's topics can end up outside the bridge's new location. UMH Core then rejects the change. The message starts with "Failed to update instance location: the new location moves the write flow topics of these bridges outside their location".
 
@@ -58,4 +58,4 @@ Add `-e BYPASS_WRITE_FLOW_VALIDATION=true` to the `docker run` command and recre
 
 Each topic must still start with `^umh\.v1\.` and name one data contract, written out in full and followed by `\.`, such as `\._mes_order\.`. A wildcard in place of the contract stays rejected.
 
-A bridge whose topics need the setting shows as degraded, with a status that starts with "BYPASS_WRITE_FLOW_VALIDATION is set". Save it with **Save Anyway**, because a normal **Save & Deploy** waits for a healthy bridge and rolls the change back.
+A bridge whose topics need the setting shows as degraded, with a status that starts with "flow degraded: BYPASS_WRITE_FLOW_VALIDATION is set". When you edit such a bridge, save it with **Save Anyway**, because a normal **Save & Deploy** waits for a healthy bridge and rolls the edit back.
