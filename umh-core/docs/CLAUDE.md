@@ -46,6 +46,8 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 
 ### Bridges and flows
 
+<!-- vale off -->
+
 | Concept | Use | Instead of |
 |---|---|---|
 | What a bridge talks to | **external system**; **device** only when it is hardware, such as a PLC or a sensor | connection, destination, target, data source, endpoint |
@@ -54,6 +56,10 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 | Picking UNS topics | the write flow **subscribes to** topics | receives |
 | A regular expression over topics | **topic pattern**; a **topic** is one concrete UNS topic | "a topic is a regular expression" |
 | Location | **bridge location** = instance location plus the bridge's levels | agent location; mixing Level and Location |
+
+<!-- vale on -->
+
+The words in the table that are wrong in every context are also [Vale](https://vale.sh) rules in `.vale/styles/UMH/`. Change the table and the rules together. To check your pages, run `vale .` from `umh-core/docs`, for example with `mise exec vale -- vale .`. CI adds the same warnings to a pull request, on the lines it adds. Words that are right in some contexts, such as device, endpoint, receives or connection, have no rule. Check them in review.
 
 - The read flow publishes what it reads to the UNS, and the write flow writes to the external system what it subscribed to. "Reads from the PLC" and "writes to the MES" need no direction words.
 - **Instance location** is `agent.location` in `config.yaml`, or the `LOCATION_<n>` environment variables. The bridge's levels are `protocolConverterServiceConfig.location`, set in the **Level _n_** fields of the bridge. They extend the instance location and do not overwrite its levels. A **location path** is the dotted form of a location, such as `acme.cologne.packaging`, and the value of `{{ .location_path }}`.
