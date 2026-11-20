@@ -1,7 +1,8 @@
 # Historian Bridge Writes No Data
 
 A Historian bridge runs, but its data does not arrive in the database, and its logs show an error
-that names the data contracts that arrived.
+that starts with "TimescaleDB historian:". The error says how many messages carry another data
+contract and names those data contracts.
 
 ## Cause
 
