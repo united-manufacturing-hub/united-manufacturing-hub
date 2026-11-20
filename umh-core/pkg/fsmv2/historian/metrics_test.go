@@ -36,6 +36,8 @@ var fullSummary = timescalemetrics.Summary{
 
 var fullDatabaseOccupiedDiskBytes int64 = 8192
 
+const fakeJobCount = 3
+
 var connectedStatus = TimescaleStatus{
 	Host:                      "db",
 	Port:                      5432,
@@ -68,7 +70,6 @@ var figureGauges = []deps.GaugeName{
 	GaugeHistorianDatabaseOccupiedDiskBytes,
 }
 
-// recordedGauges records status and returns the gauges the collector would drain.
 func recordedGauges(status TimescaleStatus) map[string]float64 {
 	recorder := deps.NewMetricsRecorder()
 	recordStatus(recorder, status)
@@ -143,7 +144,7 @@ var _ = Describe("pollAndRecord", func() {
 		fakeDatabase = timescalemetrics.NewFakeDatabase(timescalemetrics.FakeContents{
 			PostgresVersion:           "17.2",
 			TimescaleVersion:          "2.19.0",
-			JobCount:                  3,
+			JobCount:                  fakeJobCount,
 			FailedJobCount:            1,
 			DatabaseOccupiedDiskBytes: fullDatabaseOccupiedDiskBytes,
 		})
@@ -152,14 +153,14 @@ var _ = Describe("pollAndRecord", func() {
 	It("records the status Poll returned", func() {
 		d := pollDeps()
 
-		status, err := pollAndRecord(context.Background(), d, historianConfig)
+		_, err := pollAndRecord(context.Background(), d, historianConfig)
 
 		Expect(err).NotTo(HaveOccurred())
 
 		gauges := d.MetricsRecorder().Drain().Gauges
 		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianReachable), 1.0))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianJobs), float64(status.Summary.JobCount)))
-		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseOccupiedDiskBytes), float64(*status.DatabaseOccupiedDiskBytes)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianJobs), float64(fakeJobCount)))
+		Expect(gauges).To(HaveKeyWithValue(string(GaugeHistorianDatabaseOccupiedDiskBytes), float64(fullDatabaseOccupiedDiskBytes)))
 	})
 
 	It("records a failed connection check", func() {
@@ -245,9 +246,7 @@ func closeTestPool(holder *poolHolder) {
 	}
 }
 
-// cancelsAfterConnectionCheck answers SELECT 1, then cancels the poll's
-// context on the next query and fails it with driverErr, or with the context
-// error when driverErr is nil.
+// cancelsAfterConnectionCheck answers SELECT 1, then calls cancel and fails every later query.
 type cancelsAfterConnectionCheck struct {
 	timescalemetrics.Database
 	cancel    context.CancelFunc

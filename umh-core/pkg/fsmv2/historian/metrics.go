@@ -43,7 +43,6 @@ const (
 	GaugeHistorianDatabaseOccupiedDiskBytes deps.GaugeName = "historian_database_occupied_disk_bytes"
 )
 
-// recordStatus sets the Historian gauges from one observation.
 func recordStatus(recorder *deps.MetricsRecorder, status TimescaleStatus) {
 	recorder.SetGaugeFlag(GaugeHistorianReachable, status.Reachable)
 	recorder.SetGaugeFlag(GaugeHistorianAuthValid, status.Auth == models.TimescaleAuthValid)

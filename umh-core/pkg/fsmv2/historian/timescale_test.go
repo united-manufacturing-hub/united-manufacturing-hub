@@ -692,7 +692,7 @@ var _ = Describe("Sentry reporting", func() {
 		Expect(queried).To(BeFalse())
 	})
 
-	It("keeps a database size read that succeeded just before the poll's deadline", func() {
+	It("keeps a database size read that answers after the poll's deadline passed", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 		defer cancel()
 

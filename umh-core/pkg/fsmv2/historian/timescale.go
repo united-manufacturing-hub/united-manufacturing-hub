@@ -392,8 +392,8 @@ func (d Deps) forgetDatabaseFigures() {
 // errReadNotStarted means the poll's deadline passed before the read could query the database.
 var errReadNotStarted = errors.New("the poll's deadline passed before the read started")
 
-// readNotPossible returns why a read cannot start, or nil when it can.
-func readNotPossible(ctx context.Context) error {
+// readStartError returns why a read cannot start, or nil when it can.
+func readStartError(ctx context.Context) error {
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return ctx.Err()
 	}
@@ -408,7 +408,7 @@ func readNotPossible(ctx context.Context) error {
 // the error reaches the cache only, so an unreadable summary does not mark the worker degraded
 func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
 	return func() (timescalemetrics.Summary, error) {
-		if err := readNotPossible(ctx); err != nil {
+		if err := readStartError(ctx); err != nil {
 			return timescalemetrics.Summary{}, err
 		}
 
@@ -432,7 +432,7 @@ func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, ho
 
 func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, error) {
 	return func() (int64, error) {
-		if err := readNotPossible(ctx); err != nil {
+		if err := readStartError(ctx); err != nil {
 			return 0, err
 		}
 
