@@ -128,6 +128,7 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Interfaces (16 bytes each)
 	worker       fsmv2.Worker
 	currentState fsmv2.State[any, any]
+	logger       deps.FSMLogger // set once at creation, so it is safe to read without a lock
 
 	// Pointers (8 bytes each)
 	// mu protects currentState. Uses RWMutex for frequent reads, rare writes.

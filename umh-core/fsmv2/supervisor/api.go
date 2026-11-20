@@ -501,6 +501,7 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 		mu:                 s.lockManager.NewLock(lockNameWorkerContextMu, lockLevelWorkerContextMu),
 		identity:           identity,
 		worker:             worker,
+		logger:             workerLogger,
 		currentState:       initialState,
 		currentStateReason: "initial",
 		lastLifecyclePhase: initialPhase,
@@ -544,9 +545,9 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 	s.logger.Info("worker_added")
 }
 
-// stopWorker tears down a worker that just left the registry, deleting the
-// state-duration series of the worker's current state and its worker-metric
-// series.
+// stopWorker stops a worker's collector and executor and deletes its
+// state-duration and worker-metric series. It runs when a worker is removed and
+// when Shutdown stops the workers that are still registered.
 func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	ctx context.Context,
 	workerCtx *WorkerContext[TObserved, TDesired],
@@ -590,7 +591,7 @@ func (s *Supervisor[TObserved, TDesired]) waitThenCleanupWorkerMetrics(removed *
 	select {
 	case <-removed.collector.Stopped():
 	case <-waitTimer.C:
-		s.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_metrics_cleanup_wait_exceeded",
+		removed.logger.SentryWarn(deps.FeatureFSMv2, hierarchyPath, "worker_metrics_cleanup_wait_exceeded",
 			deps.Duration("wait_limit", waitLimit))
 	}
 
