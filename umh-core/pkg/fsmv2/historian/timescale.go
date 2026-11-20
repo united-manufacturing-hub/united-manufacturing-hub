@@ -388,11 +388,31 @@ func (d Deps) forgetDatabaseFigures() {
 	d.databaseSize.clear()
 }
 
+// errReadNotStarted means the poll's deadline passed before the read could query the database.
+var errReadNotStarted = errors.New("the poll's deadline passed before the read started")
+
+// readNotPossible returns why a read cannot start, or nil when it can.
+func readNotPossible(ctx context.Context) error {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return ctx.Err()
+	}
+
+	if ctx.Err() != nil {
+		return errReadNotStarted
+	}
+
+	return nil
+}
+
 // the error reaches the cache only, so an unreadable summary does not mark the worker degraded
 func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
 	return func() (timescalemetrics.Summary, error) {
+		if err := readNotPossible(ctx); err != nil {
+			return timescalemetrics.Summary{}, err
+		}
+
 		summary, err := timescalemetrics.CollectSummary(ctx, db)
-		if ctx.Err() != nil {
+		if err != nil && errors.Is(ctx.Err(), context.Canceled) {
 			return timescalemetrics.Summary{}, ctx.Err()
 		}
 
@@ -411,8 +431,12 @@ func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, ho
 
 func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, error) {
 	return func() (int64, error) {
+		if err := readNotPossible(ctx); err != nil {
+			return 0, err
+		}
+
 		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, db)
-		if ctx.Err() != nil {
+		if err != nil && errors.Is(ctx.Err(), context.Canceled) {
 			return 0, ctx.Err()
 		}
 
@@ -492,7 +516,7 @@ type readCache[T any] struct {
 	mu       sync.Mutex
 }
 
-// refresh keeps the previous value for a read cut short by the poll's context and drops it for any other failure.
+// refresh drops the value on a failed read; a cancelled read or one that never started leaves the cache for the next poll.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
@@ -514,11 +538,11 @@ func (c *readCache[T]) refresh(
 		return c.value
 	}
 
-	c.readAt = now
-
-	if errors.Is(err, context.DeadlineExceeded) {
-		return c.value
+	if errors.Is(err, errReadNotStarted) {
+		return nil
 	}
+
+	c.readAt = now
 
 	if err != nil {
 		c.value = nil

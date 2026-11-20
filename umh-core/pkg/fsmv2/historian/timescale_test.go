@@ -21,6 +21,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -425,6 +426,14 @@ var _ = Describe("the summary cache", func() {
 		}
 	}
 
+	cannotStart := func(calls *int) func() (timescalemetrics.Summary, error) {
+		return func() (timescalemetrics.Summary, error) {
+			*calls++
+
+			return timescalemetrics.Summary{}, errReadNotStarted
+		}
+	}
+
 	isCancelled := func(calls *int) func() (timescalemetrics.Summary, error) {
 		return func() (timescalemetrics.Summary, error) {
 			*calls++
@@ -486,7 +495,7 @@ var _ = Describe("the summary cache", func() {
 		Expect(third).To(Equal(1), "a cancelled read observed nothing, so the next poll reads again")
 	})
 
-	It("keeps its value and waits its turn when the poll's deadline expired during a read", func() {
+	It("drops its value and waits its turn when a read runs past the poll's deadline", func() {
 		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
 		first, expired, third := 0, 0, 0
 
@@ -494,12 +503,27 @@ var _ = Describe("the summary cache", func() {
 		summary := cache.refresh(readAt.Add(2*time.Minute), dsnA, deadlineExpires(&expired))
 
 		Expect(expired).To(Equal(1))
-		Expect(summary).NotTo(BeNil(), "an earlier read used up the poll's deadline, and the database said nothing")
-		Expect(summary.TableNames).To(ConsistOf("value_bench"))
+		Expect(summary).To(BeNil(), "a summary that keeps timing out must not be shown as current")
 
 		cache.refresh(readAt.Add(2*time.Minute+time.Second), dsnA, reads([]string{"value_other"}, &third))
 
 		Expect(third).To(BeZero(), "a slow read must not be repeated on every poll")
+	})
+
+	It("reports nothing and reads on the next poll when a read could not start", func() {
+		cache := &readCache[timescalemetrics.Summary]{interval: time.Minute}
+		first, notStarted, third := 0, 0, 0
+
+		cache.refresh(readAt, dsnA, reads([]string{"value_bench"}, &first))
+		summary := cache.refresh(readAt.Add(2*time.Minute), dsnA, cannotStart(&notStarted))
+
+		Expect(notStarted).To(Equal(1))
+		Expect(summary).To(BeNil())
+
+		summary = cache.refresh(readAt.Add(2*time.Minute+time.Second), dsnA, reads([]string{"value_other"}, &third))
+
+		Expect(third).To(Equal(1), "a read that never reached the database does not count as a read")
+		Expect(summary.TableNames).To(ConsistOf("value_other"))
 	})
 
 	It("reports nothing rather than the previous database when the first read of the new one fails", func() {
@@ -656,15 +680,29 @@ var _ = Describe("Sentry reporting", func() {
 		}),
 	)
 
-	It("returns the poll's deadline error for a database size read cut short by it, whatever the driver returned", func() {
+	It("does not query the database for a read whose deadline passed before it started", func() {
 		ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 		defer cancel()
 
-		database := &cancelsAfterConnectionCheck{cancel: cancel, driverErr: errors.New("conn closed")}
+		queried := false
+		database := &cancelsAfterConnectionCheck{cancel: func() { queried = true }, driverErr: errors.New("conn closed")}
 
 		_, readErr := databaseSizeReader(ctx, d, database, "db")()
 
-		Expect(readErr).To(MatchError(context.DeadlineExceeded))
+		Expect(readErr).To(MatchError(errReadNotStarted))
+		Expect(queried).To(BeFalse())
+	})
+
+	It("keeps a database size read that succeeded just before the poll's deadline", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
+
+		database := &answersAfterDeadline{Database: timescalemetrics.NewFakeDatabase(timescalemetrics.FakeContents{DatabaseOccupiedDiskBytes: 4096}), ctx: ctx}
+
+		databaseOccupiedDiskBytes, readErr := databaseSizeReader(ctx, d, database, "db")()
+
+		Expect(readErr).NotTo(HaveOccurred())
+		Expect(databaseOccupiedDiskBytes).To(Equal(int64(4096)))
 	})
 
 	It("reports a failed database size read", func() {
@@ -682,3 +720,21 @@ var _ = Describe("Sentry reporting", func() {
 		Expect(events[0].message).To(Equal(string(tagDatabaseSizeReadFailed)))
 	})
 })
+
+// answersAfterDeadline answers each query once ctx's deadline has passed.
+type answersAfterDeadline struct {
+	timescalemetrics.Database
+	ctx context.Context
+}
+
+func (a *answersAfterDeadline) Query(_ context.Context, sql string, args ...any) (pgx.Rows, error) {
+	<-a.ctx.Done()
+
+	return a.Database.Query(context.Background(), sql, args...)
+}
+
+func (a *answersAfterDeadline) QueryRow(_ context.Context, sql string, args ...any) pgx.Row {
+	<-a.ctx.Done()
+
+	return a.Database.QueryRow(context.Background(), sql, args...)
+}
