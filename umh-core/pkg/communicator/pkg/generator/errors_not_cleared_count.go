@@ -30,7 +30,7 @@ const notClearedMargin = time.Minute
 
 // notClearedLookupTimeout bounds all store reads of one count. It is a small
 // part of the status message's budget, so a slow store costs the count
-// (unknown reads answer from the hold) and not the status message.
+// (a worker whose read times out does not count) and not the status message.
 const notClearedLookupTimeout = 100 * time.Millisecond
 
 // benthosErrorsNotClearedInstanceCount returns how many Benthos workers hold

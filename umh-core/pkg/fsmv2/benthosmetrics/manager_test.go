@@ -17,14 +17,12 @@ package fsmv2benthosmetrics
 import (
 	"context"
 	"errors"
-	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
-	fsmv2config "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
@@ -294,8 +292,8 @@ var _ = Describe("GetLastObservedState across a failing store read", func() {
 
 var _ = Describe("The Failures lookup", func() {
 	// Failures returns the failures of the named instance's stored sample,
-	// false for an unknown instance, and false when the instance has no
-	// sample yet.
+	// false for an unknown instance, false when the instance has no sample
+	// yet, and false when the store read fails.
 	It("looks up one instance's stored failures", func() {
 		// No client: no answer.
 		f, ok := Failures(context.Background(), "benthos-1")
@@ -330,8 +328,8 @@ var _ = Describe("The Failures lookup", func() {
 		Expect(ok).To(BeTrue(), "a stored sample answers")
 		Expect(f).To(Equal(stored))
 
-		// A minute-old sample still answers: the not-cleared count relies on
-		// the lookup answering at any age.
+		// A minute-old sample still answers. Judging its age is the
+		// caller's job.
 		reader.obs.CollectedAt = time.Now().Add(-time.Minute)
 		f, ok = Failures(context.Background(), "benthos-1")
 		Expect(ok).To(BeTrue(), "a sample a minute old still answers")
@@ -343,430 +341,60 @@ var _ = Describe("The Failures lookup", func() {
 		f, ok = Failures(context.Background(), "benthos-1")
 		Expect(ok).To(BeFalse(), "a sample without Failures answers nothing")
 		Expect(f).To(BeNil())
-	})
-})
 
-// perRefReader is a deps.StateReader that returns one observation per child
-// id, so each registered worker can carry its own stored sample.
-type perRefReader struct {
-	obsByID map[string]*fsmv2.Observation[simple.Status[Scrape]]
-}
-
-func (r *perRefReader) LoadObservedTyped(_ context.Context, _, id string, result any) error {
-	obs, ok := r.obsByID[id]
-	if !ok {
-		return persistence.ErrNotFound
-	}
-
-	out, ok := result.(*fsmv2.Observation[simple.Status[Scrape]])
-	if !ok {
-		return nil
-	}
-
-	*out = *obs
-
-	return nil
-}
-
-func (r *perRefReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
-	return nil
-}
-
-// togglingReader answers every read with its one observation, or with a
-// read error once failed is set. Both can change while other goroutines
-// read, so a spec can exercise the Failures hold's lock.
-type togglingReader struct {
-	mu   sync.Mutex
-	obs  *fsmv2.Observation[simple.Status[Scrape]]
-	fail bool
-}
-
-func (r *togglingReader) setFail(fail bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.fail = fail
-}
-
-func (r *togglingReader) LoadObservedTyped(_ context.Context, _, _ string, result any) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.fail {
-		return errors.New("store read timed out")
-	}
-
-	out, ok := result.(*fsmv2.Observation[simple.Status[Scrape]])
-	if !ok {
-		return nil
-	}
-
-	if r.obs != nil {
-		*out = *r.obs
-	}
-
-	return nil
-}
-
-func (r *togglingReader) LoadDesiredTyped(_ context.Context, _, _ string, _ any) error {
-	return nil
-}
-
-var _ = Describe("The Failures hold across a failing store read", func() {
-	const name = "benthos-held"
-
-	// errorFreeObs is an observation whose sample carries empty Failures:
-	// a healthy Benthos, stored as its worker last scraped it.
-	errorFreeObs := func() *fsmv2.Observation[simple.Status[Scrape]] {
-		return &fsmv2.Observation[simple.Status[Scrape]]{
-			CollectedAt: time.Now().Add(-100 * time.Millisecond),
-			Status: simple.Status[Scrape]{
-				Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.Failures{}}},
-			},
-		}
-	}
-
-	// While the store read keeps failing and recovering, many services read
-	// their instance's Failures on their own ticks. The lookups must stay
-	// safe under that concurrency, and a failed read of a worker that is
-	// still registered must answer from the last good Failures.
-	It("answers from the last good Failures under concurrent failing reads", func() {
-		reader := &togglingReader{obs: errorFreeObs()}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-
-		// One good read fills the hold.
-		f, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "the good read answers")
-		Expect(f).NotTo(BeNil())
-
-		var wg sync.WaitGroup
-		for range 8 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				for range 50 {
-					_, _ = Failures(context.Background(), name)
-				}
-			}()
-		}
-
-		// While the readers read, the store keeps failing and recovering.
-		for j := range 50 {
-			reader.setFail(j%2 == 0)
-		}
-
-		wg.Wait()
-
-		// A failed read of a registered worker answers from the hold.
-		reader.setFail(true)
-
-		f, ok = Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "a failed read answers from the last good Failures")
-		Expect(f).NotTo(BeNil())
-	})
-
-	// A reader that changes the Failures it was handed — the good read's or
-	// the hold's — cannot change what the hold later serves: the hold keeps
-	// its own copy, entries included.
-	It("serves the next read the held answer unchanged after a reader changes the returned Failures", func() {
-		reader := &togglingReader{obs: &fsmv2.Observation[simple.Status[Scrape]]{
-			CollectedAt: time.Now().Add(-100 * time.Millisecond),
-			Status: simple.Status[Scrape]{
-				Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.Failures{
-					Entries: []benthosmetrics.FailureEntry{
-						{Signal: "output_error", Label: "output error", Count: 3},
-					},
-				}}},
-			},
-		}}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-
-		want := []benthosmetrics.FailureEntry{{Signal: "output_error", Label: "output error", Count: 3}}
-
-		// One good read fills the hold with the entry above; changing the
-		// Failures that read returned must not reach the hold's copy.
-		f, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "the good read answers")
-
-		f.Entries[0] = benthosmetrics.FailureEntry{Signal: "mutated", Count: 99}
-
-		// From here on the store read fails, so every read answers from the
-		// hold; changing the Failures a held read returned must not reach
-		// the hold's copy either.
-		reader.setFail(true)
-
-		held, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "a failed read answers from the last good Failures")
-		Expect(held.Entries).To(Equal(want), "the hold kept its own copy of the good read's entries")
-		held.Entries[0] = benthosmetrics.FailureEntry{Signal: "mutated", Count: 99}
-
-		again, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "the next failed read answers from the last good Failures")
-		Expect(again.Entries).To(Equal(want), "the hold serves its own copy, not a reader's changes")
-	})
-})
-
-var _ = Describe("The Failures hold's sweep and forget", func() {
-	// sampleWith wraps empty Failures in a stored observation: a healthy
-	// Benthos, stored as its worker last scraped it.
-	sampleWith := func() *fsmv2.Observation[simple.Status[Scrape]] {
-		return &fsmv2.Observation[simple.Status[Scrape]]{
-			CollectedAt: time.Now().Add(-100 * time.Millisecond),
-			Status:      simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.Failures{}}}},
-		}
-	}
-
-	// heldInFailuresHold reports whether the hold currently has an entry for
-	// name. The specs peek because the hold itself is the behaviour under
-	// test.
-	heldInFailuresHold := func(name string) bool {
-		lastGoodMu.Lock()
-		defer lastGoodMu.Unlock()
-
-		_, held := lastGoodFailures[name]
-
-		return held
-	}
-
-	It("drops a name from the hold on a not-found read", func() {
-		name := "benthos-forgotten"
-		reader := &stubManagerReader{}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-
-		// One good read fills the hold.
-		reader.obs = sampleWith()
-		_, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "the good read answers")
-		Expect(heldInFailuresHold(name)).To(BeTrue(), "the good read fills the hold")
-
-		// The worker is gone: the read is not found and fails closed, and it
-		// drops the entry, so the hold cannot outlive the fleet it serves.
-		reader.err = persistence.ErrNotFound
-		_, ok = Failures(context.Background(), name)
-		Expect(ok).To(BeFalse(), "a not-found read fails closed")
-		Expect(heldInFailuresHold(name)).To(BeFalse(),
-			"the not-found read drops the name from the hold")
-	})
-
-	It("keeps the newer sample when an older read arrives late", func() {
-		name := "benthos-late-reader"
-		reader := &stubManagerReader{}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
-
-		base := time.Now().Add(-time.Minute)
-		withErrors := func(at time.Time, count int64) *fsmv2.Observation[simple.Status[Scrape]] {
-			f := &benthosmetrics.Failures{ObservedAt: at}
-			if count > 0 {
-				f.Entries = []benthosmetrics.FailureEntry{{
-					Signal: "output_error", Label: "output error",
-					Count: count, LastErrorAt: at,
-				}}
-			}
-
-			return &fsmv2.Observation[simple.Status[Scrape]]{
-				CollectedAt: at,
-				Status:      simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: f}}},
-			}
-		}
-
-		// The health path and the telemetry count read the same name on
-		// different goroutines. Here the newer read lands first: it finds
-		// an error.
-		reader.obs = withErrors(base.Add(2*time.Second), 3)
-		_, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "the newer read answers")
-
-		// Then a reader that started earlier arrives with an OLDER,
-		// error-free sample. Storing it would put the hold back in time.
-		reader.obs = withErrors(base, 0)
-		_, ok = Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "the older read still answers its own caller")
-
-		// An unknown read now answers from the hold. It must see the newer
-		// sample's error, not the older sample's all-clear.
-		reader.obs = nil
+		// A store read that fails answers nothing, even after a good read.
+		reader.obs.Status.Result = Scrape{Sample: benthosmetrics.Sample{Failures: stored}}
 		reader.err = errors.New("store read timed out")
-		held, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue(), "a failed read answers from the last good Failures")
-		Expect(held.ObservedAt).To(Equal(base.Add(2*time.Second)),
-			"the hold keeps the newer sample when an older read arrives late")
-		Expect(held.Entries).To(HaveLen(1),
-			"the newer sample's error survives the late older read")
-	})
-
-	It("sweeps out names whose worker is no longer registered", func() {
-		oldName := "benthos-swept-out"
-		newName := "benthos-sweeping-in"
-
-		reader := &perRefReader{obsByID: map[string]*fsmv2.Observation[simple.Status[Scrape]]{}}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-
-		// A worker whose read answers fills the hold.
-		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: oldName}, map[string]any{})).To(Succeed())
-		reader.obsByID[fsmv2config.ChildID(oldName)] = sampleWith()
-		_, ok := Failures(context.Background(), oldName)
-		Expect(ok).To(BeTrue(), "the old worker's read answers")
-		Expect(heldInFailuresHold(oldName)).To(BeTrue(), "the old worker is held")
-
-		// The worker is deleted and a new one appears. The new name's good
-		// read sweeps the hold, so the deleted worker's entry cannot linger
-		// in it.
-		c.Delete(dynamicchildren.Ref{WorkerType: WorkerType, Name: oldName})
-		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: newName}, map[string]any{})).To(Succeed())
-		reader.obsByID[fsmv2config.ChildID(newName)] = sampleWith()
-		_, ok = Failures(context.Background(), newName)
-		Expect(ok).To(BeTrue(), "the new worker's read answers")
-		Expect(heldInFailuresHold(newName)).To(BeTrue(), "the new worker is held")
-		Expect(heldInFailuresHold(oldName)).To(BeFalse(),
-			"adding a new name sweeps out names whose worker is no longer registered")
-	})
-	// The registry is read outside the hold's mutex, so another reader can
-	// store a sample between that read and the sweep. The sweep must leave
-	// such a sample alone; otherwise a late, older read for the same name
-	// could fill the emptied entry and undo the newer sample.
-	It("keeps entries stored after its registry snapshot", func() {
-		at := time.Now()
-		hold := map[string]benthosmetrics.Failures{
-			"benthos-gone":    {ObservedAt: at},
-			"benthos-added":   {ObservedAt: at},
-			"benthos-updated": {ObservedAt: at.Add(time.Second)},
-		}
-
-		// What the sweep saw before the registry read: "benthos-added" was
-		// not held yet, and "benthos-updated" held an older sample. None of
-		// the three was registered when the registry was read.
-		candidates := map[string]time.Time{
-			"benthos-gone":    at,
-			"benthos-updated": at,
-		}
-
-		sweepUnregistered(hold, candidates, map[string]struct{}{})
-
-		Expect(hold).NotTo(HaveKey("benthos-gone"), "an unchanged, unregistered entry is swept")
-		Expect(hold).To(HaveKey("benthos-added"), "an entry added after the snapshot stays")
-		Expect(hold).To(HaveKey("benthos-updated"), "an entry updated after the snapshot stays")
+		f, ok = Failures(context.Background(), "benthos-1")
+		Expect(ok).To(BeFalse(), "a failed store read answers nothing")
+		Expect(f).To(BeNil())
 	})
 })
 
 var _ = Describe("ErrorsNotClearedCount", func() {
-	// notCleared is the Failures of a worker that holds an output error
-	// from 12 minutes ago: more than the 10-minute window plus the 1-minute
-	// margin, so it should have cleared.
-	notCleared := func() *benthosmetrics.Failures {
+	// sampleWith wraps one Failures, holding one output error whose last
+	// error is lastErrorAgo old, in a stored observation.
+	sampleWith := func(lastErrorAgo time.Duration) *fsmv2.Observation[simple.Status[Scrape]] {
 		now := time.Now()
 
-		return &benthosmetrics.Failures{
-			ObservedAt: now,
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
-				Since: now.Add(-12 * time.Minute), LastErrorAt: now.Add(-12 * time.Minute),
-			}},
-		}
-	}
-
-	// sampleWith wraps one Failures in a stored observation.
-	sampleWith := func(f *benthosmetrics.Failures) *fsmv2.Observation[simple.Status[Scrape]] {
 		return &fsmv2.Observation[simple.Status[Scrape]]{
-			CollectedAt: time.Now().Add(-100 * time.Millisecond),
-			Status:      simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: f}}},
+			CollectedAt: now.Add(-100 * time.Millisecond),
+			Status: simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.Failures{
+				ObservedAt: now,
+				Entries: []benthosmetrics.FailureEntry{{
+					Signal: "output_error", Label: "output error", Count: 1,
+					Since: now.Add(-lastErrorAgo), LastErrorAt: now.Add(-lastErrorAgo),
+				}},
+			}}}},
 		}
 	}
 
 	It("counts every registered Benthos worker holding an error that should have cleared", func() {
-		// No client: no count.
 		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero(), "no client")
 
-		// A registry holding the Benthos workers of a data flow component, a
-		// protocol converter's read and write sides, a topic browser and a
-		// stand-alone flow. Every one of them holds an error that should
-		// have cleared, so all five count; a converter with both sides stuck
-		// counts twice.
-		names := []string{
-			"benthos-dataflow-dfc-1",
+		// Both sides of a protocol converter are stuck, so it counts twice.
+		reader := &stubManagerReader{obs: sampleWith(benthosmetrics.ErrorWindow + 2*time.Minute)}
+		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
+		fsmv2client.SetClient(c)
+		DeferCleanup(func() { fsmv2client.SetClient(nil) })
+
+		for _, name := range []string{
 			"benthos-dataflow-read-protocolconverter-pc-1",
 			"benthos-dataflow-write-protocolconverter-pc-1",
-			"benthos-topicbrowser-tb-1",
-			"benthos-standalone-1",
-		}
-
-		reader := &perRefReader{obsByID: map[string]*fsmv2.Observation[simple.Status[Scrape]]{}}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-
-		for _, name := range names {
+		} {
 			Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
-			reader.obsByID[fsmv2config.ChildID(name)] = sampleWith(notCleared())
 		}
 
-		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(5),
-			"the DFC, both converter sides, the topic browser and the stand-alone flow all count")
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(2))
 
-		// A worker whose errors cleared in time does not count, and neither
-		// does a worker with no sample.
-		fresh := &benthosmetrics.Failures{
-			ObservedAt: time.Now(),
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
-				Since: time.Now().Add(-time.Minute), LastErrorAt: time.Now().Add(-time.Minute),
-			}},
-		}
-		reader.obsByID[fsmv2config.ChildID("benthos-standalone-1")] = sampleWith(fresh)
+		reader.obs = sampleWith(time.Minute)
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero(),
+			"errors still inside the window do not count")
 
-		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(4),
-			"the stand-alone flow cleared in time")
+		reader.obs = sampleWith(benthosmetrics.ErrorWindow + 2*time.Minute)
+		reader.err = errors.New("store read timed out")
 
-		delete(reader.obsByID, fsmv2config.ChildID("benthos-topicbrowser-tb-1"))
-		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(3),
-			"a worker with no stored sample does not count")
-	})
-
-	It("never changes the Failures hold", func() {
-		name := "benthos-dataflow-dfc-1"
-		reader := &stubManagerReader{obs: sampleWith(notCleared())}
-		c := fsmv2client.NewFSMv2Client(dynamicchildren.NewWriter(), reader)
-		fsmv2client.SetClient(c)
-		DeferCleanup(func() { fsmv2client.SetClient(nil) })
-		DeferCleanup(func() { forgetLastGoodFailures(name) })
-		Expect(c.Upsert(dynamicchildren.Ref{WorkerType: WorkerType, Name: name}, map[string]any{})).To(Succeed())
-
-		held := func() bool {
-			lastGoodMu.Lock()
-			defer lastGoodMu.Unlock()
-
-			_, ok := lastGoodFailures[name]
-
-			return ok
-		}
-
-		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(1))
-		Expect(held()).To(BeFalse(), "a good read does not fill the hold")
-
-		_, ok := Failures(context.Background(), name)
-		Expect(ok).To(BeTrue())
-		Expect(held()).To(BeTrue())
-
-		reader.err = persistence.ErrNotFound
-		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero())
-		Expect(held()).To(BeTrue(), "a not-found read does not drop the hold's entry")
-
-		reader.err = errors.New("read failed")
-
-		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(Equal(1),
-			"an unknown read answers from the hold")
+		Expect(ErrorsNotClearedCount(context.Background(), time.Minute)).To(BeZero(),
+			"a worker whose read fails does not count")
 	})
 })
