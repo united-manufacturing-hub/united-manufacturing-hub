@@ -60,9 +60,8 @@ type CollectorConfig[TObserved any] struct {
 	Worker                    fsmv2.Worker
 	Store                     storage.TriangularStoreInterface
 	Logger                    deps.FSMLogger
-	StateProvider             func() string                     // Returns current FSM state name (injected by supervisor)
-	ShutdownRequestedProvider func() bool                       // Returns current shutdown requested status (injected by supervisor)
-	MetricsClaim              func() metrics.WorkerMetricsClaim // nil exports no worker metrics
+	StateProvider             func() string // Returns current FSM state name (injected by supervisor)
+	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
 	// ChildrenCountsProvider is the legacy two-int interface. New workers should
 	// consume ChildrenView instead and read HealthyCount / UnhealthyCount as fields.
 	// The collector still calls both setters during migration; counts agree because
@@ -173,12 +172,21 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
-func (c *Collector[TObserved]) metricsClaim() metrics.WorkerMetricsClaim {
-	if c.config.MetricsClaim == nil {
+// metricsClaim returns the claim the worker's dependencies took when the worker was registered, or 0, which exports nothing.
+func (c *Collector[TObserved]) metricsClaim() deps.WorkerMetricsClaim {
+	provider, ok := c.config.Worker.(fsmv2.DependencyProvider)
+	if !ok {
 		return 0
 	}
 
-	return c.config.MetricsClaim()
+	claimHolder, ok := provider.GetDependenciesAny().(interface {
+		MetricsClaim() deps.WorkerMetricsClaim
+	})
+	if !ok {
+		return 0
+	}
+
+	return claimHolder.MetricsClaim()
 }
 
 // TriggerNow signals the observation loop to collect immediately.

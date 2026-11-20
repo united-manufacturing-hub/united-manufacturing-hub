@@ -81,7 +81,9 @@ type BaseDependencies struct {
 	workerID        string
 	hierarchyPath   string
 	actionHistory   []ActionResult // Set by supervisor before CollectObservedState, read-only for workers
-	mu              sync.RWMutex   // Protects frameworkState and actionHistory
+	metricsClaims   WorkerMetricsClaims
+	metricsClaim    WorkerMetricsClaim
+	mu              sync.RWMutex // Protects frameworkState, actionHistory, metricsClaims and metricsClaim
 }
 
 // NewBaseDependencies creates base dependencies with common tools.

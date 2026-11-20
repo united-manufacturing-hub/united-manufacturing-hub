@@ -472,9 +472,9 @@ type WorkerMetricsExporter struct {
 	counters                    map[string]*prometheus.CounterVec
 	gauges                      map[string]*prometheus.GaugeVec
 	previousCounterValuesByPath map[string]map[string]int64 // hierarchy path -> counter name -> last value
-	owners                      map[string]WorkerMetricsClaim
+	owners                      map[string]deps.WorkerMetricsClaim
 	registerer                  prometheus.Registerer
-	lastClaim                   WorkerMetricsClaim
+	lastClaim                   deps.WorkerMetricsClaim
 	mu                          sync.Mutex
 }
 
@@ -483,7 +483,7 @@ func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsEx
 		counters:                    make(map[string]*prometheus.CounterVec),
 		gauges:                      make(map[string]*prometheus.GaugeVec),
 		previousCounterValuesByPath: make(map[string]map[string]int64),
-		owners:                      make(map[string]WorkerMetricsClaim),
+		owners:                      make(map[string]deps.WorkerMetricsClaim),
 		registerer:                  registerer,
 	}
 }
@@ -491,7 +491,7 @@ func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsEx
 var workerMetricsExporter = newWorkerMetricsExporter(prometheus.DefaultRegisterer)
 
 // ExportWorkerMetrics exports observed's worker metrics to Prometheus while claim owns hierarchyPath.
-func ExportWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim, observed fsmv2.ObservedState) {
+func ExportWorkerMetrics(hierarchyPath string, claim deps.WorkerMetricsClaim, observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
 		return
@@ -505,7 +505,7 @@ func ExportWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim, observe
 	workerMetricsExporter.export(hierarchyPath, claim, &metrics)
 }
 
-func (e *WorkerMetricsExporter) export(hierarchyPath string, claim WorkerMetricsClaim, metrics *deps.Metrics) {
+func (e *WorkerMetricsExporter) export(hierarchyPath string, claim deps.WorkerMetricsClaim, metrics *deps.Metrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

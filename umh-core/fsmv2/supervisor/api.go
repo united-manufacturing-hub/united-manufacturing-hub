@@ -353,9 +353,6 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 
 			return workerCtx.currentState.String()
 		},
-		MetricsClaim: func() metrics.WorkerMetricsClaim {
-			return metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load())
-		},
 		ShutdownRequestedProvider: func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -532,7 +529,10 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
-	workerCtx.metricsClaim.Store(uint64(metrics.ClaimWorkerMetrics(identity.HierarchyPath)))
+	if lifecycle, ok := workerLifecycle(workerCtx.worker); ok {
+		lifecycle.Attach(metrics.WorkerMetricsClaims())
+	}
+
 	s.workers[identity.ID] = workerCtx
 
 	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
@@ -563,7 +563,21 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 
 	workerCtx.mu.RUnlock()
 
-	metrics.CleanupWorkerMetrics(workerCtx.identity.HierarchyPath, metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load()))
+	if lifecycle, ok := workerLifecycle(workerCtx.worker); ok {
+		lifecycle.Detach()
+	}
+}
+
+// workerLifecycle returns the worker's dependencies when they hold something for as long as the worker is registered.
+func workerLifecycle(worker fsmv2.Worker) (deps.WorkerLifecycle, bool) {
+	provider, ok := worker.(fsmv2.DependencyProvider)
+	if !ok {
+		return nil, false
+	}
+
+	lifecycle, ok := provider.GetDependenciesAny().(deps.WorkerLifecycle)
+
+	return lifecycle, ok
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without

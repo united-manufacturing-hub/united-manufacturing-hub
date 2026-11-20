@@ -80,8 +80,25 @@ func stateDurationStates(hierarchyPath string) []string {
 	return states
 }
 
+// workerWithDependencies gives a test worker the BaseDependencies that every production worker embeds.
+type workerWithDependencies struct {
+	fsmv2.Worker
+	dependencies *deps.BaseDependencies
+}
+
+func (w workerWithDependencies) GetDependenciesAny() any {
+	return w.dependencies
+}
+
+func withDependencies(worker fsmv2.Worker, identity deps.Identity) workerWithDependencies {
+	return workerWithDependencies{
+		Worker:       worker,
+		dependencies: deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity),
+	}
+}
+
 // exportTestWorkerMetrics exports the way the collector does after it saves an observation.
-func exportTestWorkerMetrics(hierarchyPath string, claim metrics.WorkerMetricsClaim, gaugeValue float64) {
+func exportTestWorkerMetrics(hierarchyPath string, claim deps.WorkerMetricsClaim, gaugeValue float64) {
 	workerMetrics := deps.Metrics{
 		Counters: map[string]int64{removalTestCounter: 3},
 		Gauges:   map[string]float64{removalTestGauge: gaugeValue},
@@ -115,26 +132,27 @@ func gaugeValues(metricName, hierarchyPath string) []float64 {
 	return values
 }
 
-// supervisorWithState builds a supervisor whose one worker stays in state.
-// Any state-duration series other tests left for the same hierarchy path is
-// deleted first, so the spec starts clean.
-func supervisorWithState(state *mockState) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+// supervisorWithState builds a supervisor whose one worker stays in state, and
+// returns the worker's dependencies. Any state-duration series other tests left
+// for the same hierarchy path is deleted first, so the spec starts clean.
+func supervisorWithState(state *mockState) (*supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState], *deps.BaseDependencies) {
 	state.nextState = state
 
-	s := newSupervisorWithWorkerAndLogger(&mockWorker{initialState: state}, newMockTriangularStore(), supervisor.CollectorHealthConfig{}, deps.NewNopFSMLogger())
+	worker := withDependencies(&mockWorker{initialState: state}, mockIdentity())
+	s := newSupervisorWithWorkerAndLogger(worker, newMockTriangularStore(), supervisor.CollectorHealthConfig{}, deps.NewNopFSMLogger())
 
 	workerPath := mockIdentity().HierarchyPath
 	for _, leftover := range stateDurationStates(workerPath) {
 		metrics.CleanupStateDuration(workerPath, leftover)
 	}
 
-	return s
+	return s, worker.dependencies
 }
 
 var _ = Describe("The state-duration metric of a worker", func() {
 	It("exists while the worker runs and is gone after it is removed for good", func() {
 		state := &mockState{signal: fsmv2.SignalNone}
-		s := supervisorWithState(state)
+		s, _ := supervisorWithState(state)
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
@@ -152,11 +170,11 @@ var _ = Describe("The state-duration metric of a worker", func() {
 var _ = Describe("The worker metrics of a worker", func() {
 	It("are gone after the worker is removed for good", func() {
 		state := &mockState{signal: fsmv2.SignalNone}
-		s := supervisorWithState(state)
+		s, dependencies := supervisorWithState(state)
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		exportTestWorkerMetrics(hierarchyPath, s.WorkerMetricsClaimForTest(mockIdentity().ID), 1)
+		exportTestWorkerMetrics(hierarchyPath, dependencies.MetricsClaim(), 1)
 		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(HaveLen(1))
 		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(HaveLen(1))
 
@@ -170,11 +188,11 @@ var _ = Describe("The worker metrics of a worker", func() {
 
 	It("do not come back from a collection that returns after RemoveWorkerForRestart", func() {
 		state := &mockState{signal: fsmv2.SignalNone}
-		s := supervisorWithState(state)
+		s, dependencies := supervisorWithState(state)
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		removedClaim := s.WorkerMetricsClaimForTest(mockIdentity().ID)
+		removedClaim := dependencies.MetricsClaim()
 		exportTestWorkerMetrics(hierarchyPath, removedClaim, 1)
 
 		Expect(s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)).To(Succeed())
@@ -186,15 +204,16 @@ var _ = Describe("The worker metrics of a worker", func() {
 
 	It("of a worker added again at the same path keep their values when the removed worker's collection returns", func() {
 		state := &mockState{signal: fsmv2.SignalNone}
-		s := supervisorWithState(state)
+		s, dependencies := supervisorWithState(state)
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		removedClaim := s.WorkerMetricsClaimForTest(mockIdentity().ID)
+		removedClaim := dependencies.MetricsClaim()
 
 		Expect(s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)).To(Succeed())
-		Expect(s.AddWorker(mockIdentity(), &mockWorker{initialState: state})).To(Succeed())
-		exportTestWorkerMetrics(hierarchyPath, s.WorkerMetricsClaimForTest(mockIdentity().ID), 1)
+		addedWorker := withDependencies(&mockWorker{initialState: state}, mockIdentity())
+		Expect(s.AddWorker(mockIdentity(), addedWorker)).To(Succeed())
+		exportTestWorkerMetrics(hierarchyPath, addedWorker.dependencies.MetricsClaim(), 1)
 
 		exportTestWorkerMetrics(hierarchyPath, removedClaim, 99)
 
@@ -254,7 +273,8 @@ var _ = Describe("Shutdown", func() {
 			TickInterval:            20 * time.Millisecond,
 			GracefulShutdownTimeout: 200 * time.Millisecond,
 		})
-		Expect(root.AddWorker(identity, &stuckRunningWorker{id: identity.ID})).To(Succeed())
+		worker := withDependencies(&stuckRunningWorker{id: identity.ID}, identity)
+		Expect(root.AddWorker(identity, worker)).To(Succeed())
 
 		_, err := triangularStore.SaveDesired(ctx, removalRunningType, identity.ID, persistence.Document{
 			supervisor.FieldID:  identity.ID,
@@ -268,7 +288,7 @@ var _ = Describe("Shutdown", func() {
 		_ = root.Start(runCtx)
 
 		Eventually(root.ListWorkers, 5*time.Second).Should(HaveLen(1))
-		exportTestWorkerMetrics(identity.HierarchyPath, root.WorkerMetricsClaimForTest(identity.ID), 1)
+		exportTestWorkerMetrics(identity.HierarchyPath, worker.dependencies.MetricsClaim(), 1)
 		Expect(seriesLabels(0, removalTestGaugeMetric, identity.HierarchyPath)).To(HaveLen(1))
 
 		root.Shutdown()

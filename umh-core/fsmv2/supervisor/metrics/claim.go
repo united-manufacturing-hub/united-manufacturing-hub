@@ -14,22 +14,19 @@
 
 package metrics
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
 
-// WorkerMetricsClaim identifies the worker that owns the worker-metric series of a hierarchy path.
-type WorkerMetricsClaim uint64
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+)
 
-// ClaimWorkerMetrics makes a newly added worker the only one that exports and deletes hierarchyPath's series.
-func ClaimWorkerMetrics(hierarchyPath string) WorkerMetricsClaim {
-	return workerMetricsExporter.claim(hierarchyPath)
+// WorkerMetricsClaims returns the claims on the exported worker-metric series, for a worker's dependencies to attach to.
+func WorkerMetricsClaims() deps.WorkerMetricsClaims {
+	return workerMetricsExporter
 }
 
-// CleanupWorkerMetrics deletes hierarchyPath's worker-metric series while claim still owns them.
-func CleanupWorkerMetrics(hierarchyPath string, claim WorkerMetricsClaim) {
-	workerMetricsExporter.cleanup(hierarchyPath, claim)
-}
-
-func (e *WorkerMetricsExporter) claim(hierarchyPath string) WorkerMetricsClaim {
+// Claim makes a newly registered worker the only one that exports and deletes hierarchyPath's series.
+func (e *WorkerMetricsExporter) Claim(hierarchyPath string) deps.WorkerMetricsClaim {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -43,7 +40,8 @@ func (e *WorkerMetricsExporter) claim(hierarchyPath string) WorkerMetricsClaim {
 	return e.lastClaim
 }
 
-func (e *WorkerMetricsExporter) cleanup(hierarchyPath string, claim WorkerMetricsClaim) {
+// Release deletes hierarchyPath's worker-metric series while claim still owns them.
+func (e *WorkerMetricsExporter) Release(hierarchyPath string, claim deps.WorkerMetricsClaim) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
