@@ -357,15 +357,20 @@ func (c *Collector[TObserved]) observationLoop() {
 
 	defer func() {
 		c.mu.Lock()
-		c.state = collectorStateStopped
-		c.running = false
+		// a loop that outlived Restart must not mark the loop Restart started as stopped
+		superseded := doneChan != c.goroutineDone
+		if !superseded {
+			c.state = collectorStateStopped
+			c.running = false
+		}
 
 		close(doneChan)
 		// Read state string while holding lock to avoid race with Restart()
 		finalState := c.state.String()
 		c.mu.Unlock()
 		c.config.Logger.Debug("collector_loop_stopped",
-			deps.String("final_state", finalState))
+			deps.String("final_state", finalState),
+			deps.Bool("superseded_by_restart", superseded))
 	}()
 
 	c.config.Logger.Debug("collector_loop_starting",
