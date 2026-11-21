@@ -1,0 +1,3 @@
+kind: fixes
+body: umh-core no longer keeps checking a removed component when an earlier check of that component hung and was restarted
+time: 2026-11-20T10:36:51.513679+01:00
