@@ -129,10 +129,6 @@
 //   - fsmv2_collection_success_total: Count of successful collections
 //   - fsmv2_observed_state_age_seconds: Current age of observed state
 //
-// It also exports the worker's own umh_fsmv2_worker_* series under a
-// metrics.WorkerMetricsClaim that NewCollector takes. Stop deletes the
-// series; Restart keeps them.
-//
 // # Integration with health
 //
 // The health package uses collector timestamps to detect staleness:

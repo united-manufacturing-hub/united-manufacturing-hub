@@ -44,6 +44,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
@@ -471,8 +472,9 @@ type WorkerMetricsExporter struct {
 	counters                    map[string]*prometheus.CounterVec
 	gauges                      map[string]*prometheus.GaugeVec
 	previousCounterValuesByPath map[string]map[string]int64 // hierarchy path -> counter name -> last value
-	owners                      map[string]*WorkerMetricsClaim
+	owners                      map[string]deps.WorkerMetricsClaim
 	registerer                  prometheus.Registerer
+	lastClaim                   deps.WorkerMetricsClaim
 	mu                          sync.Mutex
 }
 
@@ -481,23 +483,37 @@ func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsEx
 		counters:                    make(map[string]*prometheus.CounterVec),
 		gauges:                      make(map[string]*prometheus.GaugeVec),
 		previousCounterValuesByPath: make(map[string]map[string]int64),
-		owners:                      make(map[string]*WorkerMetricsClaim),
+		owners:                      make(map[string]deps.WorkerMetricsClaim),
 		registerer:                  registerer,
 	}
 }
 
 var workerMetricsExporter = newWorkerMetricsExporter(prometheus.DefaultRegisterer)
 
-func (e *WorkerMetricsExporter) export(claim *WorkerMetricsClaim, metrics *deps.Metrics) {
+// ExportWorkerMetrics exports observed's worker metrics to Prometheus while claim owns hierarchyPath.
+func ExportWorkerMetrics(hierarchyPath string, claim deps.WorkerMetricsClaim, observed fsmv2.ObservedState) {
+	holder, ok := observed.(deps.MetricsHolder)
+	if !ok {
+		return
+	}
+
+	metrics := holder.GetWorkerMetrics()
+	if metrics.Counters == nil && metrics.Gauges == nil {
+		return
+	}
+
+	workerMetricsExporter.export(hierarchyPath, claim, &metrics)
+}
+
+func (e *WorkerMetricsExporter) export(hierarchyPath string, claim deps.WorkerMetricsClaim, metrics *deps.Metrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	// a removed worker's late collection must not bring its series back
-	if e.owners[claim.hierarchyPath] != claim {
+	owner, claimed := e.owners[hierarchyPath]
+	if !claimed || owner != claim {
 		return
 	}
-
-	hierarchyPath := claim.hierarchyPath
 
 	labels := prometheus.Labels{
 		"hierarchy_path": hierarchyPath,

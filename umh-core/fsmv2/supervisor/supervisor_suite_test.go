@@ -424,7 +424,7 @@ func newSupervisorWithWorker(worker *mockWorker, customStore storage.TriangularS
 	return newSupervisorWithWorkerAndLogger(worker, customStore, cfg, deps.NewNopFSMLogger())
 }
 
-func newSupervisorWithWorkerAndLogger(worker *mockWorker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
+func newSupervisorWithWorkerAndLogger(worker fsmv2.Worker, customStore storage.TriangularStoreInterface, cfg supervisor.CollectorHealthConfig, logger deps.FSMLogger) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 	identity := mockIdentity()
 	ctx := context.Background()
 	workerType := "test"

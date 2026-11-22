@@ -54,7 +54,7 @@ func cleanStateDurationSeries(hierarchyPath string) {
 var _ = Describe("The state-duration series", func() {
 	It("is one per worker, so removing one worker keeps the other's", func() {
 		first := &mockState{signal: fsmv2.SignalNone}
-		s := supervisorWithState(first)
+		s, _ := supervisorWithState(first)
 		firstPath := mockIdentity().HierarchyPath
 
 		second := &mockState{signal: fsmv2.SignalNone}

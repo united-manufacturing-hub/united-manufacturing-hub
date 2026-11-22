@@ -26,7 +26,6 @@ import (
 type CollectorConfig[TObserved fsmv2.ObservedState] = collection.CollectorConfig[TObserved]
 
 // NewCollector returns the supervisor's collector for tests outside the fsmv2 module. Go's internal-directory rule stops those tests from importing supervisor/internal/collection directly.
-// Like the supervisor's collector, it takes over the worker-metric series of cfg.Identity.HierarchyPath until Stop, so give it a path no running worker uses.
 func NewCollector[TObserved fsmv2.ObservedState](cfg CollectorConfig[TObserved]) *collection.Collector[TObserved] {
 	return collection.NewCollector[TObserved](cfg)
 }
