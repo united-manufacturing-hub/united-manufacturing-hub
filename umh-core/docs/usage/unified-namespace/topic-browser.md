@@ -97,7 +97,7 @@ Each instance runs its own Topic Browser and reports its own topics, and the Man
 
 ## The Topic Browser card
 
-The **Topic Browser** card on the instance's detail page shows one value. **Topics** counts the different topics the instance has seen since umh-core started. Once a topic stops receiving messages it stays in the count. When umh-core restarts, the count can start from zero again. The **Metrics** button on the card opens the counters of the [Benthos](../data-flows/bridges.md) process that consumes the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
+The **Topic Browser** card on the instance's detail page shows one value. **Topics** counts the different topics the instance has seen since umh-core started. Once a topic stops receiving messages it stays in the count. When umh-core restarts, the count can start from zero again. The **Metrics** button on the card opens the counters of the [Benthos](../data-flows/bridges.md) process that consumes the Kafka topic `umh.messages` from [Redpanda](redpanda.md). The **Logs** button opens the log of the same process.
 
 While that process runs, the card's badge reads **Active**. The information icon beside the badge gives the state of the Topic Browser itself, for example `benthos degraded` when the Benthos process fails or `redpanda degraded` when Redpanda is degraded. The badge can read **Active** while Redpanda is degraded, so read the information icon too. The Redpanda card shows the cause of a Redpanda failure; see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
