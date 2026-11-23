@@ -214,7 +214,7 @@ func isFresh(takenAt, now time.Time) bool {
 // returns false when there is nothing to return: no client, no worker under
 // that name, no sample stored yet, or a store read that failed. The caller
 // then reports "no Benthos metrics yet".
-func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failures, bool) {
+func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.FailureReport, bool) {
 	c := fsmv2client.GetClient()
 	if c == nil {
 		return nil, false
