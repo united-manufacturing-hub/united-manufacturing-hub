@@ -68,31 +68,53 @@ type FailureEntry struct {
 }
 
 // ErrorFree reports whether nothing is failing. Otherwise reason describes
-// the first entry, for example "benthos reported 3 output errors in the last
-// 10m, last one 4m ago" or "benthos reports 1 input not connected".
+// the first entry, the one with the highest priority (see FailureEntry.reason).
 func (f *Failures) ErrorFree() (ok bool, reason string) {
 	if len(f.Entries) == 0 {
 		return true, ""
 	}
 
-	e := f.Entries[0]
+	return false, f.Entries[0].reason(f.ObservedAt)
+}
 
+// HasErrorNotClearedInTime reports whether f, as of its own ObservedAt,
+// still holds an error entry more than ErrorWindow plus margin after that
+// entry's own LastErrorAt: an error that should have cleared by then. A
+// connection entry never counts.
+func (f *Failures) HasErrorNotClearedInTime(margin time.Duration) bool {
+	for _, e := range f.Entries {
+		if e.Connection {
+			continue
+		}
+
+		if f.ObservedAt.Sub(e.LastErrorAt) > ErrorWindow+margin {
+			return true
+		}
+	}
+
+	return false
+}
+
+// reason words this one entry as of observedAt, for example "benthos
+// reported 3 output errors in the last 10m, last one 4m ago" or "benthos
+// reports 1 input not connected".
+func (e FailureEntry) reason(observedAt time.Time) string {
 	label := e.Label
 	if e.Count != 1 {
 		label += "s"
 	}
 
 	if e.Connection {
-		return false, fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
+		return fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
 	}
 
 	// Only a count above one needs saying which error the time belongs to.
-	when := e.timeSinceLastErrorText(f.ObservedAt)
+	when := e.timeSinceLastErrorText(observedAt)
 	if e.Count != 1 {
 		when = "last one " + when
 	}
 
-	return false, fmt.Sprintf("benthos reported %d %s in the last %s, %s",
+	return fmt.Sprintf("benthos reported %d %s in the last %s, %s",
 		e.Count, label, shortDuration(ErrorWindow), when)
 }
 
@@ -124,22 +146,4 @@ func shortDuration(d time.Duration) string {
 	}
 
 	return s
-}
-
-// HasErrorNotClearedInTime reports whether f, as of its own ObservedAt,
-// still holds an error entry more than ErrorWindow plus margin after that
-// entry's own LastErrorAt: an error that should have cleared by then. A
-// connection entry never counts.
-func (f *Failures) HasErrorNotClearedInTime(margin time.Duration) bool {
-	for _, e := range f.Entries {
-		if e.Connection {
-			continue
-		}
-
-		if f.ObservedAt.Sub(e.LastErrorAt) > ErrorWindow+margin {
-			return true
-		}
-	}
-
-	return false
 }

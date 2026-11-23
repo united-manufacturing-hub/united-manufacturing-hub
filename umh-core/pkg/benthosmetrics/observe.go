@@ -63,7 +63,7 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 		// it, so errors the new port's Benthos already counted still count.
 		t.engine = mustNewEngine(table())
 		t.offsets = offsets{}
-		t.failures.reset(nil, at)
+		t.failures.resetForNewInstance(at)
 	case t.restarted(previous, &current, m):
 		// A restart (a Benthos restart resets every counter to 0): a counter
 		// that reads lower than before adds its previous value to its
@@ -77,11 +77,11 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 			t.offsets.output += previous.outputSent
 		}
 
-		t.failures.reset(nil, at)
+		t.failures.resetForNewInstance(at)
 	case at.Sub(previous.at) > ErrorWindow:
 		// Errors from before the gap no longer count; only rises above the
 		// counts the gap started at do.
-		t.failures.reset(t.failures.lastCounts, at)
+		t.failures.resetAfterGap(at)
 	}
 
 	// The throughput engine holds no signals, so the discarded (Fired,
@@ -91,7 +91,7 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 		outputSent:    diagnosis.Known(float64(current.outputSent + t.offsets.output)),
 	}, diagnosis.Environment{}, at)
 
-	failures := t.failures.observe(m, at)
+	failures := t.failures.observe(readFailureReading(m, at))
 
 	s := Sample{
 		At:                      at,

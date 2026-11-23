@@ -117,6 +117,42 @@ func errorTable() diagnosis.Table[errorReadings] {
 	}
 }
 
+// newIncrease returns the diagnosis reduction for error signals: how much a
+// counter went up from the oldest to the newest reading in its window. It
+// needs at least two readings, and panics on a constructor error, a bug here.
+func newIncrease() diagnosis.Reduction {
+	r, err := diagnosis.NewReduction("increase", 2, func(p []diagnosis.Point) float64 {
+		return p[len(p)-1].Value - p[0].Value
+	})
+	if err != nil {
+		panic(fmt.Sprintf("benthosmetrics: invalid increase reduction: %v", err))
+	}
+
+	return r
+}
+
+// errorReadingsOf turns one scrape's error counters into the readings the
+// error engine reads.
+func errorReadingsOf(errorCounts map[string]int64) errorReadings {
+	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounts))}
+	for name, v := range errorCounts {
+		s.errors[name] = diagnosis.Known(float64(v))
+	}
+
+	return s
+}
+
+// seedErrors is the readings a reset error engine observes first: each
+// error counter at its value in errorCounts, or 0 when errorCounts has none.
+func seedErrors(errorCounts map[string]int64) errorReadings {
+	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounters))}
+	for _, c := range errorCounters {
+		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
+	}
+
+	return s
+}
+
 // mustNewEngine builds an engine from tbl and panics on error: both tables
 // are fixed at compile time, so an error is a bug in this package.
 func mustNewEngine[S any](tbl diagnosis.Table[S]) *diagnosis.Engine[S] {
