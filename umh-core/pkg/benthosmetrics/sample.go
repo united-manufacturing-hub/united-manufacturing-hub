@@ -61,5 +61,5 @@ type Sample struct {
 
 	// Failures is what is wrong as of this scrape. It is nil only in a zero
 	// Sample, which no successful scrape produced.
-	Failures *Failures
+	Failures *FailureReport
 }

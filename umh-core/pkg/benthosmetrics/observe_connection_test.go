@@ -207,7 +207,7 @@ var _ = Describe("The connection checks", func() {
 
 		tr := NewTracker(func() time.Time { return failureT })
 		at := failureT
-		obs := func(m Metrics) Failures {
+		obs := func(m Metrics) FailureReport {
 			at = at.Add(time.Second)
 			f := *tr.observe(testPort, m, at).Failures
 
@@ -262,7 +262,7 @@ var _ = Describe("The connection checks", func() {
 
 		fresh := NewTracker(func() time.Time { return failureT })
 		at2 := failureT
-		after := func(m Metrics) Failures {
+		after := func(m Metrics) FailureReport {
 			at2 = at2.Add(time.Second)
 			f := *fresh.observe(testPort, m, at2).Failures
 

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // The error-side state kept across scrapes, when it starts over, and how one
-// reading becomes Failures.
+// reading becomes a FailureReport.
 
 package benthosmetrics
 
@@ -131,7 +131,7 @@ func (ft *failureTracker) countsDropped(m Metrics) bool {
 
 // observe judges the reading current and keeps what the next reading is
 // judged against.
-func (ft *failureTracker) observe(current failureReading) Failures {
+func (ft *failureTracker) observe(current failureReading) FailureReport {
 	ft.notConnectedSince = firstNotConnectedSince(ft.notConnectedSince, current.connections, current.at)
 	ft.recordRises(current)
 	fired, _ := ft.engine.Observe(errorReadingsOf(current.errorCounts), diagnosis.Environment{}, current.at)
@@ -178,18 +178,18 @@ func (ft *failureTracker) recentErrors(signal string) int64 {
 	return n
 }
 
-// judge builds the Failures for the reading current: error entries first,
+// judge builds the FailureReport for the reading current: error entries first,
 // then connection entries, each group with the larger Count first. ft still
 // holds the previous scrape's counts and entries, or what a reset left of
 // them; only notConnectedSince and rises are already updated for current.
-func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading) Failures {
+func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading) FailureReport {
 	errorEntries := append(ft.firedErrorEntries(fired, current), ft.heldErrorEntries(fired, current)...)
 	connectionEntries := ft.notConnectedEntries(current)
 
 	sortByCountDesc(errorEntries)
 	sortByCountDesc(connectionEntries)
 
-	return Failures{
+	return FailureReport{
 		Entries:    append(errorEntries, connectionEntries...),
 		ObservedAt: current.at,
 	}
@@ -323,8 +323,8 @@ func isFiring(fired []diagnosis.Fired, signal string) bool {
 
 // redate returns t re-dated from at by the monotonic time elapsed between
 // them, so the result's wall clock matches at's even after a wall-clock step.
-// HasErrorNotClearedInTime on Failures that went through JSON, which drops
-// monotonic readings, then still measures real time.
+// HasErrorNotClearedInTime on a FailureReport that went through JSON, which
+// drops monotonic readings, then still measures real time.
 func redate(at, t time.Time) time.Time {
 	return at.Add(-at.Sub(t))
 }

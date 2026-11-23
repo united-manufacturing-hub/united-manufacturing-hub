@@ -59,7 +59,7 @@ var errorLabels = map[string]string{
 
 // verdictAfterRise scrapes before at T-1s, then after at T, and returns the
 // failures at T.
-func verdictAfterRise(before, after map[string]int64) Failures {
+func verdictAfterRise(before, after map[string]int64) FailureReport {
 	tr := NewTracker(func() time.Time { return failureT })
 	tr.observe(testPort, failureScrape(before), failureT.Add(-time.Second))
 	f := *tr.observe(testPort, failureScrape(after), failureT).Failures
@@ -69,7 +69,7 @@ func verdictAfterRise(before, after map[string]int64) Failures {
 
 // entryOf returns the entry with the given signal out of f, failing the spec
 // when there is none.
-func entryOf(f Failures, signal string) FailureEntry {
+func entryOf(f FailureReport, signal string) FailureEntry {
 	for _, e := range f.Entries {
 		if e.Signal == signal {
 			return e
@@ -216,7 +216,7 @@ var _ = Describe("The error counters", func() {
 	// LastErrorAt; a connection entry's is zero.
 	It("sets each error entry's LastErrorAt to its counter's last rise", func() {
 		tr := NewTracker(func() time.Time { return failureT })
-		scrape := func(at time.Time, m Metrics) Failures {
+		scrape := func(at time.Time, m Metrics) FailureReport {
 			f := *tr.observe(testPort, m, at).Failures
 
 			return f
