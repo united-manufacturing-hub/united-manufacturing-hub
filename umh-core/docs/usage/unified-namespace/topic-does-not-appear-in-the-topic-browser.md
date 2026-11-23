@@ -16,7 +16,7 @@ Open the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the de
 
 - **The reason starts with `starting`.** The Topic Browser is still starting, for example after a restart. Wait until the reason no longer starts with `starting`, then check again.
 - **The reason is `redpanda degraded`.** The Topic Browser cannot read messages because Redpanda is degraded. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded). The Topic Browser recovers on its own once Redpanda does.
-- **The reason is `benthos degraded`.** The process that reads the messages for the Topic Browser fails. Open its log with the **Logs** button on the Topic Browser card. If the log does not show a cause you can fix, continue with [Restart the container](#restart-the-container).
+- **The reason is `benthos degraded`.** The process that reads the messages for the Topic Browser fails. Open its log with the **Logs** button on the Topic Browser card. If the log does not show a cause you can fix, continue with [Restart the instance](#restart-the-instance).
 - **`internal.topicbrowser.desiredState` is `stopped` in the `config.yaml` of the instance.** The Topic Browser is turned off. See [When the Topic Browser is turned off](#when-the-topic-browser-is-turned-off).
 - **Otherwise** the Topic Browser runs. Continue with [Check what publishes the topic](#check-what-publishes-the-topic).
 
@@ -37,7 +37,7 @@ If the count of messages sent stands still, the topic is missing before it reach
 
 If the count keeps rising but errors show, they may concern other topics: one bridge or stream processor can send many. Open its **Logs** and check whether the errors concern the data behind your topic. If they do, fix what they report and check the counts again.
 
-If the count of messages sent keeps rising and no errors concern your topic, select **Metrics** on the Topic Browser card. If its counts stand still, the messages are published but the Topic Browser does not read them. Continue with [Restart the container](#restart-the-container).
+If the count of messages sent keeps rising and no errors concern your topic, select **Metrics** on the Topic Browser card. If its counts stand still, the messages are published but the Topic Browser does not read them. Continue with [Restart the instance](#restart-the-instance).
 
 To follow a single message from its device tag to its topic, see [Metadata and Tracing](metadata-and-tracing.md).
 
@@ -49,7 +49,7 @@ If the topic is published and the Topic Browser reads it, the cause is in what t
 - **The search box holds text.** The search narrows the tree to matching topics. Clear it.
 - **The topic sits deeper than you expect.** The tree follows the [topic convention](topic-convention.md): location path, data contract, then any virtual path folders, then the tag. Search for the tag name to find it.
 - **The instance is offline.** See [When the instance is offline](#when-the-instance-is-offline).
-- **UMH Core has just restarted.** Topics show again as new messages for them arrive, as [Restart the container](#restart-the-container) describes.
+- **The instance has just restarted.** Topics show again as new messages for them arrive, as [Restart the instance](#restart-the-instance) describes.
 
 If none of these applies, we know of no further step on the instance that brings the topic back. Collect the evidence that [Getting help](#getting-help) lists and contact us.
 
@@ -59,25 +59,19 @@ If the instance that reports the topic has gone offline, the Topic Browser says 
 
 ![A topic whose instance went offline, with the last values it reported](../../generated/topic-browser-instance-offline.png)
 
-## Restart the container
+## Restart the instance
 
-This step requires access to the instance’s Docker host.
-
-Restart the container only when the checks above point to the Topic Browser of the instance: the reason on its card is `benthos degraded` and the log shows no cause you can fix, or messages are published but the Topic Browser does not read them. The restart starts the Topic Browser afresh.
+Restart the instance only when the checks above point to the Topic Browser of the instance: either the reason on its card is `benthos degraded` and the log shows no cause you can fix, or messages are published but the Topic Browser does not read them. A restart starts the Topic Browser again.
 
 {% hint style="warning" %}
-Restarting the container stops umh-core and every data flow in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
+A restart interrupts this instance's processes and collection. Source observations sent during the interruption may be lost. The devices keep running, and other instances keep collecting. Only this instance is interrupted. Plan the restart for a maintenance window.
 {% endhint %}
 
-The logs in `/data/logs` inside the container stay after the restart, so you can send them to us later. On the Docker host, run:
+To restart the instance, follow [Restart an Instance](../../production/deployment/restart-an-instance.md).
 
-```bash
-docker restart umh-core
-```
+After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count can start from zero again. Topics that send data infrequently may take longer to reappear in the Topic Browser after a UMH Core restart.
 
-Replace `umh-core` with the name of your container if you named it differently.
-
-After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count starts from zero. Topics that send data infrequently may take longer to reappear in the Topic Browser after a UMH Core restart.
+The logs in `/data/logs` survive the restart, so you can send them to us later.
 
 ## Getting help
 

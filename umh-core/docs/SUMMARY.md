@@ -72,6 +72,7 @@
         * [Grafana](production/deployment/docker-compose/additional-services/grafana.md)
         * [nginx](production/deployment/docker-compose/additional-services/nginx.md)
       * [Updating](production/deployment/docker-compose/updating.md)
+    * [Restart an Instance](production/deployment/restart-an-instance.md)
   * [Sizing Guide](production/sizing-guide.md)
   * [High Availability](production/high-availability.md)
   * [Migration from Classic](production/migration-from-classic.md)

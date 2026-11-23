@@ -174,7 +174,7 @@ umh_core_service_current_state{component="dataflow_component_instance", exported
 
 The rule does not fire for a flow that is stopped (0) or idle (4). A stopped flow is one you stopped on purpose, and an idle flow is one that has no data to process.
 
-When you delete a flow, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for the deleted flow. Add the deleted name to the exclusion filter, for example `exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*|<deleted flow>"`, or restart the container.
+When you delete a flow, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for the deleted flow. Add the deleted name to the exclusion filter, for example `exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*|<deleted flow>"`, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection.
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
