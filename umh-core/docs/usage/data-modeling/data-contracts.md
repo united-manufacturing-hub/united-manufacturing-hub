@@ -62,11 +62,7 @@ datacontracts:
 
 ### Naming Convention
 
-Contracts follow the pattern `_modelname_version`:
-- Always start with underscore
-- Include model name
-- End with version number
-- Examples: `_pump_v1`, `_temperature_sensor_v2`, `_workorder_v1`
+A contract is named `_<model>_v<version>`, such as `_pump_v1`, `_temperature_sensor_v2` or `_workorder_v1`. Only the built-in contracts `_raw` and `_historian` have no version. [Topic Convention](../unified-namespace/topic-convention.md#data-contract) explains where the contract sits in a topic.
 
 ## Enforcement Mechanism
 
