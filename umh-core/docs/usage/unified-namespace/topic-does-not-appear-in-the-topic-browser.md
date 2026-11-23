@@ -1,8 +1,12 @@
 # Topic does not appear in the Topic Browser
 
-The Topic Browser can show `No topics have arrived yet.`, or miss a single topic, while your bridges and stream processors publish data. The checks below follow the path a topic takes to the tree, as [How topics reach the Topic Browser](topic-browser.md#how-topics-reach-the-topic-browser) describes. Each check says what the result means and what to do, so work through them in order.
+The Topic Browser can show `No topics have arrived yet.`, or miss a single topic, while your bridges and stream processors publish data. The checks below follow the path a topic takes to the tree, as [How live updates work](topic-browser.md#how-live-updates-work) describes. Each check says what the result means and what to do, so work through them in order.
 
 ![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
+
+## Check again after a minute
+
+Wait a minute, then check again. See [how topics reach the browser](topic-browser.md#how-live-updates-work) for why updates are not immediate.
 
 ## Check the Topic Browser of the instance
 
@@ -41,7 +45,6 @@ If the topic is published and the Topic Browser reads it, the cause is in what t
 - **The instance is not in the header filter.** The tree shows only the instances selected in the header filter of the Management Console. Select the instance there.
 - **The search box holds text.** The search narrows the tree to matching topics. Clear it.
 - **The topic sits deeper than you expect.** The tree follows the [topic convention](topic-convention.md): location path, data contract, then any virtual path folders, then the tag. Search for the tag name to find it.
-- **The topic has just published for the first time.** The instance sends an update every one to fifteen seconds while messages arrive. Check again after that time.
 - **umh-core has just restarted.** Topics show again as new messages for them arrive, as [Restart the container](#restart-the-container) describes.
 
 If none of these applies, the checks have ruled out the Topic Browser of the instance, what publishes the topic, and the view. No further step on the instance is known to bring the topic back. Collect the evidence that [Getting help](#getting-help) lists and contact us.
