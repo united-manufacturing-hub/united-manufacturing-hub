@@ -64,10 +64,10 @@ func table() diagnosis.Table[readings] {
 	}
 }
 
-// mustNewEngine builds an engine from table and panics on error: table is
+// mustNewEngine builds an engine from tbl and panics on error: the table is
 // fixed at compile time, so an error is a bug in this package.
-func mustNewEngine() *diagnosis.Engine[readings] {
-	e, err := diagnosis.NewEngine(table())
+func mustNewEngine[S any](tbl diagnosis.Table[S]) *diagnosis.Engine[S] {
+	e, err := diagnosis.NewEngine(tbl)
 	if err != nil {
 		panic(fmt.Sprintf("benthosmetrics: invalid diagnosis table: %v", err))
 	}

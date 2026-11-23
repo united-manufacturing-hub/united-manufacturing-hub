@@ -30,7 +30,8 @@ type observation struct {
 	port          int
 	inputReceived int64
 	outputSent    int64
-	sample        Sample
+
+	sample Sample
 }
 
 // observe records one successful scrape of the Benthos at port, taken at time
@@ -38,25 +39,45 @@ type observation struct {
 // the previous throughput, because the windows accept readings only in time
 // order.
 func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
-	input := m.InputReceivedTotal()
-	output := m.OutputSentTotal()
+	current := observation{
+		at:            at,
+		port:          port,
+		inputReceived: m.InputReceivedTotal(),
+		outputSent:    m.OutputSentTotal(),
+	}
 
-	if t.prev != nil {
-		if !at.After(t.prev.at) {
-			s := t.prev.sample
-			s.At, s.Metrics = at, m
+	previous := t.previous
 
-			return s
+	switch {
+	case previous == nil:
+	case !at.After(previous.at):
+		s := previous.sample
+		s.At, s.Metrics = at, m
+
+		return s
+	case previous.port != port:
+		// A new counter series: the engine and the offsets start over.
+		t.engine = mustNewEngine(table())
+		t.offsets = offsets{}
+	case restarted(previous, &current):
+		// A restart (a Benthos restart resets every counter to 0): a counter
+		// that reads lower than before adds its previous value to its
+		// offset, so the series the engine is fed never goes down and both
+		// windows keep their samples.
+		if current.inputReceived < previous.inputReceived {
+			t.offsets.input += previous.inputReceived
 		}
 
-		t.adjustForRestart(port, input, output)
+		if current.outputSent < previous.outputSent {
+			t.offsets.output += previous.outputSent
+		}
 	}
 
 	// The engine holds no signals, so the discarded (Fired, Readiness) is
 	// always zero; observe feeds it for the windows alone.
 	_, _ = t.engine.Observe(readings{
-		inputReceived: diagnosis.Known(float64(input + t.offsets.input)),
-		outputSent:    diagnosis.Known(float64(output + t.offsets.output)),
+		inputReceived: diagnosis.Known(float64(current.inputReceived + t.offsets.input)),
+		outputSent:    diagnosis.Known(float64(current.outputSent + t.offsets.output)),
 	}, diagnosis.Environment{}, at)
 
 	s := Sample{
@@ -68,37 +89,17 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 	inputPerSecond, measured := s.InputMessagesPerSecond.Get()
 	s.IsActive = measured && inputPerSecond > 0
 
-	t.prev = &observation{
-		at:            at,
-		port:          port,
-		inputReceived: input,
-		outputSent:    output,
-		sample:        s,
-	}
+	current.sample = s
+	t.previous = &current
 
 	return s
 }
 
-// adjustForRestart compares the totals of a newer scrape with t.prev. A new
-// port is a new counter series, so the engine and both offsets start over. A
-// counter that reads lower than before restarted (a Benthos restart resets it
-// to 0): its previous value is added to its offset, so the series the engine
-// is fed never goes down and both windows keep their samples.
-func (t *Tracker) adjustForRestart(port int, input, output int64) {
-	if port != t.prev.port {
-		t.engine = mustNewEngine()
-		t.offsets = offsets{}
-
-		return
-	}
-
-	if input < t.prev.inputReceived {
-		t.offsets.input += t.prev.inputReceived
-	}
-
-	if output < t.prev.outputSent {
-		t.offsets.output += t.prev.outputSent
-	}
+// restarted reports whether any counter of current is lower than at the
+// previous scrape, which is how umh-core detects a Benthos restart.
+func restarted(previous, current *observation) bool {
+	return current.inputReceived < previous.inputReceived ||
+		current.outputSent < previous.outputSent
 }
 
 // messagesPerSecond reads a measurement's slope, Unknown while the window

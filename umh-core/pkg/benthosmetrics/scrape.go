@@ -49,11 +49,11 @@ type Tracker struct {
 	// scrapes.
 	engine *diagnosis.Engine[readings]
 
-	// prev is the previous observed scrape, nil before the first.
-	prev *observation
+	// previous is the previous observed scrape, nil before the first.
+	previous *observation
 
 	// offsets folds counter restarts into the series the engine is fed, one
-	// per direction; see adjustForRestart.
+	// per direction; see observe.
 	offsets offsets
 
 	now func() time.Time
@@ -79,7 +79,7 @@ func NewTracker(now func() time.Time) *Tracker {
 			// response itself is returned.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		engine: mustNewEngine(),
+		engine: mustNewEngine(table()),
 		now:    now,
 	}
 }
