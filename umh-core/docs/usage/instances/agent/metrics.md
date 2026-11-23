@@ -10,8 +10,6 @@ Prometheus renames umh-core's `instance` label to `exported_instance`, unless th
 
 Most series appear only after umh-core records their first value. The FSMv2 counters, for example, appear after their first count. A missing series therefore does not mean the component is missing. `umh_core_errors_total` is the exception. It exists at 0 from the moment umh-core creates the component.
 
-When you remove a component, such as a bridge, most of its series stay on `/metrics` with their last value. The series disappear when umh-core restarts. umh-core deletes only `umh_fsmv2_state_duration_seconds` together with the component.
-
 ## Which framework runs a component
 
 The agent is the umh-core process. A framework is the part of the agent that starts a component, watches it and restarts it when it fails. umh-core has two frameworks. FSMv1 is the older one, and FSMv2 is the newer one. Each framework names its metrics differently. To find the metrics of a component, first find its framework in this table.
