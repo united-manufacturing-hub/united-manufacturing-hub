@@ -2,6 +2,8 @@
 
 The Topic Browser can show `No topics have arrived yet.`, or miss a single topic, while your bridges and stream processors publish data. The checks below follow the path a topic takes to the tree, as [How live updates work](topic-browser.md#how-live-updates-work) describes. Each check says what the result means and what to do, so work through them in order.
 
+If the topic shows but its values update at uneven times, see [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md) instead.
+
 ![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
 
 ## Check again after a minute

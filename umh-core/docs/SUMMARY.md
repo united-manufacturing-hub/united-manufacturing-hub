@@ -23,6 +23,7 @@
     * [Metadata and Tracing](usage/unified-namespace/metadata-and-tracing.md)
     * [Topic Browser](usage/unified-namespace/topic-browser.md)
       * [Topic Does Not Appear in the Topic Browser](usage/unified-namespace/topic-does-not-appear-in-the-topic-browser.md)
+      * [Values Are Not Updating at Regular Intervals](usage/unified-namespace/values-are-not-updating-at-regular-intervals.md)
     * [Redpanda](usage/unified-namespace/redpanda.md)
   * [Data Flows](usage/data-flows/README.md)
     * [Bridges](usage/data-flows/bridges.md)

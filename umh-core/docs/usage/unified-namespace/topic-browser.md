@@ -2,7 +2,7 @@
 
 The Topic Browser shows the topics of the instances selected in the header filter as a tree, with the current value and the recent history of the topic you select. Use it to find a data point, to see where it sits in your hierarchy, and to check what it last reported. It runs in the Management Console under **Use** → **Topic browser**. This page is not about the Topic Browser of UMH Classic. To read topics from a program, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
 
-If the tree stays empty while your instance is producing data, or a topic you expect never appears, see [Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md).
+If the tree stays empty while your instance is producing data, or a topic you expect never appears, see [Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md). If a value changes at uneven times or its age grows longer than you expect, see [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md).
 
 ## How live updates work
 
@@ -51,7 +51,7 @@ Below that are two tabs, **History** and **Details**. A third, **SQL query**, ap
 
 The History tab lists the values the browser is holding: the last 100 of that topic, newest first.
 
-The instance sends at most one value per topic per batch, as [How live updates work](#how-live-updates-work) describes. Values measured between two emits do not reach the browser, so the History tab is a sample of the signal rather than every reading of it. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
+The instance sends at most one value per topic per batch, as [How live updates work](#how-live-updates-work) describes. Values measured between two emits do not reach the browser, so the History tab is a sample of the signal rather than every reading of it. [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md) explains which gaps are normal. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
 
 A text or boolean topic has no chart. Its History tab has two views instead. **Changes** collapses runs of the same value into one row, with the time it held and how many values it stored. **All values** lists them individually.
 
