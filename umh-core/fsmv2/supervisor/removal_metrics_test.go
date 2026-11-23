@@ -105,7 +105,7 @@ func exportTestWorkerMetrics(hierarchyPath string, claim deps.WorkerMetricsClaim
 	}
 	observed := fsmv2.Observation[struct{}]{}.SetWorkerMetrics(workerMetrics)
 
-	metrics.ExportWorkerMetrics(hierarchyPath, claim, observed)
+	metrics.ForWorker(hierarchyPath).Export(claim, observed)
 }
 
 // gaugeValues returns the values of every series of metricName for hierarchyPath.

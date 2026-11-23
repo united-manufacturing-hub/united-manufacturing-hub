@@ -1,3 +1,0 @@
-kind: improvements
-body: Lower CPU overhead per running flow, as an opt-in. In a 10-flow test, monitoring overhead per flow dropped about 70%. Requires `USE_FSMV2_BENTHOS_METRICS=true` and a container restart
-time: 2026-11-18T11:19:11.336105+01:00

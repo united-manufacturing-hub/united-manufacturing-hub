@@ -114,6 +114,7 @@ type Collector[TObserved any] struct {
 	cancel        context.CancelFunc
 	goroutineDone chan struct{}
 	restartChan   chan struct{}
+	workerMetrics *metrics.WorkerMetricsHandle
 	config        CollectorConfig[TObserved]
 	state         collectorState
 	mu            sync.RWMutex
@@ -125,9 +126,10 @@ type Collector[TObserved any] struct {
 // The type parameter TObserved is inferred from the config parameter.
 func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
 	return &Collector[TObserved]{
-		config:      config,
-		state:       collectorStateCreated,
-		restartChan: make(chan struct{}, 1),
+		config:        config,
+		state:         collectorStateCreated,
+		restartChan:   make(chan struct{}, 1),
+		workerMetrics: metrics.ForWorker(config.Identity.HierarchyPath),
 	}
 }
 
@@ -238,9 +240,9 @@ func (c *Collector[TObserved]) Restart() {
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	c.Stop(stopCtx)
+	c.stopObservationLoop(stopCtx)
 
-	// Reset state so we can start again (Stop sets state to stopped)
+	// Reset state so we can start again (stopObservationLoop sets state to stopped)
 	c.mu.Lock()
 	c.state = collectorStateCreated
 	c.restartChan = make(chan struct{}, 1)
@@ -260,7 +262,13 @@ func (c *Collector[TObserved]) Restart() {
 	}
 }
 
+// Stop stops the collector when its worker is removed. Restart does not call it.
 func (c *Collector[TObserved]) Stop(ctx context.Context) {
+	c.stopObservationLoop(ctx)
+}
+
+// stopObservationLoop stops the observation loop and waits for it to exit, bounded by ctx and 5 seconds.
+func (c *Collector[TObserved]) stopObservationLoop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
@@ -609,7 +617,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim(), observed)
+	c.workerMetrics.Export(c.metricsClaim(), observed)
 
 	if changed {
 		c.logTrace("observation_saved",

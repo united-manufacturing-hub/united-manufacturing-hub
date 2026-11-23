@@ -490,8 +490,19 @@ func newWorkerMetricsExporter(registerer prometheus.Registerer) *WorkerMetricsEx
 
 var workerMetricsExporter = newWorkerMetricsExporter(prometheus.DefaultRegisterer)
 
-// ExportWorkerMetrics exports observed's worker metrics to Prometheus while claim owns hierarchyPath.
-func ExportWorkerMetrics(hierarchyPath string, claim deps.WorkerMetricsClaim, observed fsmv2.ObservedState) {
+// WorkerMetricsHandle exports one worker's metrics to Prometheus under the worker's hierarchy path.
+type WorkerMetricsHandle struct {
+	exporter      *WorkerMetricsExporter
+	hierarchyPath string
+}
+
+// ForWorker returns the handle a collector exports its worker's metrics through.
+func ForWorker(hierarchyPath string) *WorkerMetricsHandle {
+	return &WorkerMetricsHandle{exporter: workerMetricsExporter, hierarchyPath: hierarchyPath}
+}
+
+// Export exports observed's worker metrics while claim owns the hierarchy path. No-op if observed does not implement MetricsHolder.
+func (h *WorkerMetricsHandle) Export(claim deps.WorkerMetricsClaim, observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
 		return
@@ -502,7 +513,7 @@ func ExportWorkerMetrics(hierarchyPath string, claim deps.WorkerMetricsClaim, ob
 		return
 	}
 
-	workerMetricsExporter.export(hierarchyPath, claim, &metrics)
+	h.exporter.export(h.hierarchyPath, claim, &metrics)
 }
 
 func (e *WorkerMetricsExporter) export(hierarchyPath string, claim deps.WorkerMetricsClaim, metrics *deps.Metrics) {

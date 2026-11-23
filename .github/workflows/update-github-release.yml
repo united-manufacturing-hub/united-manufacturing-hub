@@ -12,15 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Populates GitHub Release notes from CHANGELOG.md on stable releases.
-# Extracted from build-umh-core.yml to avoid granting contents:write
-# in the reusable-workflow (workflow_call) path used by pull-request.yml.
+# Populates the notes of a stable GitHub Release from CHANGELOG.md.
+# release-pipeline.yml calls it for the released version.
+#
+# The notes come from release-notes.sh, so they also hold the sections of the
+# versions it superseded. Those versions have no GitHub Release of their own.
+#
+# CHANGELOG.md is read from the calling commit (staging), not from the tag: the
+# tag sits on the commit the release PR was generated from, whose CHANGELOG.md
+# does not have the version's section yet.
+#
+# The notes link to the version's changelog.umh.app entry, so sync-changelog.yml
+# must have run first. The entry's name holds the date it was synced, which a
+# re-run can move to a later day, so the link is looked up, not computed.
 
 name: Update GitHub Release
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Tag to update (e.g., v0.44.10). Must already exist as a GitHub Release.'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
@@ -30,7 +44,6 @@ on:
 
 jobs:
   update-github-release:
-    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     runs-on: depot-ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -42,23 +55,28 @@ jobs:
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            .github/scripts/
             umh-core/CHANGELOG.md
             umh-core/changelog-images/
-            umh-core/.changelog/
-          ref: ${{ inputs.version || github.event.release.tag_name }}
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          app-id: ${{ secrets.CHANGELOG_SYNC_APP_ID }}
+          private-key: ${{ secrets.CHANGELOG_SYNC_APP_PK }}
+          repositories: changelog.umh.app
 
       - name: Extract changelog section
         id: changelog
         env:
-          VERSION: ${{ inputs.version || github.event.release.tag_name }}
-          RELEASE_NAME: ${{ github.event.release.name }}
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           SEMVER="${VERSION#v}"
 
-          awk "/^## \\[${SEMVER}\\]/{found=1; next} /^## \\[/{if(found) exit} found" \
-            umh-core/CHANGELOG.md | sed 's/^### /## /' > /tmp/release-body.md
+          VERSION="$SEMVER" .github/scripts/release-notes.sh | sed 's/^###/##/' > /tmp/release-body.md
 
           if [ ! -s /tmp/release-body.md ]; then
             echo "::warning::No changelog content found for ${SEMVER} in umh-core/CHANGELOG.md. GitHub Release body was NOT updated. Add a ## [${SEMVER}] section and re-run this workflow."
@@ -66,59 +84,20 @@ jobs:
             exit 0
           fi
 
-          # IMPORTANT: Slug generation must match sync-changelog.ts generateSlug()
-          # in the changelog.umh.app repo. If that function changes, update this too.
-          # Extract title from release event payload (or fetch via gh for workflow_dispatch)
-          RAW_TITLE="${RELEASE_NAME:-}"
-          if [ -z "$RAW_TITLE" ]; then
-            RAW_TITLE=$(gh release view "$VERSION" --json name --jq '.name' 2>/dev/null || echo "")
-          fi
-          TITLE=$(echo "$RAW_TITLE" | sed -E 's/^v?[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*-[[:space:]]*//')
-
-          if [ -n "$TITLE" ]; then
-            # Generate slug (mirrors sync-changelog.ts generateSlug)
-            SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-//; s/-$//')
-            DATE=$(date +%Y-%m-%d)
+          entry=$(gh api "repos/united-manufacturing-hub/changelog.umh.app/git/trees/HEAD:public/changelog/entries" \
+            --jq ".tree[].path | select(endswith(\"-${VERSION}.md\"))" | sort | tail -1)
+          if [ -n "$entry" ]; then
             echo "" >> /tmp/release-body.md
-            echo "See https://changelog.umh.app/changelog/${DATE}-${SLUG}-${VERSION}" >> /tmp/release-body.md
+            echo "See https://changelog.umh.app/changelog/${entry%.md}" >> /tmp/release-body.md
           else
-            DATE=$(date +%Y-%m-%d)
-            echo "" >> /tmp/release-body.md
-            echo "See https://changelog.umh.app/changelog/${DATE}-umh-core-${VERSION}" >> /tmp/release-body.md
+            echo "::warning::No changelog.umh.app entry for ${VERSION}; the release notes have no link to it. Run Sync Changelog, then this workflow again."
           fi
 
       - name: Update GitHub Release
         if: steps.changelog.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           gh release edit "$VERSION" --notes-file /tmp/release-body.md
-
-      # `make release-changelog` must have been merged into staging before tagging.
-      # Runs last so the release body is still written from what was cut.
-      # Only on release events: tags from before the changie migration have no .changelog/.
-      - name: Check the changelog is cut
-        if: ${{ !cancelled() && github.event_name == 'release' }}
-        env:
-          VERSION: ${{ inputs.version || github.event.release.tag_name }}
-        run: |
-          set -euo pipefail
-          SEMVER="${VERSION#v}"
-          RELEASE_FILE="umh-core/.changelog/${SEMVER}.md"
-          failed=0
-          # The first line is the "## [X.Y.Z]" heading; the entries follow it.
-          if [ ! -f "$RELEASE_FILE" ] || ! awk 'NR > 1 && NF { found = 1; exit } END { exit !found }' "$RELEASE_FILE"; then
-            echo "::error::${RELEASE_FILE} is missing or empty at ${VERSION}. The changelog must be cut with 'make release-changelog VERSION=${SEMVER}' in umh-core/ and merged into staging before tagging. See umh-core/RELEASING.md > Troubleshooting."
-            failed=1
-          fi
-          # A fragment left at the tag belongs to a PR merged after the release-changelog PR.
-          # Its change ships in this release but is missing from the release notes.
-          # changie batch cannot add it: it refuses an existing version file.
-          if [ -n "$(find umh-core/.changelog/unreleased -type f ! -name .gitkeep)" ]; then
-            find umh-core/.changelog/unreleased -type f ! -name .gitkeep
-            echo "::error::umh-core/.changelog/unreleased/ is not empty at ${VERSION}. These changes ship without release notes. On staging, copy each fragment's entry into ${RELEASE_FILE}, delete the fragments and run 'make rebuild-changelog' in umh-core/. Then add the entries to this GitHub Release and the changelog.umh.app entry by hand."
-            failed=1
-          fi
-          exit "$failed"

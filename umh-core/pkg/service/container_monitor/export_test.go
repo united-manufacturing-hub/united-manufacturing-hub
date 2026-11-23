@@ -26,17 +26,11 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// SetCPUUsageProvider exposes the test seam to the external test package. It
-// compiles only under `go test`, so the production API does not carry it.
-func (c *ContainerMonitorService) SetCPUUsageProvider(fn func(ctx context.Context) (float64, error)) {
-	c.setCPUUsageProvider(fn)
-}
-
-// CPUGaugeInputs exposes the gauge-source selection to the external test
-// package. It decides whether the three CPU Prometheus series are read from the
-// worker's evidence or the legacy fields, so it needs a test of its own.
-func CPUGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
-	return cpuGaugeInputs(cpu, useFSMv2CPU)
+// CPUGaugeInputs exposes the CPU gauge inputs to the external test package:
+// the three CPU Prometheus series read the worker's evidence, so it needs a
+// test of its own.
+func CPUGaugeInputs(cpu *models.CPU) (usageMCores, cores float64, ok bool) {
+	return cpuGaugeInputs(cpu)
 }
 
 // CollectCPUFromWorker exposes GetStatus's fsmv2-worker CPU path to the external test

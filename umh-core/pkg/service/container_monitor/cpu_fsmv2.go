@@ -32,17 +32,12 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
-// collectCPUFromWorker is the seam: the code path that reports CPU from the
-// fsmv2 worker instead of the legacy sampler, selected at construction by
-// USE_FSMV2_CPU. It builds the whole CPU record from the fsmv2 CPU worker's
-// last observation. The legacy fields stay empty on purpose: old and new
-// reporting stay cleanly separated, so nothing here re-derives a legacy-named
-// number from worker data. models.CPU says which fields the worker fills and
-// which the legacy path does.
+// collectCPUFromWorker reports CPU from the fsmv2 worker: it builds the
+// whole CPU record from the fsmv2 CPU worker's last observation. models.CPU
+// says which fields the worker fills.
 //
 // It errors only when the tick was cancelled: a cancelled tick measured
-// nothing, so it has no verdict to report. getCPUMetrics aborts on a cancelled
-// ctx the same way.
+// nothing, so it has no verdict to report.
 func (c *ContainerMonitorService) collectCPUFromWorker(ctx context.Context) (*models.CPU, error) {
 	health, cpuHealth, err := c.readWorkerCPUHealth(ctx)
 	if err != nil {
@@ -161,8 +156,7 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	// A cancelled tick is not a degraded box. This is the first thing the
 	// function does, so nothing below it can publish a verdict nothing
 	// measured -- including the missing-client case, which reports an absent
-	// prerequisite that a cancelled tick has not established. getCPUMetrics
-	// likewise aborts on a cancelled ctx rather than reporting.
+	// prerequisite that a cancelled tick has not established.
 	//
 	// It catches a ctx already cancelled on entry, not one cancelled during the
 	// store read below. That window is deliberately uncovered: no store in this
@@ -193,12 +187,12 @@ func (c *ContainerMonitorService) readWorkerCPUHealth(ctx context.Context) (*mod
 	return v.health(), v.cpuHealth, nil
 }
 
-// fsmv2SupervisorNotRunningMessage is the diagnosis when USE_FSMV2_CPU is on
-// but no fsmv2 client is published. cmd/main.go publishes the client before
-// the supervisor runs. It clears it only when the supervisor failed to build
-// or has shut down. Sentry groups the warning by this text, so changing it
-// starts a new Sentry issue.
-const fsmv2SupervisorNotRunningMessage = "USE_FSMV2_CPU is enabled but the fsmv2 supervisor is not running, so CPU is not measured"
+// fsmv2SupervisorNotRunningMessage is the diagnosis when no fsmv2 client is
+// published. cmd/main.go publishes the client before the supervisor runs. It
+// clears it only when the supervisor failed to build or has shut down.
+// Sentry groups the warning by this text, so changing it starts a new Sentry
+// issue.
+const fsmv2SupervisorNotRunningMessage = "The CPU health check cannot run because the fsmv2 supervisor is not running, so CPU is not measured"
 
 // cpuSeamHierarchyPath is parsed by sentry.ParseHierarchyPath as an FSMv1
 // dotted path, so the event is tagged fsm_version=v1 and

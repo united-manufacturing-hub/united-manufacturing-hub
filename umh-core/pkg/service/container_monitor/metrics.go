@@ -43,7 +43,7 @@ var (
 		Namespace: namespace,
 		Subsystem: subsystem,
 		Name:      "cpu_usage_mcores",
-		Help:      "Current CPU usage in millicores (1000m = 1 core)",
+		Help:      "CPU usage in millicores (1000m = 1 core), averaged over the last 60 seconds",
 	}, []string{"instance"})
 
 	containerCPUCoreCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -57,7 +57,7 @@ var (
 		Namespace: namespace,
 		Subsystem: subsystem,
 		Name:      "cpu_load_percent",
-		Help:      "Current CPU load as percentage (0-100)",
+		Help:      "CPU load as percentage of the container's logical CPUs (0-100), from the 60-second average usage",
 	}, []string{"instance"})
 
 	// Memory metrics.
@@ -114,37 +114,21 @@ var (
 )
 
 // cpuGaugeInputs returns the usage and core figures for the CPU gauges, and
-// whether both were measured this tick. useFSMv2CPU says whether the worker or
-// the legacy path filled the record, because only one ever does: under the flag
-// the figures come from the worker's evidence and the legacy fields are empty,
-// and without it the reverse.
-//
-// The worker and the legacy path do not measure the same thing. The worker
-// reports a 60-second mean of THIS CONTAINER's usage; the legacy path an
-// instantaneous sample of the HOST's usage scaled by the quota. These gauges
-// therefore change meaning when the flag flips, and an alert on them has to be
-// re-based.
-func cpuGaugeInputs(cpu *models.CPU, useFSMv2CPU bool) (usageMCores, cores float64, ok bool) {
-	if useFSMv2CPU {
-		// UsageRingActive and a positive LogicalCpus are the evidence's own
-		// readability flags; 0 is a legitimate value for both figures, so
-		// without them an unmeasured tick would record an idle box.
-		if cpu.CPUHealth == nil || !cpu.CPUHealth.UsageRingActive || cpu.CPUHealth.LogicalCpus <= 0 {
-			return 0, 0, false
-		}
-
-		return cpu.CPUHealth.AvgUsageCores * 1000, cpu.CPUHealth.LogicalCpus, true
-	}
-
-	if cpu.TotalUsageMCpu == nil || cpu.CoreCount == nil || *cpu.CoreCount == 0 {
+// whether both were measured this tick. The figures come from the CPU worker's
+// evidence: a record the worker did not measure carries nothing.
+func cpuGaugeInputs(cpu *models.CPU) (usageMCores, cores float64, ok bool) {
+	// UsageRingActive and a positive LogicalCpus are the evidence's own
+	// readability flags; 0 is a legitimate value for both figures, so
+	// without them an unmeasured tick would record an idle box.
+	if cpu.CPUHealth == nil || !cpu.CPUHealth.UsageRingActive || cpu.CPUHealth.LogicalCpus <= 0 {
 		return 0, 0, false
 	}
 
-	return *cpu.TotalUsageMCpu, float64(*cpu.CoreCount), true
+	return cpu.CPUHealth.AvgUsageCores * 1000, cpu.CPUHealth.LogicalCpus, true
 }
 
 // RecordContainerStatus updates Prometheus metrics based on the new ContainerStatus type.
-func RecordContainerStatus(status *ServiceInfo, instanceName string, useFSMv2CPU bool) {
+func RecordContainerStatus(status *ServiceInfo, instanceName string) {
 	if status == nil {
 		return
 	}
@@ -169,7 +153,7 @@ func RecordContainerStatus(status *ServiceInfo, instanceName string, useFSMv2CPU
 	// CPU metrics. A nil measurement (an unmeasured tick) leaves each gauge
 	// untouched: the previous value stays, and no fabricated number is recorded.
 	if status.CPU != nil {
-		usageMCores, cores, ok := cpuGaugeInputs(status.CPU, useFSMv2CPU)
+		usageMCores, cores, ok := cpuGaugeInputs(status.CPU)
 		if ok {
 			containerCPUUsageMCores.WithLabelValues(instanceName).Set(usageMCores)
 			containerCPUCoreCount.WithLabelValues(instanceName).Set(cores)
