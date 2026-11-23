@@ -9,9 +9,8 @@ can read history back with ordinary SQL and build Grafana dashboards on it. The 
 value of every tag; the Historian keeps the past.
 
 {% hint style="info" %}
-**Early access.** The Historian is not switched on by default. If you want to use it, get in touch
-with us on [Discord](https://discord.com/invite/F9mqkZnm9d) or through your usual UMH contact, and we will
-show you how to get started.
+**Early access.** The Historian is not switched on by default. If you want to use it, see
+[Get Help](../../get-help.md) for the ways to reach us, and we will show you how to get started.
 {% endhint %}
 
 ## How it fits together
