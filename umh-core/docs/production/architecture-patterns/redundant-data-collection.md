@@ -18,7 +18,7 @@ flowchart LR
     B["umh.v1.enterprise.line.PLC-B._historian<br/>(umh-core 2, from its own bridge)"]
 ```
 
-umh-core 2's data also reaches umh-core 1's UNS through a bridge. umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
+umh-core 2 also writes its data to umh-core 1. On umh-core 2, the write flow of a [bridge](../../usage/data-flows/bridges.md) subscribes to the PLC-B topics and writes them with the `http_client` output to an HTTP server on umh-core 1. On umh-core 1, a bridge whose read flow uses the `http_server` input provides that HTTP server and publishes what it reads to the UNS. Publish the port of that HTTP server on umh-core 1's container. umh-core does not authenticate requests to `http_server`, so put the port behind a reverse proxy such as [Nginx](../deployment/docker-compose/additional-services/nginx.md). umh-core 1 now has both PLC-specific topics. A [stream processor](../../usage/data-flows/stream-processor.md) then does redundancy resolution: it selects the primary source from the two streams and writes a single consolidated topic:
 
 ```mermaid
 flowchart LR
@@ -29,11 +29,11 @@ flowchart LR
 
 The higher-level system (a data lake, an MQTT broker, or another factory-wide umh-core instance) consumes this consolidated topic. It does not need to track which PLC provided each reading, but the original source is always traceable through the PLC-specific topics and message metadata.
 
-![Redundant data collection topology: two umh-core instances each collecting from one PLC, umh-core 2's data reaches umh-core 1, which does redundancy resolution for the higher-level system](./images/dual-umh-core-topology.png)
+![Redundant data collection topology: two umh-core instances each collecting from one PLC, umh-core 2 writes its data to umh-core 1 over HTTP, and umh-core 1 does redundancy resolution for the higher-level system](./images/dual-umh-core-topology.png)
 
 All original data from both collectors is retained in the PLC-specific source topics. Redundancy resolution selects the primary source for downstream processing. It does not delete or modify the original records.
 
-If one instance fails, the other continues collecting into its own UNS. When the failed instance recovers, its data reaches umh-core 1 again and redundancy resolution continues.
+If one instance fails, the other continues collecting into its own UNS. When the failed instance recovers, the write flow on umh-core 2 writes to umh-core 1 again and redundancy resolution continues.
 
 ## Prerequisites
 
