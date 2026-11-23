@@ -18,7 +18,9 @@ The card shows the status that the instance sent last. When the instance stops s
 | `Authentication with the Management Console failed` | If `umh_fsmv2_worker_auth_failures_total` rises under the transport worker, the Management Console usually did not accept the `AUTH_TOKEN` of the instance. Check the token. If `umh_fsmv2_worker_instance_deleted_total` rises instead, the login got status 404. Usually the instance was deleted in the Management Console, and a new token does not fix that. |
 | `Connection to the Management Console is degraded` | The reason names the last error type. Look up its counter in [Metrics: Communicator error counters](../metrics/README.md#communicator-error-counters). For an instance behind a corporate firewall, see [Instance Stays Offline Behind a Corporate Firewall](../troubleshooting/instance-offline-behind-corporate-firewall.md). |
 
-## Metrics
+## Reference
+
+### Metrics
 
 The communicator reports on port 8080 how many of its requests to the Management Console failed, by cause. [Read the metrics](../metrics/README.md#read-the-metrics) explains how to reach the endpoint, and [FSMv2 metrics](../metrics/README.md#fsmv2-metrics) explains the `hierarchy_path` label.
 

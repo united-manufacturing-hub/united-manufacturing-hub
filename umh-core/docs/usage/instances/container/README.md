@@ -49,7 +49,9 @@ Two environment variables of the container change how umh-core judges the CPU an
 
 Since v0.44.42, the CPU health check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
 
-## Metrics
+## Reference
+
+### Metrics
 
 The Container card reports on port 8080 as `umh_container_*` gauges for CPU, memory and disk, plus `umh_container_health_status`, which holds the health per resource: 0 = Neutral, 1 = Active, 2 = Degraded. The label `component` is `overall`, `cpu`, `memory` or `disk`. [Read the metrics](../metrics/README.md#read-the-metrics) explains how to reach the endpoint and why Prometheus renames the `instance` label.
 
@@ -65,6 +67,6 @@ To alert on a single resource, for example the disk:
 umh_container_disk_usage_percent{exported_instance="Core"} > 80
 ```
 
-The meaning of the three `umh_container_cpu_*` gauges changes with `USE_FSMV2_CPU`, so adjust an alert on them when you change the variable. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
+`umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` report the CPU health check's 60-second average of the container's own usage. `umh_container_cpu_core_count` is the number of CPU cores available to the container. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
 
 The container monitor, the part of the agent that collects these values, also reports the standard [FSMv1 metrics](../metrics/README.md#fsmv1-metrics) with `component="container_monitor"` and `instance="Core"`. The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go). With the CPU health check on, which is the default, umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges, which [Metrics: CPU gauges](../metrics/README.md#cpu-gauges) lists. With the memory monitor preview on, it exposes the `umh_fsmv2_worker_memory_*` gauges, which [Metrics: Memory gauges](../metrics/README.md#memory-gauges) lists.

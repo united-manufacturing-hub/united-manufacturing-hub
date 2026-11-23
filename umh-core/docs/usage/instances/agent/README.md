@@ -9,7 +9,7 @@ The agent works in a control loop. Every 100 milliseconds, one cycle of the loop
 The agent also checks the health of each component:
 
 - It reads the last 10 minutes of the log of each bridge, stand-alone flow and stream processor. An error in the log marks the component as degraded. So does a warning that contains `failed to`, `connection lost` or `unable to`. The error counters of Benthos, the program that runs these components, also mark a component as degraded.
-- For a bridge, it checks whether the port of the device is reachable. While the port is not reachable, the bridge reports the connection as the reason it is degraded. The errors of the bridge's read and write flows are not reported then.
+- For a bridge, its connection probe checks whether the external system is reachable on its host and port. While the bridge starts, it waits in `starting_connection` until the external system is reachable. Its status reason is `starting_connection` at first, then `starting:` followed by the reason from the connection probe. After the bridge has started, an unreachable external system marks it as degraded with the connection as the reason. While the external system is unreachable, the errors of the bridge's read and write flows are not reported.
 - When a component's process stops, s6 starts it again. s6 is the process supervisor inside the container.
 - When a component stays stuck for about 60 seconds while the agent creates or removes it, the agent removes it and creates it again. A component that waits in a starting step, such as a bridge that waits for its connection, is not removed this way.
 
@@ -37,7 +37,9 @@ To clear the emergency setting, fix the resource problem first. Then set `agent.
 
 A degraded Agent also marks the whole instance as degraded. In the instance list, hover over the status dot of the instance to see the line `Agent: <reason>`.
 
-## Metrics
+## Reference
+
+### Metrics
 
 The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](../metrics/README.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](../metrics/README.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. In Prometheus, `instance` usually arrives as `exported_instance`.
 

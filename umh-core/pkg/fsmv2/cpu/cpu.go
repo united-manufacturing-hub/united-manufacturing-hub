@@ -63,9 +63,8 @@ const (
 	MaxObservationAge = 3 * PollInterval
 )
 
-// Ref is the pair the configworker upserts this child under behind
-// USE_FSMV2_CPU, and that a reader fetches its status back under through
-// fsmv2client.
+// Ref is the pair the configworker upserts this child under, and that a
+// reader fetches its status back under through fsmv2client.
 var Ref = dynamicchildren.Ref{WorkerType: WorkerType, Name: InstanceName}
 
 // FilesystemKey names the filesystem.Service the sampler reads the cgroup

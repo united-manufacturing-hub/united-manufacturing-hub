@@ -6,7 +6,7 @@
 
 UMH Core is a **single Docker container that turns any PC, VM, or edge gateway into an Industrial Data Hub**.
 
-In manufacturing, every device speaks a different language - PLCs use OPC UA, sensors use Modbus, MES systems use REST APIs. Connecting them all creates a tangled mess of point-to-point integrations. Change one thing, break ten others.
+In manufacturing, every system speaks a different language - PLCs use OPC UA, sensors use Modbus, MES systems use REST APIs. Connecting them all creates a tangled mess of point-to-point integrations. Change one thing, break ten others.
 
 UMH Core creates a **Unified Namespace (UNS)** - a central data backbone where all your industrial data lives in one organized, validated place. Instead of 100 devices talking to each other (creating 1000s of connections), they all publish to one place, and consumers subscribe to what they need.
 
@@ -71,7 +71,7 @@ flowchart LR
     UNS -->|Bridge| DB
 ```
 
-1. **Bridges** connect your devices to the UNS (50+ protocols supported) - they're the ONLY entry point
+1. **Bridges** connect PLCs, MES and other external systems to the UNS (50+ protocols supported) - they're the ONLY entry point
 2. **Data flows** into organized topics: `enterprise.site.area.line._contract.virtual_path.tag`
 3. **Models** validate critical data (optional but recommended for production)
 4. **Consumers** subscribe to the data they need

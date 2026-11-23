@@ -53,7 +53,7 @@ Three steps get you from a running UNS to a dashboard:
   ```
 
 - **Data in the UNS**, already flowing. The Historian archives what is in the namespace; it does not
-  read from devices itself.
+  read from PLCs or other external systems itself.
 
 ## Set up the connection
 
@@ -88,7 +88,7 @@ The overview card shows the connection settings plus three live fields, refreshe
 
 | Field | Meaning |
 |---|---|
-| **Reachable** | The endpoint answered. It stays `true` even when the server rejects the credentials. Only a network fault or timeout makes it `false`. |
+| **Reachable** | The database answered. It stays `true` even when the server rejects the credentials. Only a network fault or timeout makes it `false`. |
 | **Auth** | Whether the server accepted the login role, password, and database name. `unknown` when nothing answered, so authentication could not be checked. |
 | **Latency** | Round-trip time of the check query. |
 
@@ -131,8 +131,9 @@ Bridge templates read it through the reserved `{{ .historian.timescale.* }}` sco
 [Variables](../../reference/variables.md).
 
 A bridge counts as a Historian bridge when its write flow's destination protocol is `historian`.
-umh-core then targets the bridge's health check at the shared connection rather than at a host and
-port entered on the bridge, so the check follows the connection whenever you change it.
+umh-core then points the bridge's connection probe at the host and port of the Historian connection
+instead of the ones entered on the bridge, so the probe follows the Historian connection whenever you
+change it.
 
 ## Metrics
 
