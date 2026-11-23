@@ -41,11 +41,7 @@ If a bridge must start before the resource problem is fixed, use the emergency s
 
 ## The CPU row
 
-The CPU row depends on the `USE_FSMV2_CPU` environment variable. It chooses which of umh-core's two frameworks measures the CPU: FSMv2, the newer one, or FSMv1, the older one. See [Which framework runs a component](../agent/metrics.md#which-framework-runs-a-component). umh-core reads the variable once at startup. To change it, remove the container and start it again with the same `docker run` command plus `-e USE_FSMV2_CPU=false`, or without the variable to go back to the default. `docker restart` keeps the old environment.
-
-From v0.44.46, the row shows the CPU Health of the instance by default, which [CPU Health](cpu-health/README.md) explains. When umh-core cannot measure the CPU, the row reads `N/A` in red. The container is then degraded, and the reason line says why the measurement failed.
-
-With `USE_FSMV2_CPU=false`, the row shows the CPU load of the whole host, and the CPU is degraded from 70% host load or from throttling. [CPU Health](cpu-health/README.md) describes this fallback rule.
+The CPU row shows the CPU Health of the instance, which [CPU Health](cpu-health/README.md) explains. When umh-core cannot measure the CPU, the row reads `N/A` in red. The container is then degraded, and the reason line says why the measurement failed.
 
 ## Memory monitor (preview)
 
@@ -92,7 +88,9 @@ The `_ring_active` and `_signal_ready` flags work like the [CPU flags](cpu-healt
 
 The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
 
-## Metrics
+## Reference
+
+### Metrics
 
 The Container card reports on port 8080 as `umh_container_*` gauges for CPU, memory and disk, plus `umh_container_health_status`, which holds the health per resource: 0 = Neutral, 1 = Active, 2 = Degraded. The label `component` is `overall`, `cpu`, `memory` or `disk`. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint and why Prometheus renames the `instance` label.
 
@@ -108,6 +106,6 @@ To alert on a single resource, for example the disk:
 umh_container_disk_usage_percent{exported_instance="Core"} > 80
 ```
 
-The meaning of the three `umh_container_cpu_*` gauges changes with `USE_FSMV2_CPU`, so adjust an alert on them when you change the variable. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
+`umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` report the CPU health check's 60-second average of the container's own usage. `umh_container_cpu_core_count` is the number of CPU cores available to the container. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
 
-The container monitor, the part of the agent that collects these values, also reports the standard [FSMv1 metrics](../agent/metrics.md#fsmv1-metrics) with `component="container_monitor"` and `instance="Core"`. The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go). With the CPU health check on, which is the default, umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges, which [CPU Health](cpu-health/README.md#metrics) lists.
+The container monitor, the part of the agent that collects these values, also reports the standard [FSMv1 metrics](../agent/metrics.md#fsmv1-metrics) with `component="container_monitor"` and `instance="Core"`. The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go). umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges, which [CPU Health](cpu-health/README.md#metrics) lists.

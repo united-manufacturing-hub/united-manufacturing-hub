@@ -46,7 +46,7 @@ type FailureEntry struct {
 	Signal string
 
 	// Label is the human wording for one failure, e.g. "output error".
-	// ErrorFree adds an "s" for any other count.
+	// The reason ErrorFree returns adds an "s" for any other count.
 	Label string
 
 	// Count is the current number behind the entry: errors within
@@ -68,69 +68,22 @@ type FailureEntry struct {
 }
 
 // ErrorFree reports whether nothing is failing. Otherwise reason describes
-// the first entry, for example "benthos reported 3 output errors in the last
-// 10m, last one 4m ago" or "benthos reports 1 input not connected".
+// the first entry in Entries' order, for example "benthos reported 3 output
+// errors in the last 10m, last one 4m ago" or "benthos reports 1 input not
+// connected".
 func (f *Failures) ErrorFree() (ok bool, reason string) {
 	if len(f.Entries) == 0 {
 		return true, ""
 	}
 
-	e := f.Entries[0]
-
-	label := e.Label
-	if e.Count != 1 {
-		label += "s"
-	}
-
-	if e.Connection {
-		return false, fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
-	}
-
-	// Only a count above one needs saying which error the time belongs to.
-	when := e.lastErrorAgo(f.ObservedAt)
-	if e.Count != 1 {
-		when = "last one " + when
-	}
-
-	return false, fmt.Sprintf("benthos reported %d %s in the last %s, %s",
-		e.Count, label, short(ErrorWindow), when)
+	return false, f.Entries[0].reason(f.ObservedAt)
 }
 
-// lastErrorAgo words how long before at, the Failures' ObservedAt, this
-// entry's error counter last rose, e.g. "4m ago". It counts up rather than
-// down to the clear, because a countdown jumps backwards on each new error.
-// Anything under a second, including a negative duration, reads "just now".
-func (e FailureEntry) lastErrorAgo(at time.Time) string {
-	ago := at.Sub(e.LastErrorAt)
-	if ago < time.Second {
-		return "just now"
-	}
-
-	return short(ago) + " ago"
-}
-
-// short renders a duration for a user to read, rounded to whole seconds as
-// the log-window reason in pkg/fsm/benthos does and without the trailing
-// zero units Go's own String leaves behind: "10m0s" reads "10m" and
-// "1h0m0s" reads "1h", while "9m12s" is already short.
-func short(d time.Duration) string {
-	s := d.Round(time.Second).String()
-	if strings.HasSuffix(s, "m0s") {
-		s = strings.TrimSuffix(s, "0s")
-	}
-
-	if strings.HasSuffix(s, "h0m") {
-		s = strings.TrimSuffix(s, "0m")
-	}
-
-	return s
-}
-
-// NotCleared reports whether f, as of its own ObservedAt, still holds an
-// error entry more than its ErrorWindow plus margin after that entry's own
-// LastErrorAt, which means the entry did not clear in time. A connection
-// entry never counts.
-func (f *Failures) NotCleared(margin time.Duration) bool {
+// HasErrorNotClearedInTime reports whether f, as of its own ObservedAt,
+// still holds an error entry more than ErrorWindow plus margin after that
+// entry's own LastErrorAt: an error that should have cleared by then. A
+// connection entry never counts.
+func (f *Failures) HasErrorNotClearedInTime(margin time.Duration) bool {
 	for _, e := range f.Entries {
 		if e.Connection {
 			continue
@@ -142,4 +95,55 @@ func (f *Failures) NotCleared(margin time.Duration) bool {
 	}
 
 	return false
+}
+
+// reason words this one entry as of observedAt, as ErrorFree returns it.
+func (e FailureEntry) reason(observedAt time.Time) string {
+	label := e.Label
+	if e.Count != 1 {
+		label += "s"
+	}
+
+	if e.Connection {
+		return fmt.Sprintf("benthos reports %d %s not connected", e.Count, label)
+	}
+
+	// Only a count above one needs saying which error the time belongs to.
+	when := e.timeSinceLastErrorText(observedAt)
+	if e.Count != 1 {
+		when = "last one " + when
+	}
+
+	return fmt.Sprintf("benthos reported %d %s in the last %s, %s",
+		e.Count, label, shortDuration(ErrorWindow), when)
+}
+
+// timeSinceLastErrorText words how long before observedAt this entry's error
+// counter last rose, e.g. "4m ago". It counts up rather than down to the
+// clear, because a countdown jumps backwards on each new error. Anything
+// under a second, including a negative duration, reads "just now".
+func (e FailureEntry) timeSinceLastErrorText(observedAt time.Time) string {
+	ago := observedAt.Sub(e.LastErrorAt)
+	if ago < time.Second {
+		return "just now"
+	}
+
+	return shortDuration(ago) + " ago"
+}
+
+// shortDuration renders a duration for a user to read, rounded to whole
+// seconds as the log-window reason in pkg/fsm/benthos does and without the
+// trailing zero units Go's own String leaves behind: "10m0s" reads "10m" and
+// "1h0m0s" reads "1h", while "9m12s" is already short.
+func shortDuration(d time.Duration) string {
+	s := d.Round(time.Second).String()
+	if strings.HasSuffix(s, "m0s") {
+		s = strings.TrimSuffix(s, "0s")
+	}
+
+	if strings.HasSuffix(s, "h0m") {
+		s = strings.TrimSuffix(s, "0m")
+	}
+
+	return s
 }

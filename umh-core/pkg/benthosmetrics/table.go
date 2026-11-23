@@ -39,13 +39,16 @@ const (
 	outputMessagesPerSecond = "output_messages_per_second"
 )
 
-// readings is one scrape's counters as the engines read them.
+// readings is one scrape's throughput counters as the throughput engine
+// reads them.
 type readings struct {
 	inputReceived diagnosis.Reading
 	outputSent    diagnosis.Reading
+}
 
-	// errors holds one reading per errorCounters entry, keyed by the
-	// counter's name.
+// errorReadings is one scrape's error counters as the error engine reads
+// them: one reading per errorCounters entry, keyed by the counter's name.
+type errorReadings struct {
 	errors map[string]diagnosis.Reading
 }
 
@@ -76,20 +79,20 @@ func table() diagnosis.Table[readings] {
 // errorTable declares what the error engine measures: one error signal per
 // errorCounters entry. An error signal is on from a new error until
 // ErrorWindow passes without one, and comes back at once on the next error.
-func errorTable() diagnosis.Table[readings] {
+func errorTable() diagnosis.Table[errorReadings] {
 	increase := newIncrease()
 
-	signals := make([]diagnosis.Signal[readings], 0, len(errorCounters))
+	signals := make([]diagnosis.Signal[errorReadings], 0, len(errorCounters))
 	for _, counter := range errorCounters {
-		signals = append(signals, diagnosis.Signal[readings]{
+		signals = append(signals, diagnosis.Signal[errorReadings]{
 			Name: counter.name,
-			Instruments: []diagnosis.Instrument[readings]{{
-				Measurement: diagnosis.Measurement[readings]{
+			Instruments: []diagnosis.Instrument[errorReadings]{{
+				Measurement: diagnosis.Measurement[errorReadings]{
 					Name:    counter.name,
-					Extract: func(s readings) diagnosis.Reading { return s.errors[counter.name] },
-					// Counter is false: observe restarts the error engine
-					// whenever a counter drops (see restarted), so
-					// this window never sees a counter reset.
+					Extract: func(s errorReadings) diagnosis.Reading { return s.errors[counter.name] },
+					// Counter is false: observe resets the failureTracker
+					// whenever a counter drops (see restarted), so this
+					// window never sees a counter reset.
 					Reduction: increase,
 					Span:      ErrorWindow,
 				},
@@ -99,7 +102,7 @@ func errorTable() diagnosis.Table[readings] {
 					Fire:  diagnosis.Mark{At: 0.5},
 					Clear: diagnosis.Mark{At: 0, Inclusive: true},
 					// NewEngine requires a Worst; nothing reads the severity
-					// it scales, judgeFailures orders entries by Count.
+					// it scales, failureTracker.judge orders entries by Count.
 					Worst:    100,
 					Polarity: diagnosis.HigherIsWorse,
 				},
@@ -108,15 +111,51 @@ func errorTable() diagnosis.Table[readings] {
 		})
 	}
 
-	return diagnosis.Table[readings]{
+	return diagnosis.Table[errorReadings]{
 		Interval: ScrapeInterval,
 		Signals:  signals,
 	}
 }
 
+// newIncrease returns the diagnosis reduction for error signals: how much a
+// counter went up from the oldest to the newest reading in its window. It
+// needs at least two readings, and panics on a constructor error, a bug here.
+func newIncrease() diagnosis.Reduction {
+	r, err := diagnosis.NewReduction("increase", 2, func(p []diagnosis.Point) float64 {
+		return p[len(p)-1].Value - p[0].Value
+	})
+	if err != nil {
+		panic(fmt.Sprintf("benthosmetrics: invalid increase reduction: %v", err))
+	}
+
+	return r
+}
+
+// errorReadingsOf turns one scrape's error counters into the readings the
+// error engine reads.
+func errorReadingsOf(errorCounts map[string]int64) errorReadings {
+	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounts))}
+	for name, v := range errorCounts {
+		s.errors[name] = diagnosis.Known(float64(v))
+	}
+
+	return s
+}
+
+// seedErrors is the readings a reset error engine observes first: each
+// error counter at its value in errorCounts, or 0 when errorCounts has none.
+func seedErrors(errorCounts map[string]int64) errorReadings {
+	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounters))}
+	for _, c := range errorCounters {
+		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
+	}
+
+	return s
+}
+
 // mustNewEngine builds an engine from tbl and panics on error: both tables
 // are fixed at compile time, so an error is a bug in this package.
-func mustNewEngine(tbl diagnosis.Table[readings]) *diagnosis.Engine[readings] {
+func mustNewEngine[S any](tbl diagnosis.Table[S]) *diagnosis.Engine[S] {
 	e, err := diagnosis.NewEngine(tbl)
 	if err != nil {
 		panic(fmt.Sprintf("benthosmetrics: invalid diagnosis table: %v", err))

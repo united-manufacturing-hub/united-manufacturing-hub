@@ -42,10 +42,7 @@ type FeatureUsage struct {
 	// FSMv2BenthosMetricsEnabled reports whether USE_FSMV2_BENTHOS_METRICS is
 	// on, so the FSMv2 worker scrapes Benthos instead of the s6 process.
 	FSMv2BenthosMetricsEnabled bool `json:"fsmv2BenthosMetricsEnabled"`
-	// FSMv2CPUEnabled reports whether the fsmv2 CPU path is running. The
-	// FSMv2CPUEnabled function below computes it.
-	FSMv2CPUEnabled           bool `json:"fsmv2CpuEnabled"`
-	FSMv2MemoryMonitorEnabled bool `json:"fsmv2MemoryMonitorEnabled"`
+	FSMv2MemoryMonitorEnabled  bool `json:"fsmv2MemoryMonitorEnabled"`
 	// ResourceLimitBlockingEnabled reports the value of agent.enableResourceLimitBlocking in config.yaml (defaults to true).
 	ResourceLimitBlockingEnabled bool `json:"resourceLimitBlockingEnabled"`
 	// HistorianConfigured reports whether a historian section exists in config.yaml.
@@ -60,16 +57,4 @@ type FeatureUsage struct {
 	// an error well past its error window. It should stay 0, and
 	// is 0 with USE_FSMV2_BENTHOS_METRICS off. Nothing in umh-core acts on it.
 	BenthosErrorsNotClearedInstanceCount int `json:"benthosErrorsNotClearedInstanceCount"`
-}
-
-// FSMv2CPUEnabled reports the effective state of the fsmv2 CPU path, given the
-// value of USE_FSMV2_CPU. The flag is the only input: the fsmv2 supervisor runs
-// with or without Management Console credentials, so the CPU path runs whenever
-// the flag is on.
-func FSMv2CPUEnabled(flag bool) bool {
-	return FSMv2MonitorEnabled(flag)
-}
-
-func FSMv2MonitorEnabled(flag bool) bool {
-	return flag
 }

@@ -72,26 +72,43 @@ func HistorianFromFSMv2(ctx context.Context, log *zap.SugaredLogger) *models.His
 		}
 	}
 
-	return &models.Historian{
-		Timescale: models.Timescale{
-			Health: &models.Health{
-				Message:       message,
-				ObservedState: observedState,
-				DesiredState:  "active",
-				Category:      healthCat,
-			},
-			Host:                       result.Host,
-			Auth:                       result.Auth,
-			Latency:                    result.LatencyMs,
-			Port:                       result.Port,
-			Reachable:                  result.Reachable,
-			TableNames:                 result.TableNames,
-			FailedJobCount:             result.FailedJobCount,
-			JobCount:                   result.JobCount,
-			Versions:                   result.Versions,
-			DatabaseOccupiedDiskBytes:  result.DatabaseOccupiedDiskBytes,
-			HistorianOccupiedDiskBytes: result.HistorianOccupiedDiskBytes,
-			DataSpanSeconds:            result.DataSpanSeconds,
+	timescale := models.Timescale{
+		Health: &models.Health{
+			Message:       message,
+			ObservedState: observedState,
+			DesiredState:  "active",
+			Category:      healthCat,
 		},
+		Host:      result.Host,
+		Auth:      result.Auth,
+		Latency:   result.LatencyMs,
+		Port:      result.Port,
+		Reachable: result.Reachable,
 	}
+
+	if freshness == fsmv2client.Fresh {
+		addDatabaseFigures(&timescale, result)
+	}
+
+	return &models.Historian{Timescale: timescale}
+}
+
+// addDatabaseFigures copies the figures the monitor read and leaves the others
+// absent, so the console never shows a figure nobody read.
+func addDatabaseFigures(timescale *models.Timescale, result fsmv2historian.TimescaleStatus) {
+	if result.DatabaseOccupiedDiskBytes != nil {
+		timescale.DatabaseOccupiedDiskBytes = *result.DatabaseOccupiedDiskBytes
+	}
+
+	summary := result.Summary
+	if summary == nil {
+		return
+	}
+
+	timescale.TableNames = summary.TableNames
+	timescale.Versions = summary.Versions
+	timescale.HistorianOccupiedDiskBytes = summary.HistorianOccupiedDiskBytes
+	timescale.DataSpanSeconds = summary.DataSpanSeconds
+	timescale.JobCount = &summary.JobCount
+	timescale.FailedJobCount = &summary.FailedJobCount
 }

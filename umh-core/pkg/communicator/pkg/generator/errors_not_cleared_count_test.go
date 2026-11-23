@@ -54,6 +54,7 @@ func (s *stubNotClearedReader) LoadObservedTyped(_ context.Context, _, id string
 	if !ok {
 		return fmt.Errorf("stubNotClearedReader: want *fsmv2.Observation[simple.Status[benthosmetrics.Scrape]], got %T", result)
 	}
+
 	*out = *obs
 
 	return nil
@@ -67,6 +68,7 @@ func (s *stubNotClearedReader) LoadDesiredTyped(_ context.Context, _, _ string, 
 // restores whatever the environment held before. An empty value unsets it.
 func setBenthosMetricsFlag(v string) {
 	prior, present := os.LookupEnv("USE_FSMV2_BENTHOS_METRICS")
+
 	if v == "" {
 		_ = os.Unsetenv("USE_FSMV2_BENTHOS_METRICS")
 	} else {
@@ -88,10 +90,12 @@ func setBenthosMetricsFlag(v string) {
 // for that name.
 func registerBenthosWorkers(failures map[string]*benthosmetrics.Failures) {
 	obs := map[string]*fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]]{}
+
 	for s6Name, f := range failures {
 		if f == nil {
 			continue
 		}
+
 		obs[fsmv2config.ChildID(s6Name)] = &fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]]{
 			CollectedAt: time.Now(),
 			Status:      simple.Status[fsmv2benthosmetrics.Scrape]{Result: fsmv2benthosmetrics.Scrape{Sample: benthosmetrics.Sample{Failures: f}}},
@@ -138,6 +142,7 @@ var _ = Describe("The not-cleared count", func() {
 	// notClearedMargin.
 	It("counts each registered Benthos whose errors did not clear in time", func() {
 		setBenthosMetricsFlag("true")
+
 		now := time.Now()
 
 		registerBenthosWorkers(map[string]*benthosmetrics.Failures{
@@ -169,6 +174,7 @@ var _ = Describe("The not-cleared count", func() {
 	// reconnect.
 	It("does not count a connection that is still down", func() {
 		setBenthosMetricsFlag("true")
+
 		now := time.Now()
 
 		registerBenthosWorkers(map[string]*benthosmetrics.Failures{

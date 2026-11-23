@@ -72,7 +72,7 @@ umh-core trusts only public certificate authorities. It rejects the certificate 
    If you started the container with `--rm`, removing it also deletes an anonymous volume. Copy the data out first with `docker cp <container name>:/data /opt/umh/data-backup`. Make the copy readable for user ID 1000 with `sudo chown -R 1000:1000 /opt/umh/data-backup`, then mount that directory at `/data` in the next step (`-v /opt/umh/data-backup:/data:z`).
 
    {% hint style="warning" %}
-   Removing the container stops umh-core and every bridge in it until you start it again in the next step. A bridge is a connection that reads data from a machine. Values the bridges would read during this time are not collected. The configuration and data in the `/data` volume stay. Plan this for a maintenance window.
+   Removing the container stops umh-core and every bridge in it until you start it again in the next step. A bridge reads from an external system, such as a PLC, and can write to one. Values the bridges would read during this time are not collected, and nothing is written. The configuration and data in the `/data` volume stay. Plan this for a maintenance window.
    {% endhint %}
 
    ```bash

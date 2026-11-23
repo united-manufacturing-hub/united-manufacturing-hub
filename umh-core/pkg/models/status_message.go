@@ -75,9 +75,9 @@ type Timescale struct {
 	// FailedJobCount counts background jobs that exist and are not working. A
 	// historian with no policies has no jobs to fail, so zero here is not proof
 	// that data is compressed or expired -- the job list read on request says
-	// which policies exist.
-	FailedJobCount             int       `json:"failedJobCount"`
-	JobCount                   int       `json:"jobCount"`
+	// which policies exist. Absent, like JobCount, until the first summary read.
+	FailedJobCount             *int      `json:"failedJobCount,omitempty"`
+	JobCount                   *int      `json:"jobCount,omitempty"`
 	Versions                   []Version `json:"versions,omitempty"`
 	DatabaseOccupiedDiskBytes  int64     `json:"databaseOccupiedDiskBytes,omitempty"`
 	HistorianOccupiedDiskBytes int64     `json:"historianOccupiedDiskBytes,omitempty"`
@@ -225,19 +225,10 @@ type CommunicatorChannel struct {
 	Backpressured bool `json:"backpressured,omitempty"`
 }
 
-// CPU carries either the fsmv2 CPU worker's reporting or the legacy reporting,
-// never both. With USE_FSMV2_CPU on, CPUHealth holds the worker's verdict and
-// the evidence behind it, and the legacy measurement fields below stay empty.
-// With the flag off, they carry the measurements and CPUHealth is nil.
+// CPU carries the fsmv2 CPU worker's reporting.
 type CPU struct {
-	Health         *Health  `json:"health"`
-	TotalUsageMCpu *float64 `json:"totalUsageMCpu,omitempty"` // Total usage in milli-cores (1000m = 1 core); nil when not measured this tick
-	CoreCount      *int     `json:"coreCount,omitempty"`      // Number of CPU cores; nil when not measured this tick
-	// Cgroup-specific fields for container resource limits
-	CgroupCores   float64    `json:"cgroupCores,omitempty"`   // CPU quota from cgroup (e.g., 2.0 = 2 cores)
-	ThrottleRatio float64    `json:"throttleRatio,omitempty"` // Ratio of throttled periods (0.0-1.0)
-	IsThrottled   bool       `json:"isThrottled,omitempty"`   // True if recently throttled
-	CPUHealth     *CPUHealth `json:"cpuHealth,omitempty"`     // nil when the container monitor sends no verdict this tick, such as right after a start
+	Health    *Health    `json:"health"`
+	CPUHealth *CPUHealth `json:"cpuHealth,omitempty"` // nil when the container monitor sends no verdict this tick, such as right after a start
 }
 
 // CPUHealth is the wire shape of one CPU health observation: the verdict beside

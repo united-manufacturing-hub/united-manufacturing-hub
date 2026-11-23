@@ -238,9 +238,9 @@ func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.Failur
 
 // ErrorsNotClearedCount returns how many of the registered Benthos workers
 // hold an error that should have cleared: their stored Failures answer true
-// for NotCleared(margin). It counts one worker per bridge side, stand-alone
-// flow, stream processor and topic browser, so a bridge with both sides
-// stuck counts twice. A worker whose read fails does not count.
+// for HasErrorNotClearedInTime(margin). It counts one worker per bridge side,
+// stand-alone flow, stream processor and topic browser, so a bridge with both
+// sides stuck counts twice. A worker whose read fails does not count.
 func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
 	c := fsmv2client.GetClient()
 	if c == nil {
@@ -250,7 +250,7 @@ func ErrorsNotClearedCount(ctx context.Context, margin time.Duration) int {
 	count := 0
 
 	for _, ref := range c.Refs(WorkerType) {
-		if f, ok := Failures(ctx, ref.Name); ok && f.NotCleared(margin) {
+		if f, ok := Failures(ctx, ref.Name); ok && f.HasErrorNotClearedInTime(margin) {
 			count++
 		}
 	}

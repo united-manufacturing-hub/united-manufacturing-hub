@@ -12,76 +12,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Syncs the release notes of a stable version to changelog.umh.app.
+# release-pipeline.yml calls it for the released version. CHANGELOG.md is read
+# from the calling commit (staging), which has the version's section. The notes
+# come from release-notes.sh: a version superseded by this release gets no entry
+# of its own, and its section is part of this release's entry.
+
 name: Sync Changelog
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to sync (e.g., v0.44.8).'
+        required: true
+        type: string
+      title:
+        description: 'Title for the changelog entry. Defaults to the version.'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       dry_run:
         description: 'Run without creating PR (just logs output)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
       version:
-        description: 'Version to sync (e.g., v0.44.8). Required for workflow_dispatch.'
-        required: false
+        description: 'Version to sync (e.g., v0.44.8).'
+        required: true
         type: string
       title:
-        description: 'Title for the changelog entry (5-10 words). If omitted for release events, fetched from the GitHub release.'
+        description: 'Title for the changelog entry. Defaults to the version.'
         required: false
         type: string
 
 jobs:
   sync:
-    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     name: Sync to changelog.umh.app
     runs-on: depot-ubuntu-24.04
     permissions:
       contents: read
     steps:
-      - name: Determine version
+      - name: Determine version and title
         id: version
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TITLE: ${{ inputs.title }}
         run: |
-          if [ "$EVENT_NAME" = "release" ]; then
-            echo "version=$RELEASE_TAG" >> $GITHUB_OUTPUT
-          else
-            if [ -z "$INPUT_VERSION" ]; then
-              echo "Error: version input is required for workflow_dispatch"
-              exit 1
-            fi
-            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Get release title
-        id: release-title
-        env:
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          INPUT_TITLE: ${{ github.event.inputs.title }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          if [ -n "$INPUT_TITLE" ]; then
-            title="$INPUT_TITLE"
-          elif [ "$EVENT_NAME" = "release" ]; then
-            raw="${RELEASE_NAME:-$RELEASE_TAG}"
-            # Strip version prefix: "v0.44.12 - Title" -> "Title"
-            title=$(echo "$raw" | sed -E 's/^v?[0-9]+\.[0-9]+\.[0-9]+[[:space:]]*-[[:space:]]*//')
-            # If stripping didn't change anything (no version prefix), keep raw
-            if [ "$title" = "$raw" ]; then
-              title="$raw"
-            fi
-          fi
-          if [ -z "$title" ]; then
-            echo "Error: No title found. Create a GitHub release with format 'v0.44.12 - Descriptive Title', or pass --title via workflow_dispatch."
-            exit 1
-          fi
-          echo "title=$title" >> $GITHUB_OUTPUT
+          echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          echo "title=${INPUT_TITLE:-$INPUT_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Checkout umh-core
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -90,9 +71,25 @@ jobs:
           filter: blob:none
           sparse-checkout-cone-mode: false
           sparse-checkout: |
+            .github/scripts/
             umh-core/CHANGELOG.md
             umh-core/changelog-images/
           path: umh-core
+
+      # The sync script reads one `## [X.Y.Z]` section from a changelog file.
+      - name: Write the release notes as a changelog section
+        working-directory: umh-core
+        env:
+          SYNC_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          semver="${SYNC_VERSION#v}"
+          notes=$(VERSION="$semver" .github/scripts/release-notes.sh)
+          if [ -z "$notes" ]; then
+            echo "::error::umh-core/CHANGELOG.md has no section for ${semver}."
+            exit 1
+          fi
+          printf '## [%s]\n%s\n' "$semver" "$notes" > "$RUNNER_TEMP/release-notes.md"
 
       - name: Generate GitHub App token
         id: app-token
@@ -123,18 +120,18 @@ jobs:
         working-directory: changelog-app
         env:
           SYNC_VERSION: ${{ steps.version.outputs.version }}
-          SYNC_TITLE: ${{ steps.release-title.outputs.title }}
+          SYNC_TITLE: ${{ steps.version.outputs.title }}
         run: |
           npx tsx .github/scripts/sync-changelog.ts \
             --repo umh-core \
             --version "$SYNC_VERSION" \
             --title "$SYNC_TITLE" \
-            --changelog-path ../umh-core/umh-core/CHANGELOG.md \
+            --changelog-path "$RUNNER_TEMP/release-notes.md" \
             --images-path ../umh-core/umh-core/changelog-images \
             --output-path public/changelog/entries
 
       - name: Show output (dry run)
-        if: github.event.inputs.dry_run == 'true'
+        if: inputs.dry_run == true
         working-directory: changelog-app
         run: |
           echo "=== Generated files ==="
@@ -150,7 +147,7 @@ jobs:
           done
 
       - name: Create Pull Request
-        if: github.event.inputs.dry_run != 'true'
+        if: inputs.dry_run != true
         id: create-pr
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
@@ -166,7 +163,7 @@ jobs:
           delete-branch: true
 
       - name: Merge changelog PR
-        if: github.event.inputs.dry_run != 'true' && steps.create-pr.outputs.pull-request-number
+        if: inputs.dry_run != true && steps.create-pr.outputs.pull-request-number
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.create-pr.outputs.pull-request-number }}

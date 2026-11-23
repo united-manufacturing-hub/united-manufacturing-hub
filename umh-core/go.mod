@@ -14,14 +14,14 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/goccy/go-json v0.12.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.12.0
-	github.com/klauspost/compress v1.20.3
+	github.com/jackc/pgx/v5 v5.13.0
+	github.com/klauspost/compress v1.20.4
 	github.com/looplab/fsm v1.0.4
 	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
-	github.com/prometheus/common v0.73.1
+	github.com/prometheus/common v0.74.0
 	github.com/prometheus/prometheus v0.316.0
 	github.com/shirou/gopsutil/v4 v4.26.10
 	github.com/testcontainers/testcontainers-go v0.45.0
@@ -33,7 +33,7 @@ require (
 	github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2 v0.0.0
 	github.com/vektah/gqlparser/v2 v2.5.64
 	go.uber.org/zap v1.28.0
-	golang.org/x/crypto v0.58.0
+	golang.org/x/crypto v0.59.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/sys v0.50.0
 	google.golang.org/protobuf v1.36.12
@@ -103,7 +103,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/pandatix/go-abnf v0.5.3 // indirect
+	github.com/pandatix/go-abnf v0.5.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
 	github.com/pingcap/errors v0.11.5-0.20250523034308-74f78ae071ee // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -134,7 +134,7 @@ require (
 	golang.org/x/arch v0.30.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 )
 

@@ -120,6 +120,6 @@ Payload: {"timestamp_ms": 1733904005123, "value": 42.1}
 
 ## Next Steps
 
-- [Bridges](../data-flows/bridges.md) - Send data to UNS
+- [Bridges](../data-flows/bridges.md) - Read from external systems into the UNS
 - [Stream Processors](../data-modeling/stream-processors.md) - Transform time-series to relational
 - [Data Models](../data-modeling/data-models.md) - Define structure for both formats

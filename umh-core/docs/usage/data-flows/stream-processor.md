@@ -130,9 +130,9 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 
 | Data Flow Type | Purpose | Input Source | Output |
 |----------------|---------|--------------|--------|
-| **Bridges** | Get data INTO the UNS | External devices (PLCs, sensors) | UNS topics |
+| **Bridges** | Read from and write to external systems | External systems (PLCs, sensors, MES) and UNS topics | UNS topics and external systems |
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
-| **Stand-alone Flows** | Custom processing | Any source | Any destination |
+| **Stand-alone Flows** | Custom processing | Any input | Any output |
 
 ## Metrics
 

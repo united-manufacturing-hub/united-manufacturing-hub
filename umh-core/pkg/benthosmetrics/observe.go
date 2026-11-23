@@ -23,36 +23,14 @@ import (
 )
 
 // observation is what observe keeps from one scrape to compare the next one
-// against: when, from which port, the totals it read, and the Sample observe
-// returned for it.
+// against: when, from which port, the throughput totals it read, and the
+// Sample observe returned for it. The error side keeps its own state in
+// Tracker.failures.
 type observation struct {
 	at            time.Time
 	port          int
 	inputReceived int64
 	outputSent    int64
-
-	// errors holds the raw error counters, keyed by the counter's name.
-	errors map[string]int64
-
-	// connections holds the number of inputs or outputs not connected, keyed
-	// by the connection check's name.
-	connections map[string]int64
-
-	// notConnectedSince holds, for each connection check whose count is above
-	// 0, the scrape at which that count went above 0 (see
-	// firstNotConnectedSince).
-	notConnectedSince map[string]time.Time
-
-	// before holds the error counters this scrape is compared against, for
-	// the entries' LastErrorAt: the previous scrape's counters on the same
-	// counter series. It is nil on the first scrape and after a restart,
-	// where a counter missing from it reads as 0.
-	before map[string]int64
-
-	// prevEntries holds the previous scrape's failure entries, for carrying
-	// an open entry's LastErrorAt forward. It is nil on the first scrape,
-	// after a restart and after a gap longer than ErrorWindow.
-	prevEntries []FailureEntry
 
 	sample Sample
 }
@@ -63,68 +41,57 @@ type observation struct {
 // only in time order. Errors counted before the first scrape are not
 // reported.
 func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
-	cur := observation{
+	current := observation{
 		at:            at,
 		port:          port,
 		inputReceived: m.InputReceivedTotal(),
 		outputSent:    m.OutputSentTotal(),
-		errors:        readErrors(m),
-		connections:   readConnections(m),
 	}
 
-	prev := t.prev
-	// prevNotConnectedSince carries an outage's start forward only from a
-	// scrape of the same Benthos with no long gap, as the error signals do.
-	var prevNotConnectedSince map[string]time.Time
+	previous := t.previous
 
 	switch {
-	case prev == nil:
-	case !at.After(prev.at):
-		s := prev.sample
+	case previous == nil:
+	case !at.After(previous.at):
+		s := previous.sample
 		s.At, s.Metrics = at, m
 
 		return s
-	case prev.port != port:
-		// A new counter series: both engines and the offsets start over.
-		// The error engine is seeded at zero the same way a restart seeds
+	case previous.port != port:
+		// A new counter series: the throughput engine and the offsets start
+		// over. The error state starts over the same way a restart resets
 		// it, so errors the new port's Benthos already counted still count.
 		t.engine = mustNewEngine(table())
 		t.offsets = offsets{}
-		rebuildErrors(t, nil, at)
-	case restarted(prev, &cur):
+		t.failures.resetForNewInstance(at)
+	case t.restarted(previous, &current, m):
 		// A restart (a Benthos restart resets every counter to 0): a counter
 		// that reads lower than before adds its previous value to its
 		// offset, so the series the engine is fed never goes down and both
 		// throughput windows keep their samples. The error state starts over.
-		if cur.inputReceived < prev.inputReceived {
-			t.offsets.input += prev.inputReceived
+		if current.inputReceived < previous.inputReceived {
+			t.offsets.input += previous.inputReceived
 		}
 
-		if cur.outputSent < prev.outputSent {
-			t.offsets.output += prev.outputSent
+		if current.outputSent < previous.outputSent {
+			t.offsets.output += previous.outputSent
 		}
 
-		rebuildErrors(t, nil, at)
-	case at.Sub(prev.at) > ErrorWindow:
-		cur.before = prev.errors
-		rebuildErrors(t, prev.errors, at)
-	default:
-		cur.before = prev.errors
-		cur.prevEntries = prev.sample.Failures.Entries
-		prevNotConnectedSince = prev.notConnectedSince
+		t.failures.resetForNewInstance(at)
+	case at.Sub(previous.at) > ErrorWindow:
+		// Errors from before the gap no longer count; only rises above the
+		// counts the gap started at do.
+		t.failures.resetAfterGap(at)
 	}
-
-	cur.notConnectedSince = firstNotConnectedSince(prevNotConnectedSince, cur.connections, at)
 
 	// The throughput engine holds no signals, so the discarded (Fired,
 	// Readiness) is always zero; observe feeds it for the windows alone.
 	_, _ = t.engine.Observe(readings{
-		inputReceived: diagnosis.Known(float64(cur.inputReceived + t.offsets.input)),
-		outputSent:    diagnosis.Known(float64(cur.outputSent + t.offsets.output)),
+		inputReceived: diagnosis.Known(float64(current.inputReceived + t.offsets.input)),
+		outputSent:    diagnosis.Known(float64(current.outputSent + t.offsets.output)),
 	}, diagnosis.Environment{}, at)
 
-	fired, _ := t.errorEngine.Observe(errorReadings(cur), diagnosis.Environment{}, at)
-	failures := judgeFailures(t.errorEngine, fired, cur)
+	failures := t.failures.observe(readFailureReading(m, at))
 
 	s := Sample{
 		At:                      at,
@@ -136,39 +103,20 @@ func (t *Tracker) observe(port int, m Metrics, at time.Time) Sample {
 	inputPerSecond, measured := s.InputMessagesPerSecond.Get()
 	s.IsActive = measured && inputPerSecond > 0
 
-	cur.sample = s
-	t.prev = &cur
+	current.sample = s
+	t.previous = &current
 
 	return s
 }
 
-// restarted reports whether any counter of cur (input, output or error) is
-// lower than in prev, which is how umh-core detects a Benthos restart.
-// Errors the new instance counted before its first scrape count only above
-// the old instance's count.
-func restarted(prev, cur *observation) bool {
-	if cur.inputReceived < prev.inputReceived ||
-		cur.outputSent < prev.outputSent {
-		return true
-	}
-
-	for name, v := range cur.errors {
-		if v < prev.errors[name] {
-			return true
-		}
-	}
-
-	return false
-}
-
-// rebuildErrors gives t a new error engine whose first reading is
-// seedErrors(errorCounts), dated one poll before at. Dating it at the
-// previous scrape fails after a long gap: the engine drops a window whose
-// newest reading is older than DemoteSpan, so the seed would be gone before
-// the next reading.
-func rebuildErrors(t *Tracker, errorCounts map[string]int64, at time.Time) {
-	t.errorEngine = mustNewEngine(errorTable())
-	t.errorEngine.Observe(seedErrors(errorCounts), diagnosis.Environment{}, at.Add(-ScrapeInterval))
+// restarted reports whether any counter of m (input, output or error) is
+// lower than at the previous scrape, which is how umh-core detects a Benthos
+// restart. Errors the new instance counted before its first scrape count only
+// above the old instance's count.
+func (t *Tracker) restarted(previous, current *observation, m Metrics) bool {
+	return current.inputReceived < previous.inputReceived ||
+		current.outputSent < previous.outputSent ||
+		t.failures.countsDropped(m)
 }
 
 // messagesPerSecond reads a measurement's slope, Unknown while the window

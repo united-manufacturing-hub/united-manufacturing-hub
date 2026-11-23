@@ -57,6 +57,6 @@ The progression: Use `_raw` temporarily to understand your data, then apply devi
 ## Next Steps
 
 1. **Explore your data**: Open the [Topic Browser](topic-browser.md)
-2. **Connect devices**: Create [bridges](../data-flows/bridges.md)
+2. **Connect external systems**: Create [bridges](../data-flows/bridges.md)
 3. **Model your data**: Define [data models](../data-modeling/data-models.md)
 4. **Create KPIs**: Build [stream processors](../data-modeling/stream-processors.md)

@@ -43,9 +43,9 @@ type Server struct {
 	// every /metrics read; see SetTraffic.
 	inPerRead, outPerRead, errPerRead int64
 
-	// inputUp, inputLost and inputFailed are the input's connection
-	// counters /metrics serves; see SetInputConnected.
-	inputUp, inputLost, inputFailed int64
+	// inputConnection is the input's connection counters /metrics serves;
+	// see SetInputConnected.
+	inputConnection inputConnection
 
 	failOn      map[string]int
 	version     string
@@ -57,7 +57,7 @@ type Server struct {
 
 // NewServer starts a Server. The caller closes it with Close.
 func NewServer() *Server {
-	s := &Server{failOn: map[string]int{}, version: Version, inputUp: 1}
+	s := &Server{failOn: map[string]int{}, version: Version, inputConnection: inputConnection{up: 1}}
 	s.server = httptest.NewServer(http.HandlerFunc(s.serve))
 
 	return s
@@ -116,14 +116,14 @@ func (s *Server) SetInputConnected(connected bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	wasConnected := s.inputUp > s.inputLost
+	wasConnected := s.inputConnection.up > s.inputConnection.lost
 
 	switch {
 	case connected && !wasConnected:
-		s.inputUp++
+		s.inputConnection.up++
 	case !connected && wasConnected:
-		s.inputLost++
-		s.inputFailed++
+		s.inputConnection.lost++
+		s.inputConnection.failed++
 	}
 }
 
@@ -206,7 +206,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input, output, errors := s.input, s.output, s.errors
-	conn := inputConnection{up: s.inputUp, lost: s.inputLost, failed: s.inputFailed}
+	conn := s.inputConnection
 	version, metricsBody := s.version, s.metricsBody
 	s.mu.Unlock()
 
