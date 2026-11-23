@@ -41,9 +41,9 @@ type FailureReport struct {
 // FailureEntry is one failure: an error counter that rose, or inputs or
 // outputs that are not connected.
 type FailureEntry struct {
-	// Signal names the error counter or connection check, e.g. "output_error"
-	// or "input_connection".
-	Signal string
+	// Signal names the error counter or connection check, one of the Signal
+	// constants, e.g. SignalOutputError or SignalInputConnection.
+	Signal Signal
 
 	// Label is the human wording for one failure, e.g. "output error".
 	// The reason ErrorFree returns adds an "s" for any other count.
