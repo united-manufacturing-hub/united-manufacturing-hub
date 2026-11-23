@@ -15,6 +15,7 @@
       * [CPU Health](usage/instances/container/cpu-health/README.md)
         * [Enable CPU Pressure Stats](usage/instances/container/cpu-health/enable-cpu-pressure-stats.md)
     * [Communicator](usage/instances/communicator/README.md)
+    * [Plugins](usage/instances/plugins.md)
     * [Troubleshooting](usage/instances/troubleshooting/README.md)
       * [CPU Contention While Cores Are Free](usage/instances/troubleshooting/cpu-contention-while-cores-are-free.md)
       * [Instance Stays Offline Behind a Corporate Firewall](usage/instances/troubleshooting/instance-offline-behind-corporate-firewall.md)
