@@ -170,10 +170,6 @@ const (
 )
 ```
 
-### Exporting to Prometheus
-
-The supervisor exports a worker's metrics only after it has registered the worker. When it registers the worker, it calls `Attach` on dependencies that implement `deps.WorkerLifecycle`. When it stops the worker, it calls `Detach`, which deletes the worker's `umh_fsmv2_worker_*` series. `BaseDependencies` implements both, so a worker whose dependencies embed it needs no code of its own.
-
 ## Parent-Child Dependency Sharing
 
 Use `MergeDependencies()` from `fsmv2/config/dependencies.go` to share resources:
