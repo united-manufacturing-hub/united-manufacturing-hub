@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+// The scrape of the Benthos endpoints.
 // The scrape of the Benthos endpoints, and the per-instance state it feeds.
 
 package benthosmetrics
@@ -24,8 +24,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
 )
 
 // ScrapeInterval is how often the caller should call Scrape. The windows in
@@ -38,83 +36,6 @@ const scrapeClientTimeout = 400 * time.Millisecond
 // maxScrapeBody caps a response body, so a misbehaving Benthos cannot be
 // buffered without bound on each scrape.
 const maxScrapeBody = 4 << 20 // 4 MiB
-
-// Tracker is the state kept about one Benthos instance. Build it with
-// NewTracker; the caller drops it when the instance goes away. A Tracker
-// is not safe for concurrent use; one goroutine owns it.
-type Tracker struct {
-	client *http.Client
-
-	// engine holds the windows that turn counters into throughput across
-	// scrapes.
-	engine *diagnosis.Engine[readings]
-
-	// previous is the previous observed scrape, nil before the first.
-	previous *observation
-
-	// offsets folds counter restarts into the series the engine is fed, one
-	// per direction; see observe.
-	offsets offsets
-
-	now func() time.Time
-}
-
-// offsets is the per-counter restart bookkeeping observe keeps: when a
-// counter reads lower than its previous value, that value is added to its
-// offset, so the series value + offset never decreases.
-type offsets struct {
-	input  int64
-	output int64
-}
-
-// NewTracker returns a Tracker for one Benthos instance that reads the time
-// from now, which must not be nil.
-func NewTracker(now func() time.Time) *Tracker {
-	return &Tracker{
-		client: &http.Client{
-			Timeout: scrapeClientTimeout,
-			// A 3xx answer is an error, not a hop: the scrape never leaves
-			// this Benthos' endpoints. See
-			// https://pkg.go.dev/net/http#ErrUseLastResponse: the 3xx
-			// response itself is returned.
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
-		engine: mustNewEngine(table()),
-		now:    now,
-	}
-}
-
-// Scrape scrapes the Benthos at port's /ping, /ready, /version and /metrics
-// endpoints once, records the counters in the windows t holds, and returns
-// what the probes answered and the measured Sample. Probes is valid also when
-// the error is not nil; Sample is valid only when it is nil. All requests
-// carry ctx, so cancellation surfaces as a request error.
-func (t *Tracker) Scrape(ctx context.Context, port int) (Probes, Sample, error) {
-	base := fmt.Sprintf("http://localhost:%d", port)
-	probes := Probes{At: t.now()}
-
-	// A failed /ping or /ready does not fail the scrape.
-	probes.PingAlive, _ = probePing(ctx, t.client, base)
-	probes.Ready, _ = probeReady(ctx, t.client, base)
-
-	version, err := fetchVersion(ctx, t.client, base)
-	if err != nil {
-		return probes, Sample{}, err
-	}
-
-	probes.Version = version
-
-	// The counters are stamped when /metrics was read, not when the scrape
-	// began: the probes before it take a varying time.
-	metrics, readAt, err := fetchMetrics(ctx, t.client, base, t.now)
-	if err != nil {
-		return probes, Sample{}, err
-	}
-
-	// The port is passed because a config update can change it without a
-	// restart.
-	return probes, t.observe(port, metrics, readAt), nil
-}
 
 // readyResponse is the JSON body of /ready; Error is empty when every
 // connection is up.
