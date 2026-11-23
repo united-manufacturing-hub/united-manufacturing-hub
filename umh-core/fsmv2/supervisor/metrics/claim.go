@@ -17,16 +17,53 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 )
 
-// WorkerMetricsClaims returns the claims on the exported worker-metric series, for a worker's dependencies to attach to.
-func WorkerMetricsClaims() deps.WorkerMetricsClaims {
-	return workerMetricsExporter
+// WorkerMetricsHandle exports one worker's metrics under the worker's hierarchy path while it owns that path.
+// Only the newest handle for a path exports, so a collection that returns after its worker was
+// removed cannot bring the series back or overwrite a worker added again at the same path.
+type WorkerMetricsHandle struct {
+	exporter      *WorkerMetricsExporter
+	hierarchyPath string
 }
 
-// Claim makes a newly registered worker the only one that exports and deletes hierarchyPath's series.
-func (e *WorkerMetricsExporter) Claim(hierarchyPath string) deps.WorkerMetricsClaim {
+// ForWorker makes a newly added worker the only one that exports and deletes hierarchyPath's series.
+func ForWorker(hierarchyPath string) *WorkerMetricsHandle {
+	return workerMetricsExporter.claim(hierarchyPath)
+}
+
+// Export exports observed's worker metrics while h still owns its hierarchy path. No-op if observed does not implement MetricsHolder.
+func (h *WorkerMetricsHandle) Export(observed fsmv2.ObservedState) {
+	if h == nil {
+		return
+	}
+
+	holder, ok := observed.(deps.MetricsHolder)
+	if !ok {
+		return
+	}
+
+	metrics := holder.GetWorkerMetrics()
+	if metrics.Counters == nil && metrics.Gauges == nil {
+		return
+	}
+
+	h.exporter.export(h, &metrics)
+}
+
+// Release deletes the worker-metric series of h's hierarchy path while h still owns it.
+// After Release, Export does nothing.
+func (h *WorkerMetricsHandle) Release() {
+	if h == nil {
+		return
+	}
+
+	h.exporter.release(h)
+}
+
+func (e *WorkerMetricsExporter) claim(hierarchyPath string) *WorkerMetricsHandle {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -34,23 +71,22 @@ func (e *WorkerMetricsExporter) Claim(hierarchyPath string) deps.WorkerMetricsCl
 		e.deleteSeries(hierarchyPath)
 	}
 
-	e.lastClaim++
-	e.owners[hierarchyPath] = e.lastClaim
+	claim := &WorkerMetricsHandle{exporter: e, hierarchyPath: hierarchyPath}
+	e.owners[hierarchyPath] = claim
 
-	return e.lastClaim
+	return claim
 }
 
-// Release deletes hierarchyPath's worker-metric series while claim still owns them.
-func (e *WorkerMetricsExporter) Release(hierarchyPath string, claim deps.WorkerMetricsClaim) {
+func (e *WorkerMetricsExporter) release(claim *WorkerMetricsHandle) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.owners[hierarchyPath] != claim {
+	if e.owners[claim.hierarchyPath] != claim {
 		return
 	}
 
-	delete(e.owners, hierarchyPath)
-	e.deleteSeries(hierarchyPath)
+	delete(e.owners, claim.hierarchyPath)
+	e.deleteSeries(claim.hierarchyPath)
 }
 
 func (e *WorkerMetricsExporter) deleteSeries(hierarchyPath string) {

@@ -124,6 +124,9 @@ type Collector[TObserved any] struct {
 
 // NewCollector creates a new collector with the given configuration.
 // The type parameter TObserved is inferred from the config parameter.
+//
+// The collector claims the worker-metric series of the worker's hierarchy path,
+// so build it only for a worker that is being added. Stop deletes the series.
 func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
 	return &Collector[TObserved]{
 		config:        config,
@@ -174,21 +177,9 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
-// metricsClaim returns the claim the worker's dependencies took when the worker was registered, or 0, which exports nothing.
-func (c *Collector[TObserved]) metricsClaim() deps.WorkerMetricsClaim {
-	provider, ok := c.config.Worker.(fsmv2.DependencyProvider)
-	if !ok {
-		return 0
-	}
-
-	claimHolder, ok := provider.GetDependenciesAny().(interface {
-		MetricsClaim() deps.WorkerMetricsClaim
-	})
-	if !ok {
-		return 0
-	}
-
-	return claimHolder.MetricsClaim()
+// WorkerMetrics returns the handle the collector exports the worker's metrics through.
+func (c *Collector[TObserved]) WorkerMetrics() *metrics.WorkerMetricsHandle {
+	return c.workerMetrics
 }
 
 // TriggerNow signals the observation loop to collect immediately.
@@ -262,12 +253,16 @@ func (c *Collector[TObserved]) Restart() {
 	}
 }
 
-// Stop stops the collector when its worker is removed. Restart does not call it.
+// Stop stops the observation loop for good and deletes the worker-metric
+// series the collector exported. A collection that returns after Stop exports
+// nothing.
 func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.stopObservationLoop(ctx)
+	c.workerMetrics.Release()
 }
 
-// stopObservationLoop stops the observation loop and waits for it to exit, bounded by ctx and 5 seconds.
+// stopObservationLoop stops the observation loop and waits for it to exit,
+// bounded by ctx and 5 seconds. Restart uses it to keep the worker's metrics.
 func (c *Collector[TObserved]) stopObservationLoop(ctx context.Context) {
 	c.mu.Lock()
 
@@ -617,7 +612,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	c.workerMetrics.Export(c.metricsClaim(), observed)
+	c.workerMetrics.Export(observed)
 
 	if changed {
 		c.logTrace("observation_saved",

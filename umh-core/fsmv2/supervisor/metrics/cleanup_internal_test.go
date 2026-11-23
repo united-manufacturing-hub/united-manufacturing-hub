@@ -79,69 +79,63 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 		return values
 	}
 
-	exportGauge := func(claim deps.WorkerMetricsClaim, value float64) {
-		exporter.export(claimTestPath, claim, &deps.Metrics{Gauges: map[string]float64{claimTestGauge: value}})
+	exportGauge := func(claim *WorkerMetricsHandle, value float64) {
+		exporter.export(claim, &deps.Metrics{Gauges: map[string]float64{claimTestGauge: value}})
 	}
 
 	It("starts a worker added again at a removed worker's path from its own counter values", func() {
-		removedWorker := exporter.Claim(claimTestPath)
-		exporter.export(claimTestPath, removedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 100}})
-		exporter.Release(claimTestPath, removedWorker)
+		removedWorker := exporter.claim(claimTestPath)
+		exporter.export(removedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 100}})
+		removedWorker.Release()
 
-		addedWorker := exporter.Claim(claimTestPath)
-		exporter.export(claimTestPath, addedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
+		addedWorker := exporter.claim(claimTestPath)
+		exporter.export(addedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
 
 		Expect(counterValues()).To(ConsistOf(3.0))
 	})
 
 	It("drops an export from a removed worker", func() {
-		removedWorker := exporter.Claim(claimTestPath)
+		removedWorker := exporter.claim(claimTestPath)
 		exportGauge(removedWorker, 1)
 
-		exporter.Release(claimTestPath, removedWorker)
+		removedWorker.Release()
 		exportGauge(removedWorker, 1)
 
 		Expect(gaugeValues()).To(BeEmpty())
 	})
 
 	It("keeps a worker added later at the same path from the removed worker's exports and cleanup", func() {
-		removedWorker := exporter.Claim(claimTestPath)
-		addedWorker := exporter.Claim(claimTestPath)
+		removedWorker := exporter.claim(claimTestPath)
+		addedWorker := exporter.claim(claimTestPath)
 		exportGauge(addedWorker, 1)
 
 		exportGauge(removedWorker, 99)
-		exporter.Release(claimTestPath, removedWorker)
+		removedWorker.Release()
 
 		Expect(gaugeValues()).To(ConsistOf(1.0))
 	})
 
-	It("drops an export under claim 0 for a path whose worker was removed", func() {
-		removedWorker := exporter.Claim(claimTestPath)
-		exporter.Release(claimTestPath, removedWorker)
-
-		exportGauge(0, 1)
-
-		Expect(gaugeValues()).To(BeEmpty())
-	})
-
 	It("deletes the previous owner's series and counter baselines when a new worker claims the path", func() {
-		previousOwner := exporter.Claim(claimTestPath)
-		exporter.export(claimTestPath, previousOwner, &deps.Metrics{
+		previousOwner := exporter.claim(claimTestPath)
+		exporter.export(previousOwner, &deps.Metrics{
 			Gauges:   map[string]float64{claimTestGauge: 5},
 			Counters: map[string]int64{claimTestCounter: 100},
 		})
 
-		newOwner := exporter.Claim(claimTestPath)
+		newOwner := exporter.claim(claimTestPath)
 		Expect(gaugeValues()).To(BeEmpty())
 
-		exporter.export(claimTestPath, newOwner, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
+		exporter.export(newOwner, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
 
 		Expect(counterValues()).To(ConsistOf(3.0))
 	})
 
-	It("drops an export for a path no worker has claimed", func() {
-		exportGauge(0, 1)
+	It("treats a nil claim as one that exports and releases nothing", func() {
+		var noClaim *WorkerMetricsHandle
 
-		Expect(gaugeValues()).To(BeEmpty())
+		Expect(func() {
+			noClaim.Export(nil)
+			noClaim.Release()
+		}).NotTo(Panic())
 	})
 })

@@ -26,7 +26,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/internal/collection"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/metrics"
 )
 
 const (
@@ -66,11 +65,17 @@ var _ = Describe("Collector worker-metric export", func() {
 		HierarchyPath: "collector-claim(testwrapping)",
 	}
 
-	collectOnce := func(dependencies *deps.BaseDependencies) {
+	var (
+		coll         *collection.Collector[fsmv2.Observation[struct{}]]
+		dependencies *deps.BaseDependencies
+	)
+
+	BeforeEach(func() {
+		dependencies = deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
 		dependencies.MetricsRecorder().SetGauge(collectorClaimGauge, 7)
 		worker := &wrappingTestWorker{baseDeps: dependencies, observed: fsmv2.Observation[struct{}]{}}
 
-		coll := collection.NewCollector[fsmv2.Observation[struct{}]](collection.CollectorConfig[fsmv2.Observation[struct{}]]{
+		coll = collection.NewCollector[fsmv2.Observation[struct{}]](collection.CollectorConfig[fsmv2.Observation[struct{}]]{
 			Worker:               worker,
 			Identity:             identity,
 			Store:                supervisor.CreateTestTriangularStoreForWorkerType("testwrapping"),
@@ -81,22 +86,28 @@ var _ = Describe("Collector worker-metric export", func() {
 		})
 
 		Expect(coll.Start(context.Background())).To(Succeed())
-		defer coll.Stop(context.Background())
+		DeferCleanup(coll.Stop, context.Background())
 		Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
-	}
-
-	It("exports under the claim the worker's dependencies took when they were attached", func() {
-		dependencies := deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
-		dependencies.Attach(metrics.WorkerMetricsClaims())
-		defer dependencies.Detach()
-
-		collectOnce(dependencies)
-
 		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(ConsistOf(7.0))
 	})
 
-	It("exports nothing for dependencies that were never attached", func() {
-		collectOnce(deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity))
+	It("keeps exporting the worker metrics after the observation loop restarts", func() {
+		coll.Restart()
+		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(ConsistOf(7.0))
+
+		dependencies.MetricsRecorder().SetGauge(collectorClaimGauge, 8)
+		Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
+
+		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(ConsistOf(8.0))
+	})
+
+	It("deletes the worker metrics on Stop and drops a collection that returns after it", func() {
+		handle := coll.WorkerMetrics()
+
+		coll.Stop(context.Background())
+		handle.Export(fsmv2.Observation[struct{}]{}.SetWorkerMetrics(deps.Metrics{
+			Gauges: map[string]float64{collectorClaimGauge: 7},
+		}))
 
 		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(BeEmpty())
 	})
