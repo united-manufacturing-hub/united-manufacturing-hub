@@ -14,7 +14,7 @@ Unless a page says otherwise, its primary reader is the person who installed and
 
 ## Where readers get help
 
-The [Get Help](get-help.md) page is the only page that names where readers turn for help: the community on Discord, security reports, support agreed in a contract, and commercial requests. Do not restate these routes or their addresses on another page; link to Get Help. A page's own instructions stay on it: what to collect before asking, and any safety warning.
+The [Get Help](get-help.md) page is the only page that names where readers turn for help: the community on Discord, security reports, support agreed in a contract, and commercial requests. Do not restate these routes or their addresses on another page; link to Get Help. A page's own instructions stay on it: what to collect before asking, any safety warning, and the commercial contact of a licensing or billing step, such as the contact form on the billing page.
 
 ## Usage pages
 
