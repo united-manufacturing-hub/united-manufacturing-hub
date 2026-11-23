@@ -1,8 +1,6 @@
 # Topic does not appear in the Topic Browser
 
-If the Topic Browser shows `No topics have arrived yet.` or a topic is missing, follow the checks below. The Topic Browser builds its own view of incoming messages, so a missing topic does not necessarily mean the data has stopped flowing.
-
-[Check whether the data is still flowing](#check-whether-the-data-is-still-flowing) explains how to check. If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration).
+The Topic Browser can show `No topics have arrived yet.`, or miss a single topic, while your bridges and stream processors publish data. Often the data has not reached the Topic Browser yet. The checks below show whether that is the case or whether something else is wrong.
 
 ![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
 
@@ -19,6 +17,10 @@ Three checks, in order of how little they disturb:
 If the instance that reports the topic has gone offline, the browser says so above the value and keeps showing what arrived before it went. The age beside the value says how long ago that was.
 
 ![A topic whose instance went offline, with the last values it reported](../../generated/topic-browser-instance-offline.png)
+
+## When the Topic Browser is turned off
+
+If `internal.topicbrowser.desiredState` is `stopped` in the `config.yaml` of the instance, the Topic Browser collects no topics on that instance and the tree stops updating. An empty tree or a missing topic is then expected. See [Configuration](topic-browser.md#configuration).
 
 ## Check whether the data is still flowing
 
