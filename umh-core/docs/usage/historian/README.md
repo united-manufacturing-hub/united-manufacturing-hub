@@ -12,7 +12,7 @@ To set it up, follow [Use the Historian](use-the-historian.md).
 ### Plugins tab
 
 Once a connection is configured, the **Plugins** tab shows the Historian card with the connection
-settings, the latency and the connection health.
+settings, the latency and the connection health. [Plugins](../instances/plugins.md) explains the tab.
 
 - **Add plugin** → **Historian** opens the connection form. **Save & Deploy** stores it in the
   `historian:` section of `config.yaml`; see [Setup](setup.md#connection-form).
