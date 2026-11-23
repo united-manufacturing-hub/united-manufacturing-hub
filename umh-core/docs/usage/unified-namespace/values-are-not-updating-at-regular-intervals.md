@@ -45,4 +45,4 @@ If none of the checks above explains the gaps, tell us on [Discord](https://disc
 - what produces the topic and how often it should publish,
 - the **Measured** and **Arrived in UMH** times of a recent value,
 - the badge and the information icon of the [Topic Browser card](topic-browser.md#the-topic-browser-card),
-- the logs in `/data/logs/umh-core/` and `/data/logs/benthos-topicbrowser-topic-browser/` inside the container, which you can read from the Docker host.
+- the logs of the Topic Browser and of the agent, from the time of the gaps. Open them with the **Logs** button on the [Topic Browser card](topic-browser.md#the-topic-browser-card) and on the [Agent card](../instances/agent/README.md#the-agent-card) of the instance.

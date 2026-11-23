@@ -16,7 +16,7 @@ Open the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the de
 
 - **The reason starts with `starting`.** The Topic Browser is still starting, for example after a restart. Wait until the reason no longer starts with `starting`, then check again.
 - **The reason is `redpanda degraded`.** The Topic Browser cannot read messages because Redpanda is degraded. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded). The Topic Browser recovers on its own once Redpanda does.
-- **The reason is `benthos degraded`.** The process that reads the messages for the Topic Browser fails. Its log is `/data/logs/benthos-topicbrowser-topic-browser/current` inside the container. Reading it requires access to the instance’s Docker host; [Container layout](../../reference/container-layout.md) explains where the logs are and how to read them. If the log does not show a cause you can fix, continue with [Restart the container](#restart-the-container).
+- **The reason is `benthos degraded`.** The process that reads the messages for the Topic Browser fails. Open its log with the **Logs** button on the Topic Browser card. If the log does not show a cause you can fix, continue with [Restart the container](#restart-the-container).
 - **Otherwise** the Topic Browser runs. Continue with [Check what publishes the topic](#check-what-publishes-the-topic).
 
 ### When the Topic Browser is turned off
@@ -83,4 +83,4 @@ If the checks above do not bring the topic back, or it is still missing after a 
 
 - the instance, the topic and the time you last expected it,
 - which of the checks above you ran and what each showed, including the badge and the information icon of the Topic Browser card,
-- the logs in `/data/logs/umh-core/` and `/data/logs/benthos-topicbrowser-topic-browser/` inside the container, which you can read from the Docker host.
+- the logs of the Topic Browser and of the agent. Open them with the **Logs** button on the [Topic Browser card](topic-browser.md#the-topic-browser-card) and on the [Agent card](../instances/agent/README.md#the-agent-card) of the instance.
