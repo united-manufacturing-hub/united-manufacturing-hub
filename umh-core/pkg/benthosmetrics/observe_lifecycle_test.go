@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// When the failure state starts over: the first scrape, a restart or port
-// change, and a gap longer than ErrorWindow.
+// When the failure state starts over: the first scrape, a port change, and a
+// gap longer than ErrorWindow. observe_restart_test.go covers restarts.
 
 package benthosmetrics
 

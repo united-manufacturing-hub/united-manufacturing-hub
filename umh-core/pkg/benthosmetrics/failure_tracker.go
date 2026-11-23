@@ -26,9 +26,10 @@ import (
 )
 
 // failureTracker answers, for one Benthos instance, which failures are
-// active as of the latest reading, and why. Tracker.observe detects restarts,
-// port changes and gaps; on one it calls resetForNewInstance or
-// resetAfterGap, then observe once per scrape newer than the previous one.
+// active as of the latest reading, and why. Tracker.observe calls observe
+// once per scrape newer than the previous one. It detects restarts, port
+// changes and gaps itself, and before observing such a scrape calls
+// resetForNewInstance or resetAfterGap.
 type failureTracker struct {
 	// engine holds the windows that turn error counters into fired error
 	// signals.

@@ -46,7 +46,7 @@ type FailureEntry struct {
 	Signal string
 
 	// Label is the human wording for one failure, e.g. "output error".
-	// ErrorFree adds an "s" for any other count.
+	// The reason ErrorFree returns adds an "s" for any other count.
 	Label string
 
 	// Count is the current number behind the entry: errors within
@@ -68,7 +68,9 @@ type FailureEntry struct {
 }
 
 // ErrorFree reports whether nothing is failing. Otherwise reason describes
-// the first entry, the one with the highest priority (see FailureEntry.reason).
+// the first entry in Entries' order, for example "benthos reported 3 output
+// errors in the last 10m, last one 4m ago" or "benthos reports 1 input not
+// connected".
 func (f *Failures) ErrorFree() (ok bool, reason string) {
 	if len(f.Entries) == 0 {
 		return true, ""
@@ -95,9 +97,7 @@ func (f *Failures) HasErrorNotClearedInTime(margin time.Duration) bool {
 	return false
 }
 
-// reason words this one entry as of observedAt, for example "benthos
-// reported 3 output errors in the last 10m, last one 4m ago" or "benthos
-// reports 1 input not connected".
+// reason words this one entry as of observedAt, as ErrorFree returns it.
 func (e FailureEntry) reason(observedAt time.Time) string {
 	label := e.Label
 	if e.Count != 1 {
