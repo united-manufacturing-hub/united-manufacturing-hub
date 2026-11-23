@@ -53,11 +53,11 @@ Memory from 70% and disk from 75% count as a warning. The badge stays Active and
 
 From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. The info button next to it shows the usage, its 95th percentile, throttling and pressure of the container, and the busy cores and steal of the machine. The row turns red while the CPU is degraded. When umh-core cannot measure the CPU, the row reads `N/A`.
 
-<figure><img src="./images/container-cpu-info.png" alt="The CPU info button of the Container card on an instance without a CPU limit" width="339"><figcaption></figcaption></figure>
+<figure><img src="./images/container-cpu-info.png" alt="The CPU info button of the Container card on an instance without a CPU limit" width="317"><figcaption></figcaption></figure>
 
 The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details) appear in the badge reason of the Container card. While the CPU is degraded, the reason line starts with `CPU degraded:`, for example `CPU degraded: CPU limited`. While the whole container is Active, the reason is the CPU status itself, for example `CPU healthy. …`.
 
-<figure><img src="./images/container-badge-reason.png" alt="The badge reason of an Active Container card with the CPU status and its Technical Details" width="339"><figcaption></figcaption></figure>
+<figure><img src="./images/container-badge-reason.png" alt="The badge reason of an Active Container card with the CPU status and its Technical Details" width="273"><figcaption></figcaption></figure>
 
 With `USE_FSMV2_CPU=false`, the row shows the CPU load of the whole host instead, and the CPU is degraded from 70% host load or from throttling. See [Container: Configuration](container/README.md#configuration).
 
