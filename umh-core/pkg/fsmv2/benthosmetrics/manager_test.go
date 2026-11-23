@@ -311,7 +311,7 @@ var _ = Describe("The Failures lookup", func() {
 		Expect(f).To(BeNil())
 
 		// A stored sample carries its Failures.
-		stored := &benthosmetrics.Failures{
+		stored := &benthosmetrics.FailureReport{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
 			}},
