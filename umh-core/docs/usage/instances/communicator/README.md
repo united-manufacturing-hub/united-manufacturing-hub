@@ -4,7 +4,7 @@ The communicator connects your instance to the Management Console. It sends the 
 
 ## The Communicator card
 
-The Communicator card on the instance details page shows the health of the connection, how full the outbound queue is, and how many Management Console sessions watch the instance. The card shows the status that the instance sent last. When the instance stops sending, every card keeps showing that last status. After 15 seconds without a message, the Management Console shows a red alert, "Instance Offline", above the tabs. The card does not show why the connection failed. The [metrics](#metrics) show the cause.
+The Communicator card on the instance details page shows the health of the connection, how full the outbound queue is, and how many Management Console sessions watch the instance. Like every card, it shows the status that the instance sent last, also after the instance stops sending. After 15 seconds without a message, the Management Console shows a red alert, "Instance Offline", above the tabs. The card does not show why the connection failed. The [metrics](#metrics) show the cause.
 
 | Field | Shows |
 |---|---|

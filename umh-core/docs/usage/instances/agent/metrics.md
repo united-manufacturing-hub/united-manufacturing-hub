@@ -1,8 +1,6 @@
 # Metrics
 
-This page lists the Prometheus metrics that a UMH Core instance serves on port 8080, and explains how to read them. The metrics come from umh-core, the process inside the UMH Core container. [Collect Metrics with Prometheus](collect-metrics-with-prometheus.md) explains how to reach the endpoint.
-
-The component pages explain what one component reports and give alert queries for it. See [Metrics by component](#metrics-by-component).
+This page lists the Prometheus metrics that a UMH Core instance serves on port 8080, and explains how to read them. The metrics come from umh-core, the process inside the UMH Core container. [Metrics by component](#metrics-by-component) links the alert queries of each component.
 
 ## Read the metrics
 
@@ -24,7 +22,7 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
 | Bridge connection probe | FSMv2 | none. `NMAP_BACKEND` is ignored |
-| CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored |
+| CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored from v0.45.4 |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
@@ -170,7 +168,7 @@ umh-core counts one error at several layers, for example under the bridge and ag
 
 `umh_core_reconcile_duration_milliseconds` with `component="control_loop"` and `instance="main"` is the duration of one whole cycle of umh-core's control loop. A cycle should finish within 100 milliseconds. A longer cycle writes a warning to the agent log. Other `instance` values time single steps inside that cycle. A component's step names start with the component's name. The filter `instance=~"<name>(\\..*)?"` selects all of them. Do not add the steps up. They are nested inside each other, and a sum counts time twice.
 
-`umh_core_reconcile_starved_total_seconds` adds more than one second for each second of a stall. Only an increase above zero is meaningful. It means the control loop did not run for more than 15 seconds.
+Alert on any increase of `umh_core_reconcile_starved_total_seconds` above zero. It means the control loop did not run for more than 15 seconds.
 
 ## Metrics by component
 
@@ -190,11 +188,11 @@ Each component page has a Metrics section. It explains what the component report
 | Stream processors | [Stream Processors](../../data-flows/stream-processor.md#metrics) |
 | Historian | [Historian](../../historian/README.md#metrics) |
 
-Each bridge, stand-alone flow and stream processor runs in Benthos. Benthos and Redpanda keep their own metrics. umh-core does not copy them to port 8080. Per-bridge message counts are therefore not on port 8080. The Metrics view of a bridge in the Management Console shows them.
+Benthos and Redpanda keep their own metrics. umh-core does not copy them to port 8080. Per-bridge message counts are therefore not on port 8080. The Metrics view of a bridge in the Management Console shows them.
 
 ## CPU gauges
 
-With the CPU health check on, UMH Core publishes the gauges below on the Prometheus endpoint on port 8080. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+The CPU health check publishes the gauges below on the Prometheus endpoint on port 8080. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
 
 When UMH Core cannot read a file it needs for the CPU usage or capacity (the `CPU not measured` message in [CPU status](../container/README.md#cpu-status)), every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
 
@@ -236,7 +234,7 @@ The flags come in three kinds:
 
 ## Memory gauges
 
-With the [memory monitor preview](../container/how-memory-health-is-judged.md) on, umh-core publishes the gauges below. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges, with a `hierarchy_path` that ends in `(memory)`, and they also keep their previous value on a tick that could not measure. On such a tick, the age of `memory_last_sample_unix` is the only thing that reveals the freeze.
+With the [memory monitor preview](../container/how-memory-health-is-judged.md) on, umh-core publishes the gauges below. They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the CPU gauges, with a `hierarchy_path` that ends in `(memory)`, and they also keep their previous value after a failed measurement. Only the age of `memory_last_sample_unix` shows such a freeze.
 
 ### Memory measurements
 
@@ -249,7 +247,7 @@ With the [memory monitor preview](../container/how-memory-health-is-judged.md) o
 | `memory_host_total_bytes` | the machine's total memory, in bytes |
 | `memory_pressure_avg60_ratio` | the kernel's PSI memory-some avg60 as a 0..1 fraction |
 | `memory_oom_kills_last_hour` | the OOM kills in the container within the last hour |
-| `memory_last_sample_unix` | the unix seconds of the last tick that measured |
+| `memory_last_sample_unix` | the Unix time, in seconds, of the last successful measurement |
 
 ### Memory flags
 
@@ -264,7 +262,7 @@ With the [memory monitor preview](../container/how-memory-health-is-judged.md) o
 
 The `_ring_active` and `_signal_ready` flags work like the [CPU flags](#cpu-flags). `memory_host_ring_active` also reads 0 while the machine's memory is unreadable. `memory_pressure_signal_ready` stays 0 on cgroup v1 and without PSI. `memory_oom_signal_ready` reads 0 before the second read of the OOM counter and while that counter is unreadable.
 
-The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
+The two source flags say where a number came from. They do not say whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
 
 ## Communicator error counters
 
@@ -307,7 +305,6 @@ The series below are for UMH support and may change without notice. The same por
 - `umh_fsmv2_variable_propagation_total`
 - `umh_fsmv2_hierarchy_depth`
 - `umh_fsmv2_hierarchy_size`
-- `umh_fsmv2_adapter_dropped_messages_total`
 - `umh_fsmv2_worker_compaction_deltas_deleted_total`, `umh_fsmv2_worker_compaction_cycles_total`, `umh_fsmv2_worker_last_compaction_duration_ms`, `umh_fsmv2_worker_maintenance_cycles_total` and `umh_fsmv2_worker_last_maintenance_duration_ms`, reported by the persistence component
 - `umh_communicator_action_panics_total`
 - `umh_core_filesystem_ops_total`

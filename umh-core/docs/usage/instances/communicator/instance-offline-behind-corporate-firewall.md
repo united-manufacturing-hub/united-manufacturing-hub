@@ -2,7 +2,7 @@
 
 This page explains how to find out why an instance behind a corporate firewall never shows as online in the Management Console, and how to fix it. The steps need access to the Docker host, to the firewall and proxy settings, and to the corporate CA certificate, so you may need your IT department.
 
-The cause is usually one of three. The firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
+The cause is usually one of three: the firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
 
 ## Which error the instance reports
 
@@ -63,7 +63,7 @@ umh-core trusts only public certificate authorities. It rejects the certificate 
 
 3. Check where the container keeps its `/data` volume, then stop and remove the container. `docker restart` is not enough, because it keeps the flags the container was created with.
 
-   If your original command mounted `/data` with `-v <path or volume name>:/data`, the data stays there and you can go on. If it did not, Docker created an anonymous volume. A new container would get an empty one, and so would not see your configuration and data. Print the name of the volume before you remove the container, and write it down:
+   If your original command mounted `/data` with `-v <path or volume name>:/data`, the data stays there and you can go on. If it did not, Docker created an anonymous volume. A new container would get a new, empty volume without your configuration and data. Print the name of the volume before you remove the container, and write it down:
 
    ```bash
    docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' <container name>

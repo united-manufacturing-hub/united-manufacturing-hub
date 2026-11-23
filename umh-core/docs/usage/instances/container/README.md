@@ -23,8 +23,8 @@ The container shows Degraded when the CPU, the memory or the disk is degraded. T
 
 | Resource | Degraded at | Reason line |
 |---|---|---|
-| Memory | 80% of the total. With the memory monitor preview, memory also degrades for other causes, see [Memory with the memory monitor preview](#memory-with-the-memory-monitor-preview). | `Memory degraded: Memory utilization critical` |
-| Disk | 85% of the `/data` volume | `Disk degraded: Disk utilization critical` |
+| Memory | Above 80% of the total. With the memory monitor preview, memory also degrades for other causes, see [Memory with the memory monitor preview](#memory-with-the-memory-monitor-preview). | `Memory degraded: Memory utilization critical` |
+| Disk | Above 85% of the `/data` volume | `Disk degraded: Disk utilization critical` |
 | CPU | See [CPU status](#cpu-status) | `CPU degraded: …` |
 
 Memory from 70% and disk from 75% count as a warning. The badge stays Active and does not show the warning.
@@ -44,15 +44,17 @@ The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details
 | Status | What it means |
 |---|---|
 | **CPU healthy** | The instance has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". |
-| **CPU healthy, limited visibility** | The instance looks fine, but UMH Core cannot fully measure CPU health here: no CPU limit is set and the operating system is not reporting CPU-pressure statistics. |
+| **CPU: starting up.** | UMH Core has not measured the CPU yet. This shows in the first seconds after a start. |
 | **CPU limited** | The instance hit its CPU limit and was paused until the next scheduling period, for example in 12% of periods over the last minute. Work is being delayed. |
 | **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. |
 | **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. |
 | **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the instance is at its CPU limit. The status message says which. |
 
-Every status except **CPU healthy** and **CPU healthy, limited visibility** means CPU health is degraded, and new bridges wait while it lasts.
+Every status except **CPU healthy** means CPU health is degraded, and new bridges wait while it lasts.
 
-From v0.44.43, if UMH Core cannot read a file it needs to measure the CPU, the CPU health is degraded and the message names the file, for example `CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`.
+When no CPU limit is set and the operating system does not report CPU pressure stats, **CPU healthy** adds a line that starts with `Limited visibility:`. UMH Core then cannot fully tell when work waits for a free core. [Enable CPU pressure stats](enable-cpu-pressure-stats.md) turns on full monitoring.
+
+If UMH Core cannot read a file it needs to measure the CPU, the CPU health is degraded and the message names the file, for example `poll error: CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`.
 
 ### CPU Technical Details
 
@@ -92,7 +94,7 @@ The environment variable `USE_FSMV2_MEMORY_MONITOR` changes how umh-core judges 
 | Variable | Default | Effect |
 |---|---|---|
 | `USE_FSMV2_MEMORY_MONITOR` | `false` | `true` turns on the memory monitor preview, which [How Memory Health Is Judged](how-memory-health-is-judged.md) explains. |
-| `USE_FSMV2_CPU` | none | Ignored from v0.45.3. The CPU status always comes from the CPU health check. On v0.44.46 to v0.45.2, `USE_FSMV2_CPU=false` turns the check off and applies the 70% CPU usage rule instead. Remove the variable from your `docker run` command. |
+| `USE_FSMV2_CPU` | none | Ignored from v0.45.4. The CPU status always comes from the CPU health check. On v0.44.46 to v0.45.3, `USE_FSMV2_CPU=false` turns the check off and applies the 70% CPU usage rule instead. Remove the variable from your `docker run` command. |
 
 The CPU health check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
 
@@ -112,6 +114,6 @@ To alert on a single resource, for example the disk:
 umh_container_disk_usage_percent{exported_instance="Core"} > 80
 ```
 
-`umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` report the CPU health check's 60-second average of the container's own usage. `umh_container_cpu_core_count` is the number of CPU cores available to the container. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
+From v0.45.4, `umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` report the CPU health check's 60-second average of the container's own usage. `umh_container_cpu_core_count` is the number of CPU cores available to the container. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
 
 The container monitor, the part of the agent that collects these values, also reports the standard [FSMv1 metrics](../agent/metrics.md#fsmv1-metrics) with `component="container_monitor"` and `instance="Core"`. The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go). umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges, which [Metrics: CPU gauges](../agent/metrics.md#cpu-gauges) lists. With the memory monitor preview on, it exposes the `umh_fsmv2_worker_memory_*` gauges, which [Metrics: Memory gauges](../agent/metrics.md#memory-gauges) lists.

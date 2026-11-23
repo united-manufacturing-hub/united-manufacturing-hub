@@ -20,13 +20,12 @@ Free space on the `/data` volume, or shorten how long Redpanda keeps data. See [
 
 | Status | What to do |
 |---|---|
-| **CPU healthy, limited visibility** | For full monitoring, set a CPU limit, or [enable CPU pressure stats](enable-cpu-pressure-stats.md). |
 | **CPU limited** | Raise the CPU limit, or reduce the load on the instance. |
 | **CPU contention** | See [CPU Contention While Cores Are Free](cpu-contention-while-cores-are-free.md). |
 | **CPU taken by the server** | On your virtualization platform, give this virtual machine more guaranteed CPU, or move the other virtual machines off the server. |
 | **CPU running near full** | Add CPU capacity, reduce load, or raise the CPU limit. If the machine is full and this container is not the cause, reserve or pin cores for UMH Core and also set a CPU limit, or reduce what else runs on the machine. A CPU limit only caps UMH Core's usage. It reserves no CPU for UMH Core. |
 
-**CPU healthy, limited visibility** does not degrade the container. It is in the table because UMH Core cannot fully measure CPU health in this state.
+When **CPU healthy** shows a `Limited visibility:` line, set a CPU limit or [enable CPU pressure stats](enable-cpu-pressure-stats.md) for full monitoring. The line does not degrade the container.
 
 When the status says `CPU not measured` and names a file, check whether the container can read that file:
 

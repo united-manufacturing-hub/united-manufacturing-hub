@@ -6,10 +6,10 @@ Every instance serves its metrics on port 8080, at the path `/metrics`, in the P
 
 ## Read the metrics once
 
-Run this on the machine that runs the container. The install command from the Management Console names the container `umh-core`:
+Run this on the Docker host. The install command from the Management Console names the container `umh-core`:
 
 ```bash
-docker exec <container name> wget -qO- http://localhost:8080/metrics
+docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics
 ```
 
 ## Collect the metrics with Prometheus

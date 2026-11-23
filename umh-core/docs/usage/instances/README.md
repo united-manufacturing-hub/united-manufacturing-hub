@@ -11,17 +11,17 @@ An instance is a running UMH Core container: a single Docker container that host
 | Column | Shows |
 |---|---|
 | Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance that the instance filter leaves out shows **Not in the filter** and no other values. |
-| Instance name | The name of the instance. While the instance is online, click it to open the instance details page. |
+| Instance name | The name of the instance. Click it to open the instance details page. For an instance in the instance filter, this works only while it is online. |
 | Type | **Core** for UMH Core, **Classic** for UMH Classic. `n/a` while the instance is offline. |
 | Version | The UMH Core version, or for UMH Classic the version of the companion. A marker shows when a newer version is available, or that the version is no longer supported and needs an upgrade. |
 | Data flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
-| Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser. |
+| Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser, or to the Tag Browser for UMH Classic, and adds the instance to the instance filter. |
 | Read throughput (msg/sec) | The messages per second of all data flows on the instance, input and output added together, as a one-minute average. |
 
 The row menu has these entries:
 
 - **Instance details**, disabled while the instance is offline.
-- **Config file**, only for a UMH Core instance that is online.
+- **Config file**, only for a UMH Core instance that is online and whose UMH Core version supports it.
 - **Upgrade**, only for a UMH Classic instance whose companion is not up to date.
 - **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license and audit logs enabled for your organization.
 - **Delete**.
@@ -34,7 +34,7 @@ The instance details page has two tabs. **Core** shows one card per component of
 
 ![The Core tab of the instance details page](./images/instance-details-core-tab.png)
 
-Each card has a status badge: **Active**, **Neutral** or **Degraded**. When the instance sent a reason, an info button next to the badge shows it. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
+Each card has a status badge: **Active**, **Neutral**, **Degraded**, or **Stopped** for a component that is meant to be stopped. When the instance sent a reason, an info button next to the badge shows it. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
 
 Each card is explained on the page of its component:
 
@@ -47,18 +47,18 @@ Each card is explained on the page of its component:
 | Redpanda | [Redpanda](../unified-namespace/redpanda.md#redpanda-card) |
 | Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md#topic-browser-card) |
 
-**View Instance Config** opens the instance's `config.yaml`. See [Edit the Config File](edit-the-config-file.md).
+**View Instance Config** opens the instance's `config.yaml`. It appears when the instance's UMH Core version supports it. See [Edit the Config File](edit-the-config-file.md).
 
 ## Reference
 
 ### Configuration
 
-An instance authenticates with an `AUTH_TOKEN`, not with a user account. You create an instance with **Add instance** on the **Instances** page, as [Step 1: Install](../../getting-started/README.md) shows. The Management Console then generates the token and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
+An instance authenticates with an `AUTH_TOKEN`, not with a user account. You create an instance with **Add instance** on the **Instances** page, as [Step 1: Install](../../getting-started/README.md) shows. The Management Console then generates the token and shows it once. Copy it and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
 
 The token does two things:
 
 - It proves the instance's identity. The Management Console accepts the instance's status and hands it the configuration meant for it.
-- It locks the instance's access to the Management Console. Only the instance can unlock it, because only the instance has the token. The Management Console cannot.
+- It locks the instance's access to the Management Console. Only the instance can unlock it, because only the instance has the token.
 
 Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
 

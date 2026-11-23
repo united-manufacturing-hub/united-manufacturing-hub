@@ -20,8 +20,6 @@ The **Logs** button opens the logs of the agent. The agent writes them to `/data
 
 The Agent shows Degraded while the emergency setting *Turn off bridge admission* is on. The badge reason then starts with `Bridge admission is off (agent.enableResourceLimitBlocking: false).` New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit. [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission) explains how to turn bridge admission back on.
 
-The Agent also shows Degraded when `config.yaml` has no `agent.location`, or when umh-core cannot read the agent logs or its release information.
-
 A degraded Agent also marks the whole instance as degraded. In the instance list, hover over the status dot of the instance to see the line `Agent: <reason>`.
 
 ## What the agent does
@@ -49,7 +47,7 @@ UMH Core has no health or readiness endpoint. Port 8080 serves `/metrics` and an
 
 ### Metrics
 
-The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. In Prometheus, `instance` usually arrives as `exported_instance`.
+The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. Prometheus usually renames `instance` to `exported_instance`.
 
 To alert when the control loop stalls, alert on any increase of the starved counter:
 

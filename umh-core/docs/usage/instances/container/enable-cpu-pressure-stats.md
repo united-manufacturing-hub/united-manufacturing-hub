@@ -6,8 +6,8 @@ UMH Core reads CPU pressure as part of the CPU health check. See
 {% endhint %}
 
 Follow this page when the Technical Details `Pressure` line reads `Pressure not measured (this
-operating system does not report CPU pressure stats).`, for example on an instance with the status
-**CPU healthy, limited visibility**. Without CPU pressure stats and without a CPU limit, UMH Core
+operating system does not report CPU pressure stats).`, for example when **CPU healthy** shows a
+`Limited visibility:` line. Without CPU pressure stats and without a CPU limit, UMH Core
 judges CPU health on machine headroom, plus steal on a virtual machine. Once the kernel reports
 pressure to the container, the `Pressure` line in Technical Details shows a percentage.
 
@@ -61,7 +61,7 @@ Run the `docker exec` check again. It reads the same file UMH Core reads.
 The Management Console shows the result on the instance's detail page. The Technical Details
 `Pressure` line changes from `Pressure not measured (this operating system does not report CPU
 pressure stats).` to a percentage. `Pressure not available (measuring).` means UMH Core can read the
-file and is filling its 60-second window. Wait a minute and look again.
+file and has not taken its first reading yet. Look again after a few seconds.
 
 If the file is still missing, run these checks on the machine, outside the container:
 
@@ -77,5 +77,4 @@ If the file is still missing, run these checks on the machine, outside the conta
    three checks above to us on [Discord](https://discord.com/invite/F9mqkZnm9d) or through your usual UMH
    contact.
 
-With a CPU limit, UMH Core measures throttling and the headroom left under the limit, and the `Pressure`
-line keeps reading `not measured`.
+With a CPU limit, the `Pressure` line keeps reading `not measured`.

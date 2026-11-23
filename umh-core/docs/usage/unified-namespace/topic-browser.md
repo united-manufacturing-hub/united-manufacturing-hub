@@ -33,7 +33,7 @@ When selecting a topic, view:
 
 The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process that reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
 
-The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+The badge reason names a failure: `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
 The **Logs** and **Metrics** buttons are unavailable when the instance's UMH Core version does not support them.
 
