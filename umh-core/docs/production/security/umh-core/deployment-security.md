@@ -1,5 +1,7 @@
 # umh-core Security
 
+This page describes umh-core's security model. It covers the capabilities built into the container, what the instance accesses on your network and filesystem, and the deployment decisions that remain yours. The [threat model](#threat-model-simplified) names what umh-core does not protect against.
+
 ## Shared Responsibility Model
 
 ### We are responsible for:
@@ -35,9 +37,9 @@
 
 ## Security Capabilities
 
-This section documents umh-core's security features across container security, access control, network architecture, cryptography, supply chain integrity, and industrial protocol handling. Each capability is mapped to applicable industry standards (NIST, IEC 62443, OWASP) with implementation details and known limitations.
+This section documents umh-core's security features across container security, logging and audit, access control, network architecture, cryptography, supply chain integrity, and industrial protocol handling. Each capability is mapped to applicable industry standards (NIST, IEC 62443, OWASP) with implementation details and known limitations.
 
-## Container Security
+### Container Security
 
 **Applicable Standards**: OWASP Docker Security Cheat Sheet requirement 2 (non-root user), NIST SP 800-190 (least privilege principle for containers), IEC 62443-4-2 CR 2.1 (authorization enforcement and least privilege at Security Level 2)
 
@@ -45,13 +47,17 @@ This section documents umh-core's security features across container security, a
 
 **Deployment Considerations**: All bridges and [data flows](../../../usage/data-flows/) run as the same Linux user within the container, with no per-component user isolation. This design prioritizes non-root security over internal process isolation, as user switching requires root capabilities unavailable in non-root containers.
 
-**Note**: Mounted volumes must be writable by UID 1000. See [Filesystem Access](#filesystem-access).
+{% hint style="warning" %}
+Mounted volumes must be writable by UID 1000. See [Filesystem Access](#filesystem-access).
+{% endhint %}
 
-⚠️ **Safety System Warning**: umh-core is NOT SIL-rated and must not be used in safety-instrumented systems. Refer to IEC 61508/61511 for safety requirements.
+{% hint style="danger" %}
+**Safety system warning.** umh-core is NOT SIL-rated and must not be used in safety-instrumented systems. Refer to IEC 61508/61511 for safety requirements.
+{% endhint %}
 
 ---
 
-## Logging and Audit Trail
+### Logging and Audit Trail
 
 **Applicable Standards**: NIST SP 800-53 AU-2 and AU-3 (comprehensive audit logging with timestamps, event types, and outcomes), NIST SP 800-92 (log generation, storage, and protection), IEC 62443-4-2 CR 2.8 (auditable events for security-relevant actions)
 
@@ -61,7 +67,7 @@ This section documents umh-core's security features across container security, a
 
 ---
 
-## Access Control and Authentication
+### Access Control and Authentication
 
 **Applicable Standards**: NIST SP 800-53 AC-6 (least privilege access control), IEC 62443-4-2 CR 1.2 (software process and device identification and authentication), NIST SP 800-171 IA-2 (identification and authentication of organizational users)
 
@@ -71,7 +77,7 @@ This section documents umh-core's security features across container security, a
 
 ---
 
-## Network Security
+### Network Security
 
 **Applicable Standards**: NIST SP 800-82 (defense in depth for OT/ICS environments and network segmentation), IEC 62443-3-3 SR 5.1 (zone and conduit architecture for edge gateway deployment), IEC 62443-4-2 CR 5.1 (network segmentation support)
 
@@ -79,13 +85,13 @@ This section documents umh-core's security features across container security, a
 
 Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62443-3-3 for zone architecture.
 
-**Customer-Configured HTTP Servers**: Customer-configured HTTP servers require coordination between application teams (who configure bridges via ManagementConsole) and security/infrastructure teams (who must explicitly expose container ports). This two-team requirement ensures managed attack surface. umh-core does not provide built-in authentication for HTTP inputs. Deploy behind your standard reverse proxy (nginx, HAProxy) for authentication and TLS.
+**Customer-Configured HTTP Servers**: Customer-configured HTTP servers require coordination between application teams (who configure bridges via ManagementConsole) and security/infrastructure teams (who must explicitly expose container ports). A port opens only when both teams act, so no bridge configuration exposes one on its own. umh-core does not provide built-in authentication for HTTP inputs. Deploy behind your standard reverse proxy (nginx, HAProxy) for authentication and TLS.
 
-**Deployment Considerations**: The edge-only design requires outbound internet access to function and is not suitable for air-gapped or fully disconnected environments. Network segmentation and firewall rules must be configured properly by the customer to achieve defense in depth.
+**Deployment Considerations**: The edge-only design does not run air-gapped; see [Deployment Model](#deployment-model-edge-only-architecture). Network segmentation and firewall rules must be configured properly by the customer to achieve defense in depth.
 
 ---
 
-## Cryptography and TLS
+### Cryptography and TLS
 
 **Applicable Standards**: NIST SP 800-52 (TLS 1.2+ configuration with modern cipher suites), NIST SP 800-53 SC-8 (transmission confidentiality and integrity), IEC 62443-4-2 CR 4.3 (use of cryptography conforming to applicable standards and regulations)
 
@@ -95,7 +101,7 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 ---
 
-## Supply Chain Security
+### Supply Chain Security
 
 **Applicable Standards**: OWASP Docker Security Cheat Sheet requirement 0 (regular image updates and vulnerability scanning), NIST SP 800-161 (SBOM generation, vulnerability management, and supply chain risk controls), IEC 62443-4-1 SR-5 (product defect management and security vulnerability tracking)
 
@@ -105,7 +111,7 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 ---
 
-## Industrial Protocol Security
+### Industrial Protocol Security
 
 **Applicable Standards**: OWASP OT Top 10 number 9 (legacy protocol security limitations and risks), IEC 62443-3-3 SR 5.1 (network segmentation for operational technology protocols), IEC 62443-4-2 CR 3.1 (communication integrity requirements)
 
@@ -117,7 +123,9 @@ Deploy umh-core in a DMZ with firewalls on both OT and IT boundaries. See IEC 62
 
 ## PLC Integration Limits
 
-**Warning**: Aggressive polling can overwhelm PLCs and cause CPU overload or crashes. Each PLC model has different limits for concurrent connections, polling rates, and tag counts. Consult your device manual for specifications and test polling rates in non-production before deployment. S7 protocol is particularly sensitive to connection overload.
+{% hint style="warning" %}
+Aggressive polling can overwhelm PLCs and cause CPU overload or crashes. Each PLC model has different limits for concurrent connections, polling rates, and tag counts. Consult your device manual for specifications and test polling rates in non-production before deployment. S7 protocol is particularly sensitive to connection overload.
+{% endhint %}
 
 ---
 
@@ -127,7 +135,7 @@ umh-core primarily protects against unintentional compromise of external industr
 
 umh-core does not protect against malicious operators or accidental misconfiguration. An operator with access to the ManagementConsole UI or direct filesystem access to config.yaml can deploy bridge configurations that connect to external industrial systems, exfiltrate the AUTH_TOKEN via outbound network requests, or read sensitive data from mounted volumes. Accidental misconfiguration poses similar risks - operators copying configuration snippets from the internet (blog posts, forums, examples) may inadvertently expose ports, enable insecure settings, or introduce vulnerable patterns without understanding the security implications. Similarly, the system cannot protect against compromise of the underlying container runtime, host operating system, or Kubernetes control plane.
 
-This model aligns with industry-standard edge gateway security - we secure our software, you secure your infrastructure.
+This is the split the [Shared Responsibility Model](#shared-responsibility-model) describes: we secure the software, you secure the infrastructure.
 
 ---
 
@@ -135,7 +143,7 @@ This model aligns with industry-standard edge gateway security - we secure our s
 
 umh-core is designed for edge-only deployment with a specific network architecture. The system requires outbound HTTPS connections to management.umh.app for configuration synchronization and supports outbound connections to external systems such as MQTT brokers, OPC UA servers, Modbus devices and APIs. No services are designed for inbound internet connections.
 
-The typical deployment location is on the factory floor, behind corporate firewall, on-premises at customer sites. This architecture reduces the attack surface by eliminating services that listen for inbound internet connections. The ManagementConsole queues configuration changes that umh-core instances pull on their own schedule for execution. This aligns with network segmentation best practices where umh-core sits between OT networks and IT infrastructure at the boundary layer.
+The typical deployment location is on the factory floor, behind corporate firewall, on-premises at customer sites. This architecture reduces the attack surface by eliminating services that listen for inbound internet connections. The ManagementConsole queues configuration changes that umh-core instances pull on their own schedule for execution. This places umh-core between OT networks and IT infrastructure at the boundary layer, following the zone architecture of IEC 62443-3-3.
 
 The system is not designed for air-gapped environments. umh-core requires outbound internet access to management.umh.app to function and cannot operate in fully disconnected deployments.
 
@@ -176,7 +184,7 @@ See [Network Configuration](./network-configuration.md) for details on proxy set
 
 **External system connections**: Customer-defined bridge connections to PLCs, MES and other external systems.
 
-**Inbound**: No services designed for internet exposure (edge-only deployment).
+**Inbound**: No services designed for internet exposure (see [Deployment Model](#deployment-model-edge-only-architecture)).
 
 ---
 
@@ -222,6 +230,18 @@ See [Container Security](#container-security) above for details on non-root exec
 
 **What this means**: All bridges (protocol converters, data flows, stream processors) run as the same Linux user (UID 1000, umhuser). There is no user-level or process-level isolation between different bridges within the container.
 
+**Technical constraint**: Per-bridge user isolation is not possible in non-root containers. Process-level user switching requires CAP_SETUID and CAP_SETGID capabilities, which are only available to root processes.
+
+**Design decision**: Non-root container security prioritized over per-bridge user isolation.
+
+**Security implications**:
+
+Because all bridges run as the same user, they share access within the container. All bridges can read the /data/config.yaml file containing AUTH_TOKEN, access the same mounted directories, view each other's environment variables, and read each other's configuration files.
+
+The container boundary remains enforced despite shared user access. Bridges cannot access the host filesystem except through explicitly mounted paths, cannot see host processes, and network isolation applies unless explicitly disabled with host networking mode.
+
+Non-root execution provides security benefits that justify this trade-off. The container cannot escalate to root privileges even if a bridge is compromised. This follows the standard Docker security model with defense in depth. The design is compatible with restricted Kubernetes environments that do not permit privileged containers or special permissions.
+
 ### No Per-User Access Control Within Instance
 
 **Category**: Deployment Consideration (planned for future releases)
@@ -235,18 +255,6 @@ See [Container Security](#container-security) above for details on non-root exec
 **Issue**: All processes running as umhuser (UID 1000) can read and potentially modify log files in /data/logs/. This is a consequence of the non-root container design. Customers requiring tamper-proof logs should implement log forwarding to external SIEM systems with append-only storage.
 
 **What this does not mean**: Bridges do not interfere with each other's data processing, as Redpanda isolates message flows by topic. Bridges are not resource-limited together; each bridge can have separate CPU and memory limits configured via s6-softlimit. Data is not shared between bridges, as each benthos instance maintains separate configuration and state.
-
-**Technical constraint**: Per-bridge user isolation is not possible in non-root containers. Process-level user switching requires CAP_SETUID and CAP_SETGID capabilities, which are only available to root processes.
-
-**Design decision**: Non-root container security prioritized over per-bridge user isolation.
-
-**Security implications**:
-
-Because all bridges run as the same user, they share access within the container. All bridges can read the /data/config.yaml file containing AUTH_TOKEN, access the same mounted directories, view each other's environment variables, and read each other's configuration files.
-
-The container boundary remains enforced despite shared user access. Bridges cannot access the host filesystem except through explicitly mounted paths, cannot see host processes, and network isolation applies unless explicitly disabled with host networking mode.
-
-Non-root execution provides security benefits that justify this trade-off. The container cannot escalate to root privileges even if a bridge is compromised. This follows the standard Docker security model with defense in depth. The design is compatible with restricted Kubernetes environments that do not permit privileged containers or special permissions.
 
 ---
 
