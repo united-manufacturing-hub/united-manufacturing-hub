@@ -1,8 +1,8 @@
 # Topic does not appear in the Topic Browser
 
-The Topic Browser can show an empty tree, `No topics have arrived yet.`, while the instance is connected and producing data. A single topic can also stay missing while its bridge keeps sending it. The last step on this page needs access to the Docker host of the instance.
+If the Topic Browser shows `No topics have arrived yet.` or a topic is missing, follow the checks below. The Topic Browser builds its own view of incoming messages, so a missing topic does not necessarily mean the data has stopped flowing.
 
-An empty tree does not mean your data stopped. The Topic Browser is a view the instance builds from the messages it receives (see [Topic Browser](topic-browser.md)); the messages themselves can keep flowing through your bridges and stream processors into [Redpanda](redpanda.md). [Check whether the data is still flowing](#check-whether-the-data-is-still-flowing) explains how to check. If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration).
+[Check whether the data is still flowing](#check-whether-the-data-is-still-flowing) explains how to check. If the tree is empty on an instance whose `internal.topicbrowser.desiredState` is `stopped`, that is expected: see [Configuration](topic-browser.md#configuration).
 
 ![The Topic Browser with an empty topic tree](../../generated/topic-browser-empty-tree.png)
 
@@ -38,6 +38,8 @@ To follow a single message from its device tag to its topic, see [Metadata and T
 The [Redpanda](redpanda.md) card on the instance's detail page shows the state of the broker the messages go to. If it does not read **Active**, see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
 ## Restart the container
+
+This step requires access to the instance’s Docker host.
 
 {% hint style="warning" %}
 Restarting the container stops umh-core and every data flow in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
