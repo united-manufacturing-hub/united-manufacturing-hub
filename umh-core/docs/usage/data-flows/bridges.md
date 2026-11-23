@@ -6,23 +6,6 @@ Bridges move data into and out of the Unified Namespace, providing connection mo
 
 > **New to UMH?** This page is the reference for setting up real bridges. If you just want to get mock data flowing and learn the basics first, start with [Step 2: Connect Your First Data Source](../../getting-started/1-connect-data.md).
 
-## UI Capabilities
-
-| Action | Available | Notes |
-|--------|-----------|-------|
-| Create bridges | ✅ | Visual protocol configuration |
-| Create from existing bridge | ✅ | Copy a healthy bridge's configuration |
-| Start from a template | ✅ | 84 pre-configured templates, filtered by vendor and protocol |
-| Select protocols | ✅ | OPC UA, Modbus, S7, MQTT, 50+ more |
-| Configure location path | ✅ | ISA-95 levels (0-4) |
-| Map addresses to topics | ✅ | Dropdown of data model fields for custom data contracts |
-| Monitor connection health | ✅ | Real-time status |
-| View logs | ✅ | Live log streaming |
-| View metrics | ✅ | Throughput monitoring |
-| Edit bridges | ✅ | Modify and redeploy |
-| Delete bridges | ✅ | Clean removal |
-| Advanced mode | ✅ | Direct YAML editing |
-
 ## Creating a Bridge (UI)
 
 ### Step 1: Navigate to Data Flows

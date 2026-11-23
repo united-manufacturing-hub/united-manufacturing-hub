@@ -17,19 +17,6 @@ Use bridges instead for:
 - Single device to model mapping
 - Direct protocol connections
 
-## UI Capabilities
-
-| Action | Available | Notes |
-|--------|-----------|-------|
-| Create processors | ✅ | Visual configuration with topic browser |
-| Select source topics | ✅ | Browse and multi-select |
-| Map to model fields | ✅ | Expression-based mapping |
-| View processors | ✅ | Listed in Stream tab |
-| Monitor throughput | ✅ | Real-time message rates |
-| Edit processors | ✅ | Modify configuration |
-| Delete processors | ✅ | Remove when not needed |
-| Code mode | ✅ | Direct YAML editing |
-
 ## Creating a Stream Processor
 
 Stream processors are created through the **Data Flows → Stream** tab:

@@ -16,20 +16,6 @@ Use bridges instead for:
 - Data that needs UNS organization
 - Connections requiring health monitoring
 
-## UI Capabilities
-
-| Action | Available | Notes |
-|--------|-----------|-------|
-| Create flows | ✅ | Via UI with YAML editor |
-| View flows | ✅ | Listed in Standalone tab |
-| Edit configuration | ✅ | Direct YAML editing |
-| Control state | ✅ | Active/Stopped toggle |
-| Use example templates | ✅ | Pre-built samples available |
-| Monitor status | ✅ | Throughput and state |
-| View logs | ✅ | Real-time log streaming |
-| View metrics | ✅ | Performance monitoring |
-| Delete flows | ✅ | Via context menu |
-
 ## Creating a Stand-alone Flow (UI)
 
 ### Step 1: Navigate to Data Flows

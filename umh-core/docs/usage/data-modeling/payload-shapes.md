@@ -14,19 +14,6 @@ Payload Shapes → Data Models → Data Contracts → Data Flows
   Value types defined here
 ```
 
-## UI Capabilities
-
-Payload shapes have no UI component:
-
-| Feature | Available | Notes |
-|---------|-----------|-------|
-| View shapes | ❌ | Configuration file only |
-| Create shapes | ❌ | Edit config.yaml directly |
-| Edit shapes | ❌ | Modify config.yaml |
-| Built-in shapes | ✅ | Always available, no configuration needed |
-
-**Configuration location**: Select your instance under `Instances` in the menu, press `...`, then `Config File`. Find payload shapes under the `payloadShapes:` section
-
 ## Built-in Shapes
 
 UMH provides three built-in shapes that handle 90% of industrial data:
@@ -89,6 +76,8 @@ Learn more: [Payload Formats](../unified-namespace/payload-formats.md)
 ## Configuration
 
 Access configuration via: Instances → Select instance → `...` → Config File
+
+Payload shapes have no UI component. They are viewed, created and edited in `config.yaml` only, under the `payloadShapes:` section.
 
 ### Defining Custom Shapes
 

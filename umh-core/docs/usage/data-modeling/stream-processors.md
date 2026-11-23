@@ -20,18 +20,9 @@ Stream processors are for:
 - **Calculating** derived values across equipment
 - **Reducing** data volume for cloud transmission
 
-## UI Capabilities
+## Creating a Stream Processor (UI)
 
-The Management Console provides visual stream processor creation:
-
-| Feature | Available | Notes |
-|---------|-----------|-------|
-| View processor list | ✅ | Shows all processors with throughput |
-| Create processors | ✅ | Visual or code mode |
-| Topic selection | ✅ | Browse and select source topics |
-| Expression mapping | ✅ | Map topics to model fields |
-| Edit processors | ✅ | Modify existing processors |
-| Delete processors | ✅ | Remove unused processors |
+The UI is the primary way to create stream processors. It generates the YAML configuration automatically.
 
 ![Stream Processors List](./images/stream-processors.png)
 
@@ -39,10 +30,6 @@ The Management Console provides visual stream processor creation:
 - **Name**: Processor identifier
 - **Instance**: Which UMH Core instance runs the processor
 - **Throughput**: Messages processed per second
-
-## Creating a Stream Processor (UI)
-
-The UI is the primary way to create stream processors. It generates the YAML configuration automatically.
 
 ### Step 1: Basic Configuration
 
