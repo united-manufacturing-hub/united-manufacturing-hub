@@ -44,7 +44,7 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Communicator | FSMv2 | none |
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
-| Bridge connection check | FSMv2 | none. `NMAP_BACKEND` is ignored |
+| Bridge connection probe | FSMv2 | none. `NMAP_BACKEND` is ignored |
 | CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
@@ -74,7 +74,7 @@ umh_fsmv2_state_duration_seconds{hierarchy_path=~".*\\(communicator\\)"}
 
 Prometheus matches a regular expression against the whole label value. This expression therefore selects the communicator and none of its children.
 
-Not every component reports every standard series. A simple component such as the bridge connection check or the historian runs no actions. It reports no `action_*` and no `stuck_action_*` series. A component without children never reports `umh_fsmv2_circuit_open`.
+Not every component reports every standard series. A simple component such as the bridge connection probe or the historian runs no actions. It reports no `action_*` and no `stuck_action_*` series. A component without children never reports `umh_fsmv2_circuit_open`.
 
 ### State and time in state
 
