@@ -125,59 +125,7 @@ _For complete input/output syntax see [Benthos-UMH Documentation](https://docs.u
 
 ### Bridge
 
-> 🚧 **Roadmap Item**: Bridges are under active development. Current functionality includes connection monitoring and basic read/write flows.
-
-A [**bridge**](../usage/data-flows/bridges.md) (UI: "Bridges", YAML: `protocolConverter:`) connects the Unified Namespace (UNS) to one external system, such as an OPC UA server, a Siemens S7 or a Modbus controller. Its read flow reads from the external system and publishes to the UNS. Its write flow subscribes to UNS topics and writes to the external system.
-
-It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle.
-
-```yaml
-protocolConverter:
-- name: press-opcua
-  desiredState: active
-  debug_level: false  # Set to true for detailed logging while troubleshooting
-  protocolConverterServiceConfig:
-    location:
-      3: press1
-    config:
-      connection:
-        nmap:
-          target: "{{ .IP }}"
-          port: "{{ .PORT }}"
-      dataflowcomponent_read:
-        benthos:
-          input:
-            opcua:
-              endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
-              nodeIDs: ["ns=2;s=MachineFolder"]
-          pipeline:
-            processors:
-              - tag_processor:
-                  defaults: |
-                    msg.meta.location_path = "{{ .location_path }}"
-                    msg.meta.data_contract = "_raw"
-                    msg.meta.tag_name      = msg.meta.opcua_tag_name
-                    return msg;
-          output:
-            uns: {}
-    variables:
-      # Optional templating support
-      IP: "192.168.0.50"
-      PORT: "4840"
-```
-
-#### Key fields
-
-| Field                                      | Description                                                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `name`                                     | Unique ID for this converter instance                                                       |
-| `desiredState`                             | `active` to run immediately, or `stopped` to keep it defined but off.                       |
-| `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., general OPC UA debug logging via the `OPC_DEBUG=debug` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. |
-| `protocolConverterServiceConfig.location`  | The bridge's levels. The instance location (`agent.location`) plus these levels is the bridge location. Optional, but useful to identify per-machine data. |
-| `protocolConverterServiceConfig.config.connection.nmap` | Connection probe: a TCP check of whether the external system is reachable. |
-| `protocolConverterServiceConfig.config.dataflowcomponent_read.benthos` | Read flow: the Benthos pipeline that reads from the external system and publishes to the UNS. |
-| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow: subscribes to UNS topics and writes their data to the external system, set with `source`, `processing` and `destination`. |
-| `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](variables.md#variables) for details. |
+Bridges (YAML: `protocolConverter:`) are configured on the [Bridges](../usage/data-flows/bridges.md#configuration) page.
 
 ### Benthos-UMH Processors
 
