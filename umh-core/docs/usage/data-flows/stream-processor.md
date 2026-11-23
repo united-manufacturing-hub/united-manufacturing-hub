@@ -13,7 +13,7 @@ Use stream processors for:
 - Reducing data volume for cloud transmission
 
 Use bridges instead for:
-- Getting data into the UNS initially
+- Getting data into the [Unified Namespace](../unified-namespace/README.md) initially
 - Single device to model mapping
 - Direct protocol connections
 
@@ -46,6 +46,8 @@ Select source topics and they'll automatically get variable names:
 - Use "Show Selected Only" to filter view
 - Copy variable names for use in expressions
 
+Each variable name stands for one selected topic, and the expressions in the next step refer to a source by that name. In Code Mode you can give the sources your own names instead; the examples in the [Stream Processors guide](../data-modeling/stream-processors.md) use names like `cnc1`.
+
 ### Step 3: Expression Mapping
 
 Map source variables to model fields using expressions:
@@ -54,7 +56,7 @@ Map source variables to model fields using expressions:
 
 - Each field in your data model appears on the right
 - Enter expressions using the source variables
-- Simple passthrough: `source_alias`
+- Simple passthrough: the variable's name, for example `_10`
 - Calculations: `_10 + _10_2` or more complex formulas
 - The expressions support standard mathematical operations
 
@@ -71,9 +73,9 @@ The UI automatically generates YAML with:
 
 You can switch between UI and Code Mode anytime to fine-tune configurations.
 
-**For detailed configuration instructions**, see the comprehensive [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling.
+**For detailed configuration instructions**, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling.
 
-## How It Works
+## How a Stream Processor Works
 
 Stream processors subscribe to multiple UNS topics and output to a single model-based topic:
 
@@ -85,11 +87,6 @@ flowchart LR
 Example: Combining temperature and pressure from different sensors into a pump model:
 - Input: `enterprise.site._raw.temp_sensor_1`, `enterprise.site._raw.pressure_gauge_2`  
 - Output: `enterprise.site._pump_v1` with calculated efficiency
-
-The system handles:
-- Consumer group management for offset tracking
-- Dependency-based processing (waits for all required inputs)
-- Guaranteed output structure via data models
 
 ## Configuration (YAML)
 
@@ -105,8 +102,8 @@ streamProcessor:
           name: pump
           version: v1
         sources:
-          inlet_temp: enterprise.site._raw.inlet_temp
-          outlet_temp: enterprise.site._raw.outlet_temp
+          inlet_temp: "{{ .location_path }}._raw.inlet_temp"
+          outlet_temp: "{{ .location_path }}._raw.outlet_temp"
         mapping:
           efficiency: "(outlet_temp - inlet_temp) / inlet_temp * 100"
 ```
@@ -114,6 +111,8 @@ streamProcessor:
 See the [Stream Processors configuration guide](../data-modeling/stream-processors.md) for detailed YAML structure.
 
 ## Key Differences from Other Data Flows
+
+The table below sets stream processors apart from the other two data flow types: what each is for, where it reads from and where it writes.
 
 | Data Flow Type | Purpose | Input Source | Output |
 |----------------|---------|--------------|--------|
@@ -133,7 +132,7 @@ Stream processors run on FSMv1 and use the standard [FSMv1 metrics](../instances
 | The internal flow that runs it | `dataflow_component_instance` | `dfc-streamprocessor-oee-rollup` |
 | The Benthos process of that flow | `benthos_instance` | `dataflow-dfc-streamprocessor-oee-rollup` |
 
-To alert when a stream processor has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
+To alert on a stream processor that is not active, idle or stopped, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
 
 ```promql
 umh_core_service_current_state{component="stream_processor_instance"} != 3 != 4 != 0
@@ -141,10 +140,6 @@ umh_core_service_current_state{component="stream_processor_instance"} != 3 != 4 
 
 The rule does not fire for a stream processor that is stopped (0) or idle (4). A stopped one is one you stopped on purpose, and an idle one has no data to process.
 
-When you delete a stream processor, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name, for example by adding `exported_instance!="<deleted stream processor>"` to the selector, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection.
+When you delete a stream processor, umh-core keeps its last state series at -1 until the instance restarts, so the rule keeps firing for it. Exclude the deleted name, for example by adding `exported_instance!="<deleted stream processor>"` to the selector, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection.
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
-
-## Learn More
-
-For comprehensive stream processor configuration and examples, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling documentation.

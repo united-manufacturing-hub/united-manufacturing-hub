@@ -2,7 +2,7 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and [Bridges](bridges.md).
 
-Stand-alone flows provide raw Benthos access for custom data processing when bridges or stream processors aren't sufficient. They're the fallback mechanism for write flows, external integrations, and specialized transformations.
+Stand-alone flows provide raw Benthos access for custom data processing when bridges or stream processors aren't sufficient.
 
 ## When to Use
 
@@ -13,7 +13,7 @@ Use stand-alone flows for:
 
 Use bridges instead for:
 - Industrial device connections
-- Data that needs UNS organization
+- Data that needs [Unified Namespace](../unified-namespace/README.md) organization
 - Connections requiring health monitoring
 
 ## Creating a Stand-alone Flow (UI)
@@ -44,8 +44,8 @@ Click the **Examples** tab to access pre-built configurations:
 ![Example Templates](./images/standalone-detail-samples.png)
 
 Available examples include:
-- **mqtt_to_kafka_historian_bridge**: MQTT to Kafka with historian pattern
-- **kafka_to_postgresql_historian_bridge**: Write to TimescaleDB (like Classic)
+- **mqtt_to_kafka_historian_bridge**: MQTT to Kafka with a [Historian](../historian/README.md) pattern
+- **kafka_to_postgresql_historian_bridge**: Write to TimescaleDB (like [UMH Classic](../../umh-core-vs-classic-faq.md))
 - **opcua_to_umh_core**: OPC UA integration
 - **generate_to_stdout**: Testing pattern
 
@@ -58,7 +58,7 @@ Use the state dropdown to control execution:
 - **Active**: Flow is running
 - **Stopped**: Temporarily disabled (useful for maintenance)
 
-### Managing Stand-alone Flows
+## Managing Stand-alone Flows
 
 Right-click any flow for quick actions:
 
@@ -70,7 +70,13 @@ Options include:
 - **Metrics**: Monitor performance
 - **Delete**: Remove the flow
 
-### Enable Debug Logging
+{% hint style="warning" %}
+Deleting a flow removes its configuration from the instance, and the flow stops processing. Data the flow already wrote to its outputs is not deleted. To undo, re-create the flow with the same configuration, so copy the flow's YAML from its configuration screen before you delete it.
+{% endhint %}
+
+A deleted flow also keeps its last state series on `/metrics` until the instance restarts, so the alert rule below keeps firing for it. See [Metrics](#metrics) for how to exclude a deleted flow from the rule.
+
+## Enable Debug Logging
 
 For troubleshooting data processing issues in stand-alone flows, enable the `debug_level` configuration option:
 
@@ -85,15 +91,7 @@ dataFlow:
         # ...
 ```
 
-**What it controls:**
-- Log level: DEBUG (when `true`) vs INFO (when `false`, default)
-- Detailed operational logging for input/output operations
-- Processing step execution details
-- Data transformation trace information
-
-**Important:** Debug logging generates significantly more log data and may impact performance. **Use only during active troubleshooting** and disable afterward.
-
-View logs via right-click → **Logs**. For comprehensive debug_level configuration reference, see [Configuration Reference](../../reference/configuration-reference.md).
+View logs via right-click → **Logs**. For what `debug_level` controls and when to disable it again, see [Configuration Reference](../../reference/configuration-reference.md).
 
 ## Configuration (YAML)
 
@@ -152,7 +150,7 @@ Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances
 | The flow | `dataflow_component_instance` | `<flow>` |
 | Its Benthos process | `benthos_instance` | `dataflow-<flow>` |
 
-To alert when a flow has not been active for 5 minutes, use this rule with `for: 5m`. Prometheus renames `instance` to `exported_instance`. With `honor_labels: true` in the scrape job it keeps `instance`, so write `instance` in the rule instead. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. A flow whose own name starts with `protocolconverter-` or `dfc-streamprocessor-` is left out too. To watch one flow, replace the filter with `exported_instance="<flow>"`:
+To alert on a flow that is not active, idle or stopped, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. A flow whose own name starts with `protocolconverter-` or `dfc-streamprocessor-` is left out too. To watch one flow, replace the filter with `exported_instance="<flow>"`:
 
 ```promql
 umh_core_service_current_state{component="dataflow_component_instance", exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*"} != 3 != 4 != 0
@@ -160,7 +158,7 @@ umh_core_service_current_state{component="dataflow_component_instance", exported
 
 The rule does not fire for a flow that is stopped (0) or idle (4). A stopped flow is one you stopped on purpose, and an idle flow is one that has no data to process.
 
-When you delete a flow, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for the deleted flow. Add the deleted name to the exclusion filter, for example `exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*|<deleted flow>"`, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection.
+When you delete a flow, umh-core keeps its last state series at -1 until the instance restarts, so the rule keeps firing for the deleted flow. Add the deleted name to the exclusion filter, for example `exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*|<deleted flow>"`, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection.
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 

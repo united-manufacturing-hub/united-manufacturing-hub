@@ -69,7 +69,7 @@ Each row in the address mapping table becomes one UNS topic: the protocol addres
 
 ![Address Mapping Table](./images/bridges-read-address-table-model-dropdown.png)
 
-With `_historian` or `_raw`, Virtual Path and Tag Name are free-text fields. Selecting a custom data contract merges both columns into a single dropdown listing every field the contract's [data model](../data-modeling/data-models.md) defines, so you pick a valid path instead of typing one. A value the model rejects, for example after switching contracts, stays in the row, is flagged red, and blocks deploy until you correct it. Contracts whose data model references other models keep free-text input.
+With `_historian` or `_raw`, Virtual Path and Tag Name are free-text fields. Selecting a custom data contract merges both columns into a single dropdown listing every field the contract's [data model](../data-modeling/data-models.md) defines, so you pick a valid path instead of typing one. A value the model rejects stays in the row and is flagged red. Deploy stays blocked until you correct the value. For example, a value can be rejected after you switch contracts. Contracts whose data model references other models keep free-text input.
 
 ### Step 7: Deploy
 
@@ -79,13 +79,13 @@ Click **Save & Deploy**. The bridge will start connecting to your device.
 
 ### View Status
 
-The main view shows all bridges with connection status and throughput:
+The main view shows all bridges with their state and throughput:
 
 ![Bridges Overview](./images/bridges-overview.png)
 
-- **Green dot**: Connected and running
-- **Yellow dot**: Starting or warning state
-- **Grey dot**: Intermediate states (starting, stopping, or stuck in starting state)
+- **Green**: the bridge is `active` or `idle`. An idle bridge is healthy and has no data to process.
+- **Red**: the bridge is degraded -- `degraded_connection`, `degraded_redpanda`, `degraded_dfc` or `degraded_other`.
+- **Grey**: every other state, including `starting`, `stopped`, and a bridge that failed to start.
 
 ### Context Menu
 
@@ -107,15 +107,14 @@ Track performance and throughput:
 
 ### Enable Debug Logging
 
-When troubleshooting connection or data issues, enable debug logging in your bridge configuration:
+When troubleshooting connection or data issues, enable debug logging in your bridge configuration. A bridge's YAML lives under `protocolConverter:` in `config.yaml`; the Management Console shows the same definitions under **Bridges**. See [Config File](../instances/config-file.md).
 
 **Via YAML:**
 ```yaml
 protocolConverter:
   - name: my-plc-bridge
-    debug_level: true  # Enable detailed logging
-    protocolConverterServiceConfig:
-      config:
+    debug_level: true  # Detailed logging while troubleshooting (default: false)
+    # ... the rest of the bridge definition, as in the full example under Configuration (YAML)
 ```
 
 Debug logging provides:
@@ -124,17 +123,17 @@ Debug logging provides:
 - Data parsing details
 - For OPC UA: Sets `OPC_DEBUG` environment variable for protocol-level debugging
 
-**Remember to disable debug logging** after troubleshooting - it generates significantly more log data.
+**Remember to disable debug logging** after troubleshooting.
 
 To view debug logs, go to the bridge and select **Logs**.
 
-## Important: Data Types from Different Protocols
+## Data Types from Different Protocols
 
 **Industrial protocols (OPC UA, Modbus, S7) only provide time-series data** - snapshots of values at points in time. They cannot directly provide relational records.
 
 **IT protocols (MQTT, HTTP, Kafka) can provide relational data** - when you select "relational" as the data type in the UI, the bridge automatically uses [`nodered_js` processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) to handle complex business records like work orders or batch reports.
 
-For converting time-series to relational data, see [Stream Processors](stream-processor.md#time-series-to-relational-challenges) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
+For converting time-series to relational data, see [Stream Processors](stream-processor.md) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
 
 ## Configuration (YAML)
 
@@ -181,6 +180,8 @@ protocolConverter:
 
 ### Key Configuration Elements
 
+These are the parts of the configuration that most bridges set: the location path, the template variables and connection monitoring.
+
 **Location Path:**
 ```yaml
 location:
@@ -188,7 +189,7 @@ location:
   1: site        # Optional: inherits from agent
   2: area        # Required: your addition
   3: line        # Required: your addition
-  4: cell        # Optional: further subdivision
+  4: machine     # Optional: further subdivision
 ```
 
 **Template Variables:**
@@ -222,13 +223,13 @@ Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/met
 | The Benthos process of its read flow | `benthos_instance` | `dataflow-read-protocolconverter-mixing-station` |
 | The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
 
-To alert when a bridge has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
+To alert on a bridge that is not active, idle or stopped, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
 
 ```promql
 umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 4 != 0
 ```
 
-For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the instance restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ### Connection Check
 
