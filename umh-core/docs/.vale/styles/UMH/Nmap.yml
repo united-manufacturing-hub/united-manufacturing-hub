@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The docs describe the connection probe by what it does, not by the tool
-# behind it. Vale skips code spans and code blocks, so the literal `nmap:` YAML
+# nmap is an old, deprecated feature: the FSMv1 connection probe that
+# `NMAP_BACKEND=fsmv1` switched back to, removed in 0.45.0. The docs describe the
+# connection probe by what it does, not by the tool that once ran it. Vale skips code spans and code blocks, so the literal `nmap:` YAML
 # key, the `NMAP_BACKEND` variable and the `(nmap)` label stay in code.
 extends: existence
-message: "Do not name nmap. Say 'connection probe': it checks whether the external system is reachable. Put a literal key or variable in code."
+message: "Do not name nmap: it is an old, deprecated feature. Say 'connection probe': it checks whether the external system is reachable. Put a literal key or variable in code."
 level: warning
 ignorecase: true
 tokens:

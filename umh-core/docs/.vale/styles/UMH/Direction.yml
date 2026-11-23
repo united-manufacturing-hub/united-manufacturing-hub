@@ -13,7 +13,8 @@
 # limitations under the License.
 
 # The direction words of the terminology table in umh-core/docs/CLAUDE.md, but
-# only right after a bridge or a flow, in the same clause. Alone, words like
+# only right after a bridge or a flow, with at most one adverb in between, so
+# "the write flow writes what the PLC sends" does not match. Alone, words like
 # "sends" or "receives" are right in other contexts, such as the Management
 # Console or `docker pull`. Change this file and the table together.
 extends: existence
@@ -21,4 +22,4 @@ message: "Avoid '%s'. Name the direction at the external system: a read flow rea
 level: warning
 ignorecase: true
 tokens:
-  - '\b(?:bridges?|flows?)\b[^.,;:]{0,30}?\b(?:brings?|sends?|push(?:es)?|pulls?|ingests?|forwards?|receives?)\b'
+  - '\b(?:bridges?|flows?)\s+(?:(?:also|then|now|only|still|\w+ly)\s+)?(?:brings?|sends?|push(?:es)?|pulls?|ingests?|forwards?|receives?)\b'

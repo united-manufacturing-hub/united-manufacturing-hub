@@ -136,7 +136,7 @@ rebuild-changelog: $(CHANGIE)
 .PHONY: docs-lint
 
 docs-lint:
-	docker run --rm -v $(CURDIR)/docs:/docs -w /docs jdkato/vale:$(VALE_VERSION) .
+	docker run --rm -v "$(CURDIR)/docs:/docs" -w /docs jdkato/vale:$(VALE_VERSION) .
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
