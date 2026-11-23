@@ -6,6 +6,8 @@ An instance is a running UMH Core container: a single Docker container that host
 
 **Instances** lists every instance you can access, one row each:
 
+<figure><img src="./images/instance-list.png" alt="The instance list with one UMH Core instance" width="738"><figcaption></figcaption></figure>
+
 | Column | Shows |
 |---|---|
 | Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance that the instance filter leaves out shows **Not in the filter** and no other values. |
@@ -23,6 +25,8 @@ The row menu has these entries:
 - **Upgrade**, only for a UMH Classic instance whose companion is not up to date.
 - **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license and audit logs enabled for your organization.
 - **Delete**.
+
+<figure><img src="./images/instance-list-row-menu.png" alt="The row menu of an online UMH Core instance" width="738"><figcaption></figcaption></figure>
 
 ## The instance details page
 

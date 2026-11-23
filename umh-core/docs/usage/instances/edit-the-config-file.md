@@ -10,6 +10,8 @@ Open the instance's details page and click **View Instance Config**. In the inst
 
 The page shows `/data/config.yaml` as umh-core read it last. **Refresh** reads it again. **Download** saves a copy named `config-<first 8 characters of the instance ID>.yaml`.
 
+![The Config File page](./images/config-file-page.png)
+
 ## Save a change
 
 1. Edit the file in the editor.
