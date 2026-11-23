@@ -81,7 +81,7 @@ After the restart, wait until the reason on the Topic Browser card no longer sta
 
 ## Getting help
 
-If the checks above do not bring the topic back, or the topic is still missing after a restart and after it has published again, tell us on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH contact. Include:
+If the checks above do not bring the topic back, or the topic is still missing after a restart and after it has published again, contact us through one of the routes on [Get Help](../../get-help.md). Include:
 
 - the instance, the topic and the time you last expected it,
 - which of the checks above you ran and what each showed, including the badge and the information icon of the Topic Browser card,
