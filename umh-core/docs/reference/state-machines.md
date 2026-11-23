@@ -9,7 +9,7 @@ UMH Core uses hierarchical state machines where components build upon each other
 - **Bridge** = Connection + Read Flow + Write Flow
 - **Flow** = Benthos instance with lifecycle management  
 - **Benthos Flow** = Individual Benthos process with detailed startup phases
-- **Connection** = Connection probe that checks whether the external system is reachable (nmap-based)
+- **Connection** = Connection probe that checks whether the external system is reachable
 
 Each component inherits lifecycle states (`to_be_created`, `creating`, `removing`, `removed`) and adds operational states specific to its function. The Agent continuously reconciles desired vs actual state, triggering appropriate transitions based on observed conditions.
 

@@ -49,7 +49,7 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 | Concept | Use | Instead of |
 |---|---|---|
 | What a bridge talks to | **external system**; **device** only when it is hardware, such as a PLC or a sensor | connection, destination, target, data source, endpoint |
-| The reachability check | **connection** for what the Management Console shows; **connection probe** for what umh-core does (the nmap TCP check and its states) | connection check, health check, liveness check, network probe; never the external system itself |
+| The reachability check | **connection** for what the Management Console shows; **connection probe** for what umh-core does (a probe that checks whether the external system is reachable, and its states) | connection check, health check, liveness check, network probe; never the external system itself |
 | Direction | a flow is named after what it does **at the external system**: a read flow reads from it, a write flow writes to it | brings, sends, pushes, pulls, ingests, forwards |
 | Picking UNS topics | the write flow **subscribes to** topics | receives |
 | A regular expression over topics | **topic pattern**; a **topic** is one concrete UNS topic | "a topic is a regular expression" |
