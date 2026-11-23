@@ -37,7 +37,7 @@ A `found error` reason stays for 10 minutes after the log line. The `clears in` 
 
 ## Redpanda card
 
-The Redpanda card on the instance details page shows the state badge, the throughput, and two buttons.
+The Redpanda card on the instance details page shows the state badge, the throughput, and two buttons. The **Logs** and **Metrics** buttons are unavailable when the instance's UMH Core version does not support them.
 
 | Field | Shows |
 |---|---|
@@ -80,7 +80,7 @@ If your config file was created before umh-core started to write `defaultTopicCl
 
 ### Metrics
 
-Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). [Metrics](../instances/metrics/README.md) explains how to read them.
+Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them.
 
 Redpanda has `component="redpanda_instance"` with `instance="redpanda"`. Its monitor, a separate process in the container that reads Redpanda's status once per second, has `component="redpanda_monitor"` with `instance="redpanda-redpanda"`. In Prometheus, write `exported_instance` for `instance`.
 

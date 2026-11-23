@@ -29,6 +29,14 @@ When selecting a topic, view:
 
 ![Topic Browser showing DB1.DW20](../../getting-started/images/2-topic-browser-DB1.DW20.png)
 
+## Topic Browser card
+
+The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process that reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
+
+The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+
+The **Logs** and **Metrics** buttons are unavailable when the instance's UMH Core version does not support them.
+
 ## GraphQL API
 
 Programmatic access at `http://localhost:8090/graphql` (per instance).
@@ -107,13 +115,11 @@ curl -X POST http://localhost:8090/graphql \
 - Large namespaces (>10,000 topics) may load progressively
 - Each UMH instance has its own Topic Browser service
 
-## Metrics
+## Reference
 
-The **Topic Browser** card on the instance details page shows one value. **Topics** is the number of different topics the instance has seen since umh-core started. A topic stays in the count after it stops receiving messages. The count starts again from zero when umh-core restarts. The **Metrics** button on the card opens the counters of the Benthos process that reads the messages in the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
+### Metrics
 
-The badge on the card shows Active while that process runs. Check the badge tooltip for failures. The tooltip shows `benthos degraded` when the Benthos process fails, and `redpanda degraded` when Redpanda is degraded. For a Redpanda failure, the Redpanda card shows the cause. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
-
-On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). [Metrics](../instances/metrics/README.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
+On port 8080, the Topic Browser runs on FSMv1 and uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them. The Topic Browser has `component="topic_browser_instance"` with `instance="topic-browser"`, and its Benthos process has `component="benthos_instance"` with `instance="topicbrowser-topic-browser"`. In Prometheus, write `exported_instance` for `instance`.
 
 To alert when the Benthos process of the Topic Browser is degraded, use:
 

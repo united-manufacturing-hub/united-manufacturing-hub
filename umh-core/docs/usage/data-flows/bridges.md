@@ -226,9 +226,9 @@ connection:
 
 ## Metrics
 
-The Management Console shows each bridge's message counts. Open the bridge and select **Metrics** (see [View Metrics](#view-metrics)). The view shows messages received and sent, errors, connection status and latency for the bridge's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry per-bridge message counts. It carries the bridge's state and error counts. [Metrics](../instances/metrics/README.md) explains how to read them, which framework runs bridges and what the labels and the state values mean.
+The Management Console shows each bridge's message counts. Open the bridge and select **Metrics** (see [View Metrics](#view-metrics)). The view shows messages received and sent, errors, connection status and latency for the bridge's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry per-bridge message counts. It carries the bridge's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs bridges and what the labels and the state values mean.
 
-Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels:
+Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels:
 
 | Part of the bridge | `component` | `instance` |
 |---|---|---|

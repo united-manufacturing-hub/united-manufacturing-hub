@@ -137,7 +137,7 @@ change it.
 
 ## Metrics
 
-umh-core checks the Historian connection once per second. The check exists only while `config.yaml` has a `historian:` section. It runs on FSMv2 (see [Which framework runs a component](../instances/metrics/README.md#which-framework-runs-a-component)) and reports the standard [FSMv2 series](../instances/metrics/README.md#fsmv2-metrics). Its `hierarchy_path` ends in `timescale-001(historian-timescale)`. The state is `running` while the check succeeds and `degraded` while it fails, for example when TimescaleDB is unreachable or rejects the credentials.
+umh-core checks the Historian connection once per second. The check exists only while `config.yaml` has a `historian:` section. It runs on FSMv2 (see [Which framework runs a component](../instances/agent/metrics.md#which-framework-runs-a-component)) and reports the standard [FSMv2 series](../instances/agent/metrics.md#fsmv2-metrics). Its `hierarchy_path` ends in `timescale-001(historian-timescale)`. The state is `running` while the check succeeds and `degraded` while it fails, for example when TimescaleDB is unreachable or rejects the credentials.
 
 This alert fires when the connection has been down for more than a minute:
 

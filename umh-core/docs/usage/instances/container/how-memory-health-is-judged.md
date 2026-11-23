@@ -24,4 +24,4 @@ The size and usage causes use 60-second means, so a short peak does not degrade 
 | `memory-pressure` | 0.20: processes in the container waited for memory for 20% of the last minute | 0.12 | `memory_pressure_avg60_ratio` |
 | `oom-kill` | 1 OOM kill in the container within the last hour | 0 for a whole hour | `memory_oom_kills_last_hour` |
 
-The preview reports its readings as Prometheus gauges. When a reading fails, the gauges keep their previous value. Only the age of `memory_last_sample_unix` shows the gap. [Metrics: Memory gauges](../metrics/README.md#memory-gauges) lists them.
+The preview reports its readings as Prometheus gauges. When a reading fails, the gauges keep their previous value. Only the age of `memory_last_sample_unix` shows the gap. [Metrics: Memory gauges](../agent/metrics.md#memory-gauges) lists them.

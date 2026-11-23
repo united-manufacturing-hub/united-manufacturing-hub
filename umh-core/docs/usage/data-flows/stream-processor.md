@@ -136,9 +136,9 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 
 ## Metrics
 
-The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts. It carries the stream processor's state and error counts. [Metrics](../instances/metrics/README.md) explains how to read them, which framework runs stream processors and what the labels and the state values mean.
+The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts. It carries the stream processor's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stream processors and what the labels and the state values mean.
 
-Stream processors run on FSMv1 and use the standard [FSMv1 metrics](../instances/metrics/README.md#fsmv1-metrics). For a stream processor named `oee-rollup`, the series carry these labels:
+Stream processors run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a stream processor named `oee-rollup`, the series carry these labels:
 
 | Part | `component` | `instance` |
 |---|---|---|

@@ -30,22 +30,36 @@ The row menu has these entries:
 
 ## The instance details page
 
-The **Core** tab shows one card per component. Each card name in the table links to its section on [Instance Details Page](instance-details-page.md), which lists every field, status and reason on the card.
+The instance details page has two tabs. **Core** shows one card per component of UMH Core. **Plugins** shows the plugins added to the instance.
 
-| Card | Usage page |
+![The Core tab of the instance details page](images/instance-details-core-tab.png)
+
+Each card has a status badge: **Active**, **Neutral** or **Degraded**. When the instance sent a reason, an info button next to the badge shows it. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
+
+Each card is explained on the page of its component:
+
+| Card | Page |
 |---|---|
-| [Agent](instance-details-page.md#agent) | [Agent](agent/README.md) |
-| [Container](instance-details-page.md#container) | [Container](container/README.md) |
-| [Communicator](instance-details-page.md#communicator) | [Communicator](communicator/README.md) |
-| [Data Flows](instance-details-page.md#data-flows) | [Data Flows](../data-flows/README.md) |
-| [Redpanda](instance-details-page.md#redpanda) | [Redpanda](../unified-namespace/redpanda.md) |
-| [Topic Browser](instance-details-page.md#topic-browser) | [Topic Browser](../unified-namespace/topic-browser.md) |
-
-The **Plugins** tab shows the plugins added to the instance. The [Historian](../historian/README.md) is the first plugin.
+| Agent | [Agent](agent/README.md#the-agent-card) |
+| Container | [Container](container/README.md#the-container-card) |
+| Communicator | [Communicator](communicator/README.md#the-communicator-card) |
+| Data Flows | [Data Flows](../data-flows/README.md#the-data-flows-card) |
+| Redpanda | [Redpanda](../unified-namespace/redpanda.md#redpanda-card) |
+| Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md#topic-browser-card) |
 
 **View Instance Config** opens the instance's `config.yaml`. See [Edit the Config File](edit-the-config-file.md).
 
-## Configuration
+### The Plugins tab
+
+The **Plugins** tab shows one card per plugin added to the instance. The tab is unavailable when plugins are not enabled for your organization, or when the instance's UMH Core version does not support them. In the second case, hovering over the tab shows `This instance does not support plugins yet — update umh-core.`
+
+| Plugin | Page |
+|---|---|
+| Historian | [Historian](../historian/README.md) |
+
+## Reference
+
+### Configuration
 
 An instance authenticates with an `AUTH_TOKEN`, not with a user account. You create an instance with **Add instance** on the **Instances** page, as [Step 1: Install](../../getting-started/README.md) shows. The Management Console then generates the token and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
 
@@ -58,10 +72,6 @@ Keep the token somewhere you can find it again, such as your password manager. F
 
 Every other setting is a key in `config.yaml` or an environment variable of the container. See the [Configuration Reference](../../reference/configuration-reference.md) and [Environment Variables](../../reference/environment-variables.md).
 
-## Metrics
+### Metrics
 
-Every instance serves Prometheus metrics on port 8080. [Collect Metrics with Prometheus](metrics/collect-with-prometheus.md) explains how to reach them. [Metrics](metrics/README.md) explains the series, and [Read the metrics](metrics/README.md#read-the-metrics) explains why Prometheus renames the `instance` label.
-
-## Troubleshooting
-
-[Troubleshooting](troubleshooting/README.md) lists the pages for instance problems, each named after the symptom.
+Every instance serves Prometheus metrics on port 8080. [Collect Metrics with Prometheus](agent/collect-metrics-with-prometheus.md) explains how to reach them. [Metrics](agent/metrics.md) explains the series, and [Read the metrics](agent/metrics.md#read-the-metrics) explains why Prometheus renames the `instance` label.

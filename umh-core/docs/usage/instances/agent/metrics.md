@@ -1,12 +1,12 @@
 # Metrics
 
-This page lists the Prometheus metrics that a UMH Core instance serves on port 8080, and explains how to read them. The metrics come from umh-core, the process inside the UMH Core container. [Collect Metrics with Prometheus](collect-with-prometheus.md) explains how to reach the endpoint.
+This page lists the Prometheus metrics that a UMH Core instance serves on port 8080, and explains how to read them. The metrics come from umh-core, the process inside the UMH Core container. [Collect Metrics with Prometheus](collect-metrics-with-prometheus.md) explains how to reach the endpoint.
 
 The component pages explain what one component reports and give alert queries for it. See [Metrics by component](#metrics-by-component).
 
 ## Read the metrics
 
-[Collect Metrics with Prometheus](collect-with-prometheus.md) explains how to read the endpoint once and how to set up a Prometheus scrape job.
+[Collect Metrics with Prometheus](collect-metrics-with-prometheus.md) explains how to read the endpoint once and how to set up a Prometheus scrape job.
 
 Prometheus renames umh-core's `instance` label to `exported_instance`, unless the scrape job sets `honor_labels: true`. In Prometheus queries, write `exported_instance="Core"` where these pages write `instance="Core"`.
 
@@ -178,7 +178,7 @@ Each component page has a Metrics section. It explains what the component report
 
 | Component | Metrics |
 |---|---|
-| Agent | [Agent](../agent/README.md#metrics) |
+| Agent | [Agent](README.md#metrics) |
 | Container | [Container](../container/README.md#metrics) |
 | CPU health | [CPU gauges](#cpu-gauges) |
 | Memory health (preview) | [Memory gauges](#memory-gauges) |
@@ -196,7 +196,7 @@ Each bridge, stand-alone flow and stream processor runs in Benthos. Benthos and 
 
 With the CPU health check on, UMH Core publishes the gauges below on the Prometheus endpoint on port 8080. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
 
-When UMH Core cannot read a file it needs for the CPU usage or capacity (the `CPU not measured` message on the [Instance Details Page](../instance-details-page.md#cpu-status)), every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
+When UMH Core cannot read a file it needs for the CPU usage or capacity (the `CPU not measured` message in [CPU status](../container/README.md#cpu-status)), every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
 
 ### CPU measurements
 

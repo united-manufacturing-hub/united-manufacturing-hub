@@ -1,10 +1,10 @@
 # How CPU Health Is Judged
 
 {% hint style="info" %}
-The CPU health check is on by default from UMH Core v0.44.46. `USE_FSMV2_CPU=false` turns it off. See [Container: Configuration](README.md#configuration).
+The CPU health check is the only CPU status. From UMH Core v0.45.3, it always runs and `USE_FSMV2_CPU` is ignored. On v0.44.46 to v0.45.2, it is on by default and `USE_FSMV2_CPU=false` turns it off. See [Container: Configuration](README.md#configuration).
 {% endhint %}
 
-UMH Core checks whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the Container card. While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)). [Instance Details Page: CPU status](../instance-details-page.md#cpu-status) lists the statuses, and [Container](README.md#what-to-do-for-each-cpu-status) says what to do for each.
+UMH Core checks whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the Container card. While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)). [Container: CPU status](README.md#cpu-status) lists the statuses, and [Container Shows Degraded](container-shows-degraded.md#cpu) says what to do for each.
 
 ## How UMH Core judges CPU health
 
@@ -54,6 +54,6 @@ Waiting for CPU health is separate from the bridge limit. [Bridge limit](../../d
 |------|---------|
 | **Headroom** | The CPU an instance can still use. Without a CPU limit, UMH Core measures it against the machine's cores. With a limit, it measures it against the limit. |
 | **Throttling** | The kernel caps a container to its CPU limit in short repeating periods, about 100 ms each by default. A container that needs more within a period is paused until the next one, so a workload whose average looks fine can still be paused during bursts. |
-| **CPU pressure** | The share of time in which tasks of the instance waited for a CPU core, from Linux Pressure Stall Information (PSI). [CPU contention while cores are free](../troubleshooting/cpu-contention-while-cores-are-free.md) explains it in detail. |
+| **CPU pressure** | The share of time in which tasks of the instance waited for a CPU core, from Linux Pressure Stall Information (PSI). [CPU contention while cores are free](cpu-contention-while-cores-are-free.md) explains it in detail. |
 | **CPU steal** | Time the hypervisor scheduled this machine's CPU elsewhere. High steal usually means the physical server is oversubscribed. A burstable cloud instance whose CPU credits have run out is capped by a different mechanism, but the guest counts that capped time as steal too. |
 | **Host contention** | CPU used by software outside UMH Core on the same machine. UMH Core cannot see which processes those are, only that they are using CPU it needs. It is not the **CPU contention** status: that one is measured inside the instance, as tasks of UMH Core's own waiting for a free core. |
