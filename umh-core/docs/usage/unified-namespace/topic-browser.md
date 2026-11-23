@@ -4,6 +4,18 @@ The Topic Browser shows the topics of the instances selected in the header filte
 
 If the tree stays empty while your instance is producing data, or a topic you expect never appears, see [Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md).
 
+## How live updates work
+
+A topic reaches the tree in three steps:
+
+1. A bridge or stream processor publishes a message for the topic to the Unified Namespace of its instance.
+2. The Topic Browser of that instance reads the message and keeps the latest value of every topic it has seen.
+3. The Topic Browser collects what it reads into batches and sends each batch to the Management Console as an update. While the instance is offline, no updates arrive.
+
+The Topic Browser aims for an interval of 1 to 15 seconds between two batches. It sets the interval from the size of recent batches and the CPU use of the Topic Browser process: large batches and low CPU use shorten it, small batches and high CPU use lengthen it. The interval covers only the batching. A topic can take longer to show, because the Topic Browser checks the interval only when new messages arrive, and the update then still has to reach the Management Console.
+
+The instance keeps a topic in its list while umh-core runs, even after the topic stops receiving messages. When umh-core restarts, the Topic Browser does not read older messages again, so topics show again as new messages for them arrive.
+
 ## The Topic Browser screen
 
 The screen splits into two panels. The left panel searches and shows your topics as a tree. The right panel shows the topic you select. Both update on their own, without a reload.
@@ -39,7 +51,7 @@ Below that are two tabs, **History** and **Details**. A third, **SQL query**, ap
 
 The History tab lists the values the browser is holding: the last 100 of that topic, newest first.
 
-The instance sends at most one value per topic per emit interval, which umh-core adapts between one and fifteen seconds. Values measured between two emits do not reach the browser, so the History tab is a sample of the signal rather than every reading of it. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
+The instance sends at most one value per topic per batch, as [How live updates work](#how-live-updates-work) describes. Values measured between two emits do not reach the browser, so the History tab is a sample of the signal rather than every reading of it. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
 
 A text or boolean topic has no chart. Its History tab has two views instead. **Changes** collapses runs of the same value into one row, with the time it held and how many values it stored. **All values** lists them individually.
 
@@ -82,18 +94,6 @@ A relational topic, for example `_erp.orders`, is a JSON document rather than a 
 Each instance runs its own Topic Browser and reports its own topics, and the Management Console merges them into one tree. When more than one instance reports the same topic, the **Instance** dropdown lists all of them.
 
 ![A topic reported by three instances, one of them offline](../../generated/topic-browser-several-instances.png)
-
-## How topics reach the Topic Browser
-
-A topic shows in the tree only after three things have happened:
-
-1. A bridge or stream processor publishes a message for the topic to the Unified Namespace of its instance.
-2. The Topic Browser of that instance reads the message. It keeps the latest value of every topic it has seen.
-3. The instance sends an update to the Management Console. It does so every one to fifteen seconds while messages arrive, and only while it is online.
-
-The instance keeps a topic in its list while umh-core runs, even after the topic stops receiving messages. When umh-core restarts, the Topic Browser does not read older messages again, so topics show again as new messages for them arrive.
-
-[Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md) checks each step in turn.
 
 ## The Topic Browser card
 
