@@ -23,8 +23,8 @@
 //
 // fsmv2/diagnosis computes the time windows; this package says what to
 // measure and over how long. Metrics is the parsed counters, Probes and
-// Sample are the result of one scrape, Failures is what is wrong as of that
-// scrape, and Tracker is what is kept about one Benthos instance between
+// Sample are the result of one scrape, FailureReport is what is wrong as of
+// that scrape, and Tracker is what is kept about one Benthos instance between
 // scrapes.
 //
 // FSMv1's pkg/service/benthos_monitor keeps its own copy of the types and

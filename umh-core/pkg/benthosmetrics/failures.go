@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Failures, its entries, and the questions callers ask of it.
+// FailureReport, its entries, and the questions callers ask of it.
 
 package benthosmetrics
 
@@ -22,13 +22,13 @@ import (
 	"time"
 )
 
-// Failures is what is wrong with one Benthos instance as of one scrape:
-// recent errors, and inputs or outputs that are not connected. The zero
-// value means nothing is wrong.
+// FailureReport is the result of judging one scrape: what is wrong with one
+// Benthos instance as of that scrape, namely recent errors and inputs or
+// outputs that are not connected. The zero value means nothing is wrong.
 //
-// Failures holds no fsmv2/diagnosis types, so the FSMv2 store can save it as
-// JSON.
-type Failures struct {
+// A FailureReport holds no fsmv2/diagnosis types, so the FSMv2 store can
+// save it as JSON.
+type FailureReport struct {
 	// Entries holds one entry per current failure, error entries first. An
 	// error entry stays until ErrorWindow (10 minutes) passes with no new
 	// error; a connection entry stays while an input or output is not connected.
@@ -71,7 +71,7 @@ type FailureEntry struct {
 // the first entry in Entries' order, for example "benthos reported 3 output
 // errors in the last 10m, last one 4m ago" or "benthos reports 1 input not
 // connected".
-func (f *Failures) ErrorFree() (ok bool, reason string) {
+func (f *FailureReport) ErrorFree() (ok bool, reason string) {
 	if len(f.Entries) == 0 {
 		return true, ""
 	}
@@ -83,7 +83,7 @@ func (f *Failures) ErrorFree() (ok bool, reason string) {
 // still holds an error entry more than ErrorWindow plus margin after that
 // entry's own LastErrorAt: an error that should have cleared by then. A
 // connection entry never counts.
-func (f *Failures) HasErrorNotClearedInTime(margin time.Duration) bool {
+func (f *FailureReport) HasErrorNotClearedInTime(margin time.Duration) bool {
 	for _, e := range f.Entries {
 		if e.Connection {
 			continue

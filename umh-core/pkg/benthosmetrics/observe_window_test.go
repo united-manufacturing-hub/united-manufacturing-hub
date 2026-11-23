@@ -46,7 +46,7 @@ type errorTimeline struct {
 	tracker  *Tracker
 	next     time.Time
 	errorsAt func(time.Time) int64
-	failures Failures
+	failures FailureReport
 }
 
 func newErrorTimeline(start time.Time, errorsAt func(time.Time) int64) *errorTimeline {
@@ -159,7 +159,7 @@ var _ = Describe("The error window", func() {
 		Expect(reason).To(Equal("benthos reported 5 output errors in the last 10m, last one just now"))
 	})
 
-	// Scrape stores observe's Failures on the sample, so a rise between two
+	// Scrape stores observe's FailureReport on the sample, so a rise between two
 	// real scrapes reaches the sample as not error-free.
 	It("carries the failures on Scrape", func() {
 		var outputError int64
@@ -237,12 +237,12 @@ var _ = Describe("The error window", func() {
 		}
 	})
 
-	// Failures.HasErrorNotClearedInTime judges each error entry against its
+	// FailureReport.HasErrorNotClearedInTime judges each error entry against its
 	// own LastErrorAt, so an entry stuck past its window counts even while
 	// another counter keeps rising.
 	It("counts an entry stuck past its window while another counter keeps rising", func() {
 		now := failureT.Add(12 * time.Minute)
-		f := Failures{
+		f := FailureReport{
 			ObservedAt: now,
 			Entries: []FailureEntry{
 				{Signal: "output_error", LastErrorAt: failureT},
@@ -280,8 +280,8 @@ var _ = Describe("The error window", func() {
 	// ErrorWindow plus margin behind the scrape.
 	It("gives an entry its margin before it counts as not cleared", func() {
 		now := failureT.Add(15 * time.Minute)
-		failuresWithLastErrorAgo := func(age time.Duration) Failures {
-			return Failures{ObservedAt: now, Entries: []FailureEntry{{
+		failuresWithLastErrorAgo := func(age time.Duration) FailureReport {
+			return FailureReport{ObservedAt: now, Entries: []FailureEntry{{
 				Signal: "output_error", Since: now.Add(-age), LastErrorAt: now.Add(-age),
 			}}}
 		}

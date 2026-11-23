@@ -60,7 +60,7 @@ var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
 		raw, err := json.Marshal(f)
 		Expect(err).NotTo(HaveOccurred())
 
-		var stored Failures
+		var stored FailureReport
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 
 		Expect(stored.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
@@ -85,7 +85,7 @@ var _ = Describe("HasErrorNotClearedInTime on a held entry after a wall-clock st
 		raw, err := json.Marshal(f)
 		Expect(err).NotTo(HaveOccurred())
 
-		var stored Failures
+		var stored FailureReport
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 
 		Expect(stored.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
