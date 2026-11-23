@@ -1,6 +1,6 @@
 # Topic Browser
 
-The Topic Browser shows the topics of the instances selected in the header filter as a tree, with the current value and the recent history of the topic you select. Use it to find a data point, to see where it sits in your hierarchy, and to check what it last reported. It runs in the Management Console under **Use** → **Topic browser**. This page is not about the Topic Browser of UMH Classic. To read topics from a program, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
+The Topic Browser shows your topics as a tree, with the current value and the recent history of the topic you select. Use it to find a data point and to check what it last reported. It runs in the Management Console under **Use** → **Topic browser**. This page is not about the Topic Browser of UMH Classic. To read topics from a program, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
 
 If the tree stays empty while your instance is producing data, or a topic you expect never appears, see [Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md). If a value changes at uneven times or its age grows longer than you expect, see [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md).
 
@@ -10,9 +10,9 @@ A topic reaches the tree in three steps:
 
 1. A bridge or stream processor publishes a message for the topic to the Unified Namespace of its instance.
 2. The Topic Browser of that instance reads the message and keeps the latest value of every topic it has seen.
-3. The Topic Browser collects what it reads into batches and sends each batch to the Management Console as an update. While the instance is offline, no updates arrive.
+3. The Topic Browser collects what it reads into batches and sends each batch to the Management Console as an update. Each batch carries at most one value per topic, the latest. While the instance is offline, no updates arrive.
 
-The Topic Browser aims for an interval of 1 to 15 seconds between two batches. It sets the interval from the size of recent batches and the CPU use of the Topic Browser process: large batches and low CPU use shorten it, small batches and high CPU use lengthen it. The interval covers only the batching. A topic can take longer to show, because the Topic Browser checks the interval only when new messages arrive, and the update then still has to reach the Management Console.
+The Topic Browser aims for an interval of 1 to 15 seconds between two batches. It sets the interval from the size of recent batches and the CPU use of the Topic Browser process: large batches and low CPU use shorten it, small batches and high CPU use lengthen it. A new value can take longer than the interval to show: the Topic Browser checks the interval only when new messages arrive, and the update then still has to reach the Management Console.
 
 The instance keeps a topic in its list while umh-core runs, even after the topic stops receiving messages. When umh-core restarts, the Topic Browser does not read older messages again, so topics show again as new messages for them arrive.
 
@@ -22,7 +22,7 @@ The screen splits into two panels. The left panel searches and shows your topics
 
 ![The Topic Browser with a numeric topic selected](../../generated/topic-browser-main.png)
 
-The instance filter in the Management Console header decides which instances the tree draws from. It applies to every page, it accepts more than one instance at a time, and its menu is headed **Filtering N of M instances**.
+The instance filter in the Management Console header decides which instances the tree draws from. The filter applies to every page and accepts several instances. Its menu is headed **Filtering N of M instances**.
 
 ## The topic tree
 
@@ -49,9 +49,9 @@ Below that are two tabs, **History** and **Details**. A third, **SQL query**, ap
 
 ### History
 
-The History tab lists the values the browser is holding: the last 100 of that topic, newest first.
+The History tab lists the values the Topic Browser is holding: the last 100 of that topic, newest first.
 
-The instance sends at most one value per topic per batch, as [How live updates work](#how-live-updates-work) describes. Values measured between two emits do not reach the browser, so the History tab is a sample of the signal rather than every reading of it. [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md) explains which gaps are normal. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
+The instance sends at most one value per topic per batch, as [How live updates work](#how-live-updates-work) describes. Other values measured between two batches do not reach the Topic Browser, so the History tab holds a sample of the signal. [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md) explains which gaps are normal. To keep every reading, save the data contract to the historian database with a Historian bridge: see [Save data to the Historian](../historian/save-to-historian.md).
 
 A text or boolean topic has no chart. Its History tab has two views instead. **Changes** collapses runs of the same value into one row, with the time it held and how many values it stored. **All values** lists them individually.
 
@@ -59,7 +59,7 @@ A text or boolean topic has no chart. Its History tab has two views instead. **C
 
 ### Details
 
-The Details tab describes the last message rather than the series.
+The Details tab describes the last message of the topic.
 
 | Field | Shows |
 |---|---|
@@ -81,11 +81,11 @@ The SQL query tab writes the query that reads this tag out of the historian data
 
 ![The SQL query tab, with a Grafana query for the selected tag](../../generated/topic-browser-sql-query.png)
 
-The query returns rows only once the tag has been saved to the historian database. Until then it returns nothing, however much data the Topic Browser itself is showing.
+The query returns rows only once the tag has been saved to the historian database. Until then it returns nothing, even when the Topic Browser shows values for the tag.
 
 ## Relational topics
 
-A relational topic, for example `_erp.orders`, is a JSON document rather than a measurement. It shows **Latest payload** in place of a current value, and has two tabs, **Payload** and **Details**. The browser keeps only the most recent payload, so there is no history and no chart.
+A relational topic, for example `_erp.orders`, carries a JSON document. It shows **Latest payload** in place of a current value, and has two tabs, **Payload** and **Details**. The Topic Browser keeps only the most recent payload, so there is no history and no chart.
 
 ![A relational topic, showing its latest JSON payload](../../generated/topic-browser-relational-topic.png)
 
@@ -103,7 +103,7 @@ While that process runs, the card's badge reads **Active**. The information icon
 
 ## Configuration
 
-One key controls the Topic Browser, in the `config.yaml` of the instance. [Configuration reference](../../reference/configuration-reference.md) lists it with the rest of `internal`, under a warning that the `internal` section is not meant to be edited without guidance from UMH support.
+One key controls the Topic Browser, in the `config.yaml` of the instance. [Configuration reference](../../reference/configuration-reference.md) lists it with the rest of `internal` and warns not to edit that section without guidance from UMH support.
 
 | Key | Default | Effect |
 |---|---|---|
@@ -111,7 +111,7 @@ One key controls the Topic Browser, in the `config.yaml` of the instance. [Confi
 
 ## Metrics
 
-The Topic Browser reports on port 8080 and runs on FSMv1, so it uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains how to reach the endpoint. Its series carry these labels:
+The metrics show the state of the Topic Browser and of its Benthos process, so you can alert when either is degraded. The Topic Browser reports on port 8080 and runs on FSMv1, so it uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains how to reach the endpoint. Its series carry these labels:
 
 | Part of the Topic Browser | `component` | `instance` |
 |---|---|---|
@@ -130,4 +130,4 @@ The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manu
 
 ## GraphQL API
 
-The GraphQL API is documented on its own reference page. For the endpoint, the schema, example queries and every configuration option, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
+For the endpoint, the schema, example queries and every configuration option, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
