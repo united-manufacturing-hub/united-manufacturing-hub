@@ -97,20 +97,12 @@ var connectionChecks = []connectionCheck{
 	{name: SignalOutputConnection, label: "output", notConnected: outputsNotConnected},
 }
 
-// endpointDown reports whether one input or output is down: up <= lost (its
-// last connect did not succeed) and failed or lost is above 0, so a first
-// connect still in progress counts as up. Benthos sets these counters in
-// input/async_reader.go and output/async_writer.go; names.go links both.
-func endpointDown(up, lost, failed int64) bool {
-	return up <= lost && (failed > 0 || lost > 0)
-}
-
 // inputsNotConnected counts the inputs of m that are not connected.
 func inputsNotConnected(m Metrics) int64 {
 	var n int64
 
 	for _, in := range m.Inputs {
-		if endpointDown(in.ConnectionUp, in.ConnectionLost, in.ConnectionFailed) {
+		if in.down() {
 			n++
 		}
 	}
@@ -123,7 +115,7 @@ func outputsNotConnected(m Metrics) int64 {
 	var n int64
 
 	for _, out := range m.Outputs {
-		if endpointDown(out.ConnectionUp, out.ConnectionLost, out.ConnectionFailed) {
+		if out.down() {
 			n++
 		}
 	}

@@ -34,6 +34,15 @@ type connectionCounters struct {
 	ConnectionUp     int64 `json:"connection_up"`
 }
 
+// down reports whether the input or output these counters belong to is down:
+// ConnectionUp <= ConnectionLost (its last connect did not succeed) and
+// ConnectionFailed or ConnectionLost is above 0, so a first connect still in
+// progress counts as up. Benthos sets these counters in input/async_reader.go
+// and output/async_writer.go; names.go links both.
+func (c connectionCounters) down() bool {
+	return c.ConnectionUp <= c.ConnectionLost && (c.ConnectionFailed > 0 || c.ConnectionLost > 0)
+}
+
 // InputMetrics contains the metrics of one leaf input path.
 type InputMetrics struct {
 	Path  string `json:"path"`
