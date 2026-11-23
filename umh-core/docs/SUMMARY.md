@@ -20,6 +20,7 @@
     * [Communicator](usage/instances/communicator/README.md)
       * [Communicator Shows Degraded](usage/instances/communicator/communicator-shows-degraded.md)
       * [Instance Stays Offline Behind a Corporate Firewall](usage/instances/communicator/instance-offline-behind-corporate-firewall.md)
+    * [Plugins](usage/instances/plugins.md)
     * [Edit the Config File](usage/instances/edit-the-config-file.md)
   * [Unified Namespace](usage/unified-namespace/README.md)
     * [Topic Convention](usage/unified-namespace/topic-convention.md)

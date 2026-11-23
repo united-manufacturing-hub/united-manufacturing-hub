@@ -30,9 +30,9 @@ The row menu has these entries:
 
 ## The instance details page
 
-The instance details page has two tabs. **Core** shows one card per component of UMH Core. **Plugins** shows the plugins added to the instance.
+The instance details page has two tabs. **Core** shows one card per component of UMH Core. **Plugins** shows the plugins added to the instance. See [Plugins](plugins.md).
 
-![The Core tab of the instance details page](images/instance-details-core-tab.png)
+![The Core tab of the instance details page](./images/instance-details-core-tab.png)
 
 Each card has a status badge: **Active**, **Neutral** or **Degraded**. When the instance sent a reason, an info button next to the badge shows it. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
 
@@ -48,14 +48,6 @@ Each card is explained on the page of its component:
 | Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md#topic-browser-card) |
 
 **View Instance Config** opens the instance's `config.yaml`. See [Edit the Config File](edit-the-config-file.md).
-
-### The Plugins tab
-
-The **Plugins** tab shows one card per plugin added to the instance. The tab is unavailable when plugins are not enabled for your organization, or when the instance's UMH Core version does not support them. In the second case, hovering over the tab shows `This instance does not support plugins yet — update umh-core.`
-
-| Plugin | Page |
-|---|---|
-| Historian | [Historian](../historian/README.md) |
 
 ## Reference
 
