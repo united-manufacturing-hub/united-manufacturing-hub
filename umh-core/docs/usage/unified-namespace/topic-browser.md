@@ -83,11 +83,23 @@ Each instance runs its own Topic Browser and reports its own topics, and the Man
 
 ![A topic reported by three instances, one of them offline](../../generated/topic-browser-several-instances.png)
 
+## How topics reach the Topic Browser
+
+A topic shows in the tree only after three things have happened:
+
+1. A bridge or stream processor publishes a message for the topic to the Unified Namespace of its instance.
+2. The Topic Browser of that instance reads the message. It keeps the latest value of every topic it has seen.
+3. The instance sends an update to the Management Console. It does so every one to fifteen seconds while messages arrive, and only while it is online.
+
+The instance keeps a topic in its list while umh-core runs, even after the topic stops receiving messages. When umh-core restarts, the Topic Browser does not read older messages again, so topics show again as new messages for them arrive.
+
+[Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md) checks each step in turn.
+
 ## The Topic Browser card
 
 The **Topic Browser** card on the instance's detail page shows one value. **Topics** counts the different topics the instance has seen since umh-core started. Once a topic stops receiving messages it stays in the count. When umh-core restarts, the count can start from zero again. The **Metrics** button on the card opens the counters of the [Benthos](../data-flows/bridges.md) process that consumes the Kafka topic `umh.messages` from [Redpanda](redpanda.md).
 
-While that process runs, the card's badge reads **Active**. When it does not, the information icon beside the badge gives the reason: `benthos degraded` when the Benthos process fails, `redpanda degraded` when Redpanda is degraded. The Redpanda card shows the cause of a Redpanda failure; see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
+While that process runs, the card's badge reads **Active**. The information icon beside the badge gives the state of the Topic Browser itself, for example `benthos degraded` when the Benthos process fails or `redpanda degraded` when Redpanda is degraded. The badge can read **Active** while Redpanda is degraded, so read the information icon too. The Redpanda card shows the cause of a Redpanda failure; see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
 ## Configuration
 
