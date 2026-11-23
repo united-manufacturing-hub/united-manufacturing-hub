@@ -253,7 +253,7 @@ Before umh-core starts a bridge, it checks that the external system answers on i
 
 When the external system stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the external system answers, read the bridge's state.
 
-The check's series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`.
+The connection probe's series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`.
 
 ## Next Steps
 
