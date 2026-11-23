@@ -51,7 +51,7 @@ Memory from 70% and disk from 75% count as a warning. The badge stays Active and
 
 ### The CPU row
 
-From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. The info button next to it shows the usage, its 95th percentile, throttling and pressure of the container, and the busy cores and steal of the machine. The row turns red while the CPU is degraded. When umh-core cannot measure the CPU, the row reads `N/A`.
+From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. [How CPU Health Is Judged: With and without a CPU limit](container/how-cpu-health-is-judged.md#with-and-without-a-cpu-limit) explains the difference. The info button next to it shows the readings of the container and the machine, which the [Glossary](container/how-cpu-health-is-judged.md#glossary) defines. The row turns red while the [CPU status](#cpu-status) is degraded, and reads `N/A` when umh-core cannot measure the CPU.
 
 <figure><img src="./images/container-cpu-info.png" alt="The CPU info button of the Container card on an instance without a CPU limit" width="317"><figcaption></figcaption></figure>
 
@@ -95,35 +95,9 @@ The headroom lines depend on the machine. A machine whose core count is readable
 
 A signal that is already past its threshold shows what would clear it instead, for example `Throttling 12% (recovers below 3%)`. A signal this machine cannot measure reads `not measured` with its reason, as the Steal line above does.
 
-### CPU thresholds
-
-Each signal degrades at one value and recovers at another. The two are held apart so the status does not flicker. Throttling, pressure, steal and usage are worse the higher they read, headroom the lower. All readings are 60-second figures. A reading must exceed a threshold to count. Where the table says "at", reaching it is enough.
-
-| Signal | Degrades | Recovers | Measured only when |
-|--------|----------|----------|--------------------|
-| **Throttling** | above 5% of scheduling periods | below 3% | a CPU limit is set |
-| **Pressure** | above 20% (Linux Pressure Stall Information, PSI: `some avg60`) | below 12% | the container can read `cpu.pressure` (see [Enable CPU pressure stats](container/enable-cpu-pressure-stats.md)) |
-| **Steal** | above 10% | below 6% | the machine is a virtual machine |
-| **Machine headroom** | less than 1 core free | more than 1.5 cores free | the machine's core count is readable |
-| **Instance headroom** | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
-| **Instance usage** | at 70% | below 60% | no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured (last-resort fallback for machine headroom) |
-
-Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a newly started instance gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine the Steal line reads `not measured` with its reason.
-
 ### Memory with the memory monitor preview
 
-With the [memory monitor preview](container/how-memory-health-is-judged.md) on, memory counts as degraded while any of these causes holds:
-
-| Cause | Degraded from | Healthy again below | Gauge |
-|---|---|---|---|
-| `container-limit-full` | 0.8 (80%) of the container's own memory limit, as a 60s mean. Judged only when the container has a limit. Without one, `memory_avg_used_fraction` still shows the container's share of the machine's memory, but only `host-memory-full` judges | 0.75 | `memory_avg_used_fraction` while `memory_total_is_cgroup_limit` is 1 |
-| `host-memory-full` | 0.8 (80%) of the machine's memory, as a 60s mean | 0.75 | `memory_avg_host_used_bytes` / `memory_host_total_bytes` |
-| `memory-pressure` | 0.20: processes in the container waited for memory for 20% of the last minute | 0.12 | `memory_pressure_avg60_ratio` |
-| `oom-kill` | 1 OOM kill in the container within the last hour | 0 for a whole hour | `memory_oom_kills_last_hour` |
-
-The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`.
-
-Memory also counts as degraded whenever no reading from the last three seconds is available. [Metrics](metrics/README.md#memory-gauges) lists the gauges.
+With the [memory monitor preview](container/how-memory-health-is-judged.md) on, memory degrades for one of four causes. The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`. [How Memory Health Is Judged: Memory thresholds](container/how-memory-health-is-judged.md#memory-thresholds) lists the causes and their values.
 
 ## Communicator
 

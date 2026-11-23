@@ -30,16 +30,16 @@ The row menu has these entries:
 
 ## The instance details page
 
-The **Core** tab shows one card per component. [Instance Details Page](instance-details-page.md) lists every field, status and reason on the cards.
+The **Core** tab shows one card per component. Each card name in the table links to its section on [Instance Details Page](instance-details-page.md), which lists every field, status and reason on the card.
 
 | Card | Usage page |
 |---|---|
-| Agent | [Agent](agent/README.md) |
-| Container | [Container](container/README.md) |
-| Communicator | [Communicator](communicator/README.md) |
-| Data Flows | [Data Flows](../data-flows/README.md) |
-| Redpanda | [Redpanda](../unified-namespace/redpanda.md) |
-| Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md) |
+| [Agent](instance-details-page.md#agent) | [Agent](agent/README.md) |
+| [Container](instance-details-page.md#container) | [Container](container/README.md) |
+| [Communicator](instance-details-page.md#communicator) | [Communicator](communicator/README.md) |
+| [Data Flows](instance-details-page.md#data-flows) | [Data Flows](../data-flows/README.md) |
+| [Redpanda](instance-details-page.md#redpanda) | [Redpanda](../unified-namespace/redpanda.md) |
+| [Topic Browser](instance-details-page.md#topic-browser) | [Topic Browser](../unified-namespace/topic-browser.md) |
 
 The **Plugins** tab shows the plugins added to the instance. The [Historian](../historian/README.md) is the first plugin.
 
@@ -47,7 +47,7 @@ The **Plugins** tab shows the plugins added to the instance. The [Historian](../
 
 ## Configuration
 
-An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Management Console generates the token while you create the instance and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
+An instance authenticates with an `AUTH_TOKEN`, not with a user account. You create an instance with **Add instance** on the **Instances** page, as [Step 1: Install](../../getting-started/README.md) shows. The Management Console then generates the token and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
 
 The token does two things:
 
