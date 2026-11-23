@@ -128,6 +128,23 @@ var _ = Describe("A dropped counter", func() {
 			"150->157 over 1s; the old port's 100 is gone from the window")
 	})
 
+	It("rebuilds on a port change even when the counters read lower", func() {
+		t0 := time.Now().Truncate(time.Second)
+		tr := NewTracker(func() time.Time { return t0 })
+
+		// The new port's counters are below the old port's. A port change
+		// wins over a restart: the window starts over instead of folding the
+		// drop into the old series.
+		tr.observe(4195, counts(100, 100), t0)
+		got := tr.observe(4196, counts(10, 10), t0.Add(10*time.Second))
+		Expect(got.InputMessagesPerSecond).To(Equal(unmeasured),
+			"the first tick on the new port holds one sample")
+
+		got = tr.observe(4196, counts(17, 17), t0.Add(11*time.Second))
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 7, 0.5),
+			"10->17 over 1s on the new port alone")
+	})
+
 	It("ignores a scrape that is not newer", func() {
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
