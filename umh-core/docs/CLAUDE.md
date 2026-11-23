@@ -46,14 +46,20 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 
 ### Bridges and flows
 
+<!-- vale off -->
+
 | Concept | Use | Instead of |
 |---|---|---|
 | What a bridge talks to | **external system**; **device** only when it is hardware, such as a PLC or a sensor | connection, destination, target, data source, endpoint |
-| The reachability check | **connection** for what the Management Console shows; **connection probe** for what umh-core does (a probe that checks whether the external system is reachable, and its states) | connection check, health check, liveness check, network probe; never the external system itself |
+| The reachability check | **connection** for what the Management Console shows; **connection probe** for what umh-core does (a probe that checks whether the external system is reachable, and its states) | connection check, health check, liveness check, network probe, nmap; never the external system itself |
 | Direction | a flow is named after what it does **at the external system**: a read flow reads from it, a write flow writes to it | brings, sends, pushes, pulls, ingests, forwards |
 | Picking UNS topics | the write flow **subscribes to** topics | receives |
 | A regular expression over topics | **topic pattern**; a **topic** is one concrete UNS topic | "a topic is a regular expression" |
 | Location | **bridge location** = instance location plus the bridge's levels | agent location; mixing Level and Location |
+
+<!-- vale on -->
+
+The words in the table that are wrong in every context, and the direction words, are also [Vale](https://vale.sh) rules in `.vale/styles/UMH/`. Change the table and the rules together. To check your pages, run `make docs-lint` from `umh-core`. It runs Vale in Docker. CI adds the same warnings to a pull request, on the lines it adds. Vale flags the direction words, such as sends or receives, only right after a bridge or a flow. Words that are right in some contexts, such as device, endpoint or connection, have no rule. Check them in review.
 
 - The read flow publishes what it reads to the UNS, and the write flow writes to the external system what it subscribed to. "Reads from the PLC" and "writes to the MES" need no direction words.
 - **Instance location** is `agent.location` in `config.yaml`, or the `LOCATION_<n>` environment variables. The bridge's levels are `protocolConverterServiceConfig.location`, set in the **Level _n_** fields of the bridge. They extend the instance location and do not overwrite its levels. A **location path** is the dotted form of a location, such as `acme.cologne.packaging`, and the value of `{{ .location_path }}`.

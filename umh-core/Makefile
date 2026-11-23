@@ -41,6 +41,9 @@ help: ## Display available make targets and usage information
 	@echo "   make release-changelog VERSION=X.Y.Z    # Batch the fragments into a release (release PRs only)"
 	@echo "   make rebuild-changelog                  # Regenerate CHANGELOG.md after editing .changelog/X.Y.Z.md"
 	@echo ""
+	@echo "📖 DOCS COMMANDS:"
+	@echo "   make docs-lint      # Check the docs terminology with Vale (in Docker)"
+	@echo ""
 	@echo "🛠️  UTILITY COMMANDS:"
 	@echo "   make pod-shell      # Shell into running container"
 	@echo "   make stop-all-pods  # Stop all UMH Core containers"
@@ -69,6 +72,8 @@ GOLANGCI_LINT_VERSION = v2.5.0
 GOTESTSUM_VERSION = v1.13.0
 DLV_VERSION = v1.25.1
 CHANGIE_VERSION = v1.26.0
+# Keep in step with the version in .github/workflows/docs-lint.yml.
+VALE_VERSION = v3.28.1
 
 # Default values for build arguments
 NMAP_VERSION = 7.99-r0
@@ -125,6 +130,13 @@ endif
 # Regenerates CHANGELOG.md from .changelog/ after a released .changelog/<version>.md was edited.
 rebuild-changelog: $(CHANGIE)
 	@$(CHANGIE) merge
+
+# Checks the docs terminology with the Vale rules in docs/.vale/. Runs Vale in
+# Docker, so it needs no local install.
+.PHONY: docs-lint
+
+docs-lint:
+	docker run --rm -v "$(CURDIR)/docs:/docs" -w /docs jdkato/vale:$(VALE_VERSION) .
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
