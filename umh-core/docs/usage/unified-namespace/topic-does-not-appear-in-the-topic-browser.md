@@ -53,7 +53,7 @@ docker restart umh-core
 
 Replace `umh-core` with the name of your container if you named it differently.
 
-The restart does not replay past messages: the Topic Browser continues from the last message it read. A missing topic shows once it publishes again, so a topic that publishes rarely can stay absent until then.
+Topics that send data infrequently may take longer to reappear in the Topic Browser after a UMH Core restart.
 
 ## Getting help
 
