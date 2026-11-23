@@ -26,28 +26,32 @@ type Metrics struct {
 	Inputs  map[string]InputMetrics  `json:"inputs,omitempty"`
 }
 
+// connectionCounters is how often one input or output connected, lost its
+// connection, and failed to connect.
+type connectionCounters struct {
+	ConnectionFailed int64 `json:"connection_failed"`
+	ConnectionLost   int64 `json:"connection_lost"`
+	ConnectionUp     int64 `json:"connection_up"`
+}
+
 // InputMetrics contains the metrics of one leaf input path.
 type InputMetrics struct {
-	Path             string  `json:"path"`
-	Label            string  `json:"label"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Received         int64   `json:"received"`
+	Path  string `json:"path"`
+	Label string `json:"label"`
+	connectionCounters
+	LatencyNS Latency `json:"latency_ns"`
+	Received  int64   `json:"received"`
 }
 
 // OutputMetrics contains the metrics of one leaf output path.
 type OutputMetrics struct {
-	Path             string  `json:"path"`
-	Label            string  `json:"label"`
-	BatchSent        int64   `json:"batch_sent"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	Error            int64   `json:"error"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Sent             int64   `json:"sent"`
+	Path      string `json:"path"`
+	Label     string `json:"label"`
+	BatchSent int64  `json:"batch_sent"`
+	connectionCounters
+	Error     int64   `json:"error"`
+	LatencyNS Latency `json:"latency_ns"`
+	Sent      int64   `json:"sent"`
 }
 
 // ProcessMetrics holds one entry per processor, keyed by processor path.
