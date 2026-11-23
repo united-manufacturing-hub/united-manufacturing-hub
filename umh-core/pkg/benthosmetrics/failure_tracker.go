@@ -39,11 +39,11 @@ type failureTracker struct {
 	// counter's name. It is nil only before the first scrape, which is the
 	// baseline. After resetForNewInstance it is empty, and a counter missing
 	// from it reads as 0.
-	lastCounts map[string]int64
+	lastCounts map[Signal]int64
 
 	// rises holds, per error counter, each rise still within ErrorWindow,
 	// oldest first. An entry's Count is their sum.
-	rises map[string][]errorRise
+	rises map[Signal][]errorRise
 
 	// lastEntries holds the previous scrape's failure entries, for carrying
 	// an open entry's LastErrorAt forward. It is nil before the first scrape
@@ -53,7 +53,7 @@ type failureTracker struct {
 	// notConnectedSince holds, for each connection check with something not
 	// connected, the scrape at which that started. Like lastEntries, it is
 	// nil before the first scrape and after any reset.
-	notConnectedSince map[string]time.Time
+	notConnectedSince map[Signal]time.Time
 }
 
 // failureReading is what failureTracker.observe reads off one successful
@@ -62,11 +62,11 @@ type failureReading struct {
 	at time.Time
 
 	// errorCounts holds the raw error counters, keyed by the counter's name.
-	errorCounts map[string]int64
+	errorCounts map[Signal]int64
 
 	// connections holds the number of inputs or outputs not connected,
 	// keyed by the connection check's name.
-	connections map[string]int64
+	connections map[Signal]int64
 }
 
 // errorRise is one scrape at which an error counter rose, and by how much.
@@ -103,12 +103,12 @@ func (ft *failureTracker) resetAfterGap(at time.Time) {
 // The seed is dated one poll before at. Dating it at the previous scrape
 // fails after a long gap: the engine drops a window whose newest reading is
 // older than DemoteSpan, so the seed would be gone before the next reading.
-func (ft *failureTracker) reset(errorCounts map[string]int64, at time.Time) {
+func (ft *failureTracker) reset(errorCounts map[Signal]int64, at time.Time) {
 	ft.engine = mustNewEngine(errorTable())
 	ft.engine.Observe(seedErrors(errorCounts), diagnosis.Environment{}, at.Add(-ScrapeInterval))
 
 	if errorCounts == nil {
-		errorCounts = map[string]int64{}
+		errorCounts = map[Signal]int64{}
 	}
 
 	ft.lastCounts = errorCounts
@@ -148,7 +148,7 @@ func (ft *failureTracker) observe(current failureReading) FailureReport {
 // The first scrape is the baseline, so it records nothing.
 func (ft *failureTracker) recordRises(current failureReading) {
 	if ft.rises == nil {
-		ft.rises = make(map[string][]errorRise, len(errorCounters))
+		ft.rises = make(map[Signal][]errorRise, len(errorCounters))
 	}
 
 	for _, c := range errorCounters {
@@ -169,7 +169,7 @@ func (ft *failureTracker) recordRises(current failureReading) {
 // recentErrors returns how many errors the counter named signal rose by
 // within ErrorWindow, each rise timed by the scrape that saw it, so a rise
 // whose baseline reading is older than the window still counts.
-func (ft *failureTracker) recentErrors(signal string) int64 {
+func (ft *failureTracker) recentErrors(signal Signal) int64 {
 	var n int64
 	for _, r := range ft.rises[signal] {
 		n += r.by
@@ -203,7 +203,7 @@ func (ft *failureTracker) firedErrorEntries(fired []diagnosis.Fired, current fai
 	var entries []FailureEntry
 
 	for _, f := range fired {
-		c := errorCounterOf(f.Signal)
+		c := errorCounterOf(Signal(f.Signal))
 		entries = append(entries, FailureEntry{
 			Signal:      c.name,
 			Label:       c.label,
@@ -268,7 +268,7 @@ func (ft *failureTracker) notConnectedEntries(current failureReading) []FailureE
 
 // lastRise returns when the error counter named signal last rose, for the
 // entry that opened at since.
-func (ft *failureTracker) lastRise(current failureReading, signal string, since time.Time) time.Time {
+func (ft *failureTracker) lastRise(current failureReading, signal Signal, since time.Time) time.Time {
 	// A counter missing from ft.lastCounts reads as 0, so after a restart
 	// every non-zero counter rose.
 	if current.errorCounts[signal] > ft.lastCounts[signal] {
@@ -285,7 +285,7 @@ func (ft *failureTracker) lastRise(current failureReading, signal string, since 
 
 // lastEntry returns the previous scrape's entry with the same signal and
 // Since.
-func (ft *failureTracker) lastEntry(signal string, since time.Time) (FailureEntry, bool) {
+func (ft *failureTracker) lastEntry(signal Signal, since time.Time) (FailureEntry, bool) {
 	for _, previous := range ft.lastEntries {
 		if previous.Signal == signal && previous.Since.Equal(since) {
 			return previous, true
@@ -298,8 +298,8 @@ func (ft *failureTracker) lastEntry(signal string, since time.Time) (FailureEntr
 // firstNotConnectedSince returns, per connection check with something not
 // connected, when that started: the time from previous, or at if previous
 // has none.
-func firstNotConnectedSince(previous map[string]time.Time, counts map[string]int64, at time.Time) map[string]time.Time {
-	out := make(map[string]time.Time, len(counts))
+func firstNotConnectedSince(previous map[Signal]time.Time, counts map[Signal]int64, at time.Time) map[Signal]time.Time {
+	out := make(map[Signal]time.Time, len(counts))
 	for name, n := range counts {
 		if n == 0 {
 			continue
@@ -317,8 +317,8 @@ func firstNotConnectedSince(previous map[string]time.Time, counts map[string]int
 }
 
 // isFiring reports whether fired holds the signal named signal.
-func isFiring(fired []diagnosis.Fired, signal string) bool {
-	return slices.ContainsFunc(fired, func(f diagnosis.Fired) bool { return f.Signal == signal })
+func isFiring(fired []diagnosis.Fired, signal Signal) bool {
+	return slices.ContainsFunc(fired, func(f diagnosis.Fired) bool { return f.Signal == string(signal) })
 }
 
 // redate returns t re-dated from at by the monotonic time elapsed between

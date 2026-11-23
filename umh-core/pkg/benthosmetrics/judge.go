@@ -21,34 +21,40 @@ import (
 	"time"
 )
 
+// Signal names one thing that can fail: an error counter the failure window
+// judges, or a connection check. The constants below are the only signals
+// this package reports. Their strings reach the FSMv2 store as JSON and are
+// matched by name, so they are fixed.
+type Signal string
+
 // errorCounter is one cumulative Benthos error counter the failure window
 // judges.
 type errorCounter struct {
 	// name identifies the counter everywhere, including FailureEntry.Signal.
-	name string
+	name Signal
 	// label is the wording the entry's reason shows for a count of 1.
 	label string
 	// read sums the counter off one scrape's Metrics.
 	read func(Metrics) int64
 }
 
-// outputErrorSignal and processorErrorSignal are the signal names of the
-// two error counters. They spell the same as the Benthos series they sum,
-// but nothing reads them as series names: read sums the parsed fields.
+// The signals of the two error counters. They spell the same as the Benthos
+// series they sum, but nothing reads them as series names: read sums the
+// parsed fields.
 const (
-	outputErrorSignal    = "output_error"
-	processorErrorSignal = "processor_error"
+	SignalOutputError    Signal = "output_error"
+	SignalProcessorError Signal = "processor_error"
 )
 
 // errorCounters lists the counters the error signals are built from.
 var errorCounters = []errorCounter{
 	{
-		name:  outputErrorSignal,
+		name:  SignalOutputError,
 		label: "output error",
 		read:  Metrics.outputErrorTotal,
 	},
 	{
-		name:  processorErrorSignal,
+		name:  SignalProcessorError,
 		label: "processor error",
 		read:  Metrics.processorErrorTotal,
 	},
@@ -56,7 +62,7 @@ var errorCounters = []errorCounter{
 
 // errorCounterOf returns the error counter named name. Every fired error
 // signal is built from an errorCounters entry, so no entry is a bug here.
-func errorCounterOf(name string) errorCounter {
+func errorCounterOf(name Signal) errorCounter {
 	for _, c := range errorCounters {
 		if c.name == name {
 			return c
@@ -71,24 +77,24 @@ func errorCounterOf(name string) errorCounter {
 type connectionCheck struct {
 	// name is the check's name in the observation's connections and in the
 	// failure entry's Signal.
-	name string
+	name Signal
 	// label is the wording the entry's reason shows for one input or output.
 	label string
 	// notConnected counts the inputs or outputs that are not connected.
 	notConnected func(Metrics) int64
 }
 
-// inputConnectionSignal and outputConnectionSignal are our own signal names
-// for the derived not-connected counts; they are not Benthos series names.
+// The signals of the two connection checks. These are our own names for the
+// derived not-connected counts; they are not Benthos series names.
 const (
-	inputConnectionSignal  = "input_connection"
-	outputConnectionSignal = "output_connection"
+	SignalInputConnection  Signal = "input_connection"
+	SignalOutputConnection Signal = "output_connection"
 )
 
 // connectionChecks has one check for the inputs and one for the outputs.
 var connectionChecks = []connectionCheck{
-	{name: inputConnectionSignal, label: "input", notConnected: inputsNotConnected},
-	{name: outputConnectionSignal, label: "output", notConnected: outputsNotConnected},
+	{name: SignalInputConnection, label: "input", notConnected: inputsNotConnected},
+	{name: SignalOutputConnection, label: "output", notConnected: outputsNotConnected},
 }
 
 // endpointDown reports whether one input or output is down: up <= lost (its
@@ -127,8 +133,8 @@ func outputsNotConnected(m Metrics) int64 {
 
 // readConnections returns, for each connection check, how many inputs or
 // outputs of m are not connected, keyed by the check's name.
-func readConnections(m Metrics) map[string]int64 {
-	out := make(map[string]int64, len(connectionChecks))
+func readConnections(m Metrics) map[Signal]int64 {
+	out := make(map[Signal]int64, len(connectionChecks))
 	for _, c := range connectionChecks {
 		out[c.name] = c.notConnected(m)
 	}
@@ -138,8 +144,8 @@ func readConnections(m Metrics) map[string]int64 {
 
 // readErrors returns each error counter's sum over m, keyed by the counter's
 // name.
-func readErrors(m Metrics) map[string]int64 {
-	out := make(map[string]int64, len(errorCounters))
+func readErrors(m Metrics) map[Signal]int64 {
+	out := make(map[Signal]int64, len(errorCounters))
 	for _, c := range errorCounters {
 		out[c.name] = c.read(m)
 	}

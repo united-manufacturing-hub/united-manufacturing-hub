@@ -52,7 +52,7 @@ func failureScrape(v map[string]int64) Metrics {
 
 // errorLabels repeats each counter's label so the specs check the wording, not
 // copy it from errorCounters. The first spec keeps the two lists in step.
-var errorLabels = map[string]string{
+var errorLabels = map[Signal]string{
 	"output_error":    "output error",
 	"processor_error": "processor error",
 }
@@ -69,7 +69,7 @@ func verdictAfterRise(before, after map[string]int64) FailureReport {
 
 // entryOf returns the entry with the given signal out of f, failing the spec
 // when there is none.
-func entryOf(f FailureReport, signal string) FailureEntry {
+func entryOf(f FailureReport, signal Signal) FailureEntry {
 	for _, e := range f.Entries {
 		if e.Signal == signal {
 			return e
@@ -97,7 +97,7 @@ var _ = Describe("The error counters", func() {
 	// error-free with its own label.
 	It("degrades on every error counter", func() {
 		for name, label := range errorLabels {
-			f := verdictAfterRise(nil, map[string]int64{name: 1})
+			f := verdictAfterRise(nil, map[string]int64{string(name): 1})
 			ok, reason := f.ErrorFree()
 			Expect(ok).To(BeFalse(), "%s 0 -> 1", name)
 			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 1 %s in the last 10m, just now", label)))
@@ -157,15 +157,15 @@ var _ = Describe("The error counters", func() {
 	It("reads a drop in any error counter as a restart", func() {
 		for name := range errorLabels {
 			tr := NewTracker(func() time.Time { return failureT })
-			f := *tr.observe(testPort, failureScrape(map[string]int64{name: 3}), failureT.Add(-time.Second)).Failures
+			f := *tr.observe(testPort, failureScrape(map[string]int64{string(name): 3}), failureT.Add(-time.Second)).Failures
 			ok, _ := f.ErrorFree()
 			Expect(ok).To(BeTrue(), "the first scrape does not backfill %s", name)
 
-			f = *tr.observe(testPort, failureScrape(map[string]int64{name: 4}), failureT).Failures
+			f = *tr.observe(testPort, failureScrape(map[string]int64{string(name): 4}), failureT).Failures
 			ok, _ = f.ErrorFree()
 			Expect(ok).To(BeFalse(), "setup: %s 3 -> 4 did not fire", name)
 
-			f = *tr.observe(testPort, failureScrape(map[string]int64{name: 0}), failureT.Add(time.Second)).Failures
+			f = *tr.observe(testPort, failureScrape(map[string]int64{string(name): 0}), failureT.Add(time.Second)).Failures
 			ok, _ = f.ErrorFree()
 			Expect(ok).To(BeTrue(), "%s 4 -> 0 is a restart", name)
 		}
@@ -175,9 +175,9 @@ var _ = Describe("The error counters", func() {
 	// reaches the verdict with its label. This covers the parser's name for
 	// each counter.
 	It("judges every error counter from the wire", func() {
-		lines := map[string]string{
-			"output_error":    `output_error{label="",path="root.output"} %d`,
-			"processor_error": `processor_error{label="",path="root.pipeline.processors.0"} %d`,
+		lines := map[Signal]string{
+			SignalOutputError:    `output_error{label="",path="root.output"} %d`,
+			SignalProcessorError: `processor_error{label="",path="root.pipeline.processors.0"} %d`,
 		}
 
 		for name, label := range errorLabels {

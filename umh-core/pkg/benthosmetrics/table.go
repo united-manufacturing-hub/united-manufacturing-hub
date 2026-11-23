@@ -49,7 +49,7 @@ type readings struct {
 // errorReadings is one scrape's error counters as the error engine reads
 // them: one reading per errorCounters entry, keyed by the counter's name.
 type errorReadings struct {
-	errors map[string]diagnosis.Reading
+	errors map[Signal]diagnosis.Reading
 }
 
 // table declares what the engine measures: the input and output messages per
@@ -85,10 +85,10 @@ func errorTable() diagnosis.Table[errorReadings] {
 	signals := make([]diagnosis.Signal[errorReadings], 0, len(errorCounters))
 	for _, counter := range errorCounters {
 		signals = append(signals, diagnosis.Signal[errorReadings]{
-			Name: counter.name,
+			Name: string(counter.name),
 			Instruments: []diagnosis.Instrument[errorReadings]{{
 				Measurement: diagnosis.Measurement[errorReadings]{
-					Name:    counter.name,
+					Name:    string(counter.name),
 					Extract: func(s errorReadings) diagnosis.Reading { return s.errors[counter.name] },
 					// Counter is false: observe resets the failureTracker
 					// whenever a counter drops (see restarted), so this
@@ -133,8 +133,8 @@ func newIncrease() diagnosis.Reduction {
 
 // errorReadingsOf turns one scrape's error counters into the readings the
 // error engine reads.
-func errorReadingsOf(errorCounts map[string]int64) errorReadings {
-	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounts))}
+func errorReadingsOf(errorCounts map[Signal]int64) errorReadings {
+	s := errorReadings{errors: make(map[Signal]diagnosis.Reading, len(errorCounts))}
 	for name, v := range errorCounts {
 		s.errors[name] = diagnosis.Known(float64(v))
 	}
@@ -144,8 +144,8 @@ func errorReadingsOf(errorCounts map[string]int64) errorReadings {
 
 // seedErrors is the readings a reset error engine observes first: each
 // error counter at its value in errorCounts, or 0 when errorCounts has none.
-func seedErrors(errorCounts map[string]int64) errorReadings {
-	s := errorReadings{errors: make(map[string]diagnosis.Reading, len(errorCounters))}
+func seedErrors(errorCounts map[Signal]int64) errorReadings {
+	s := errorReadings{errors: make(map[Signal]diagnosis.Reading, len(errorCounters))}
 	for _, c := range errorCounters {
 		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
 	}
