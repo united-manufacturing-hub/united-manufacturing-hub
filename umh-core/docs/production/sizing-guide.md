@@ -26,7 +26,7 @@ UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/REA
 
 Part of the 0.2 vCPU monitoring overhead goes to reading each flow's metrics. By default, a separate monitoring service does this for each flow. Adding `-e USE_FSMV2_BENTHOS_METRICS=true` to the `docker run` command moves this work into the UMH Core process, where it costs less CPU. Remove and recreate the container for the change to apply, because `docker restart` keeps the old environment. Still plan 0.2 vCPU per flow: it is a conservative budget that also covers the log analysis, which this variable does not change.
 
-Your flows' own work comes on top of that overhead, and depends on what they do. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags, and a single high-rate bridge can need more than the overhead budget by itself. Above an estimated 10,000 messages per second on the instance, plan more vCPU and [contact us](https://discord.gg/F9mqkZnm8U).
+Your flows' own work comes on top of that overhead, and depends on what they do. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags, and a single high-rate bridge can need more than the overhead budget by itself. Above an estimated 10,000 messages per second on the instance, plan more vCPU and [contact us](../get-help.md).
 
 On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full physical core, as on AWS Graviton, the same vCPU count gives at least as much. UMH Core counts each vCPU as one core.
 
