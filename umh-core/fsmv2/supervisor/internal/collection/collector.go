@@ -114,6 +114,7 @@ type Collector[TObserved any] struct {
 	cancel        context.CancelFunc
 	goroutineDone chan struct{}
 	restartChan   chan struct{}
+	workerMetrics *metrics.WorkerMetricsHandle
 	config        CollectorConfig[TObserved]
 	state         collectorState
 	mu            sync.RWMutex
@@ -125,9 +126,10 @@ type Collector[TObserved any] struct {
 // The type parameter TObserved is inferred from the config parameter.
 func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
 	return &Collector[TObserved]{
-		config:      config,
-		state:       collectorStateCreated,
-		restartChan: make(chan struct{}, 1),
+		config:        config,
+		state:         collectorStateCreated,
+		restartChan:   make(chan struct{}, 1),
+		workerMetrics: metrics.ForWorker(config.Identity.HierarchyPath),
 	}
 }
 
@@ -598,7 +600,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, observed)
+	c.workerMetrics.Export(observed)
 
 	if changed {
 		c.logTrace("observation_saved",
