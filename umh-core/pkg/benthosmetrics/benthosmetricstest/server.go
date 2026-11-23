@@ -43,6 +43,10 @@ type Server struct {
 	// every /metrics read; see SetTraffic.
 	inPerRead, outPerRead, errPerRead int64
 
+	// inputConnection is the input's connection counters /metrics serves;
+	// see SetInputConnected.
+	inputConnection inputConnection
+
 	failOn      map[string]int
 	version     string
 	metricsBody string
@@ -53,7 +57,7 @@ type Server struct {
 
 // NewServer starts a Server. The caller closes it with Close.
 func NewServer() *Server {
-	s := &Server{failOn: map[string]int{}, version: Version}
+	s := &Server{failOn: map[string]int{}, version: Version, inputConnection: inputConnection{up: 1}}
 	s.server = httptest.NewServer(http.HandlerFunc(s.serve))
 
 	return s
@@ -102,6 +106,25 @@ func (s *Server) SetTraffic(inputPerRead, outputPerRead, errorPerRead int64) {
 	defer s.mu.Unlock()
 
 	s.inPerRead, s.outPerRead, s.errPerRead = inputPerRead, outputPerRead, errorPerRead
+}
+
+// SetInputConnected sets whether the input holds its connection, the way
+// Benthos counts it: losing the connection counts one lost connection and one
+// failed reconnect, and getting it back counts one more successful connect.
+// A new Server's input is connected.
+func (s *Server) SetInputConnected(connected bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	wasConnected := s.inputConnection.up > s.inputConnection.lost
+
+	switch {
+	case connected && !wasConnected:
+		s.inputConnection.up++
+	case !connected && wasConnected:
+		s.inputConnection.lost++
+		s.inputConnection.failed++
+	}
 }
 
 // SetFailing makes path answer status instead of 200. The body stays valid
@@ -183,6 +206,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input, output, errors := s.input, s.output, s.errors
+	conn := s.inputConnection
 	version, metricsBody := s.version, s.metricsBody
 	s.mu.Unlock()
 
@@ -208,19 +232,38 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		writeCounters(w, input, output, errors)
+		writeCounters(w, input, output, errors, conn)
 	default:
 		http.NotFound(w, r)
 	}
 }
 
+// inputConnection is the input's connection counters as /metrics serves them.
+type inputConnection struct {
+	up, lost, failed int64
+}
+
 // writeCounters writes the counters in Benthos's exposition shape: one series
 // per leaf with a path label and no top-level aggregate, so a parser has to
 // add up the two output brokers.
-func writeCounters(w http.ResponseWriter, input, output, errors int64) {
+func writeCounters(w http.ResponseWriter, input, output, errors int64, conn inputConnection) {
 	_, _ = fmt.Fprintf(w, "# HELP input_received Benthos Counter metric\n")
 	_, _ = fmt.Fprintf(w, "# TYPE input_received counter\n")
 	_, _ = fmt.Fprintf(w, "input_received{label=\"\",path=\"root.input\"} %d\n", input)
+
+	for _, c := range []struct {
+		name  string
+		value int64
+	}{
+		{"input_connection_up", conn.up},
+		{"input_connection_lost", conn.lost},
+		{"input_connection_failed", conn.failed},
+	} {
+		_, _ = fmt.Fprintf(w, "# HELP %s Benthos Counter metric\n", c.name)
+		_, _ = fmt.Fprintf(w, "# TYPE %s counter\n", c.name)
+		_, _ = fmt.Fprintf(w, "%s{label=\"\",path=\"root.input\"} %d\n", c.name, c.value)
+	}
+
 	_, _ = fmt.Fprintf(w, "# HELP output_sent Benthos Counter metric\n")
 	_, _ = fmt.Fprintf(w, "# TYPE output_sent counter\n")
 	_, _ = fmt.Fprintf(w, "output_sent{label=\"\",path=\"root.output.broker.0\"} %d\n", output/2)
