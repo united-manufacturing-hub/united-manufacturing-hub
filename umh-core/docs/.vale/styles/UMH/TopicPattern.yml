@@ -18,4 +18,4 @@ message: "A topic is one concrete UNS topic. Call the regular expression a topic
 level: warning
 ignorecase: true
 tokens:
-  - 'topics?\b[^.]{0,40}?\b(?:is|are) (?:a )?regular expressions?'
+  - '\btopics?\b(?!\s+patterns?\b)[^.]{0,40}?\b(?:is|are) (?:a )?regular expressions?'

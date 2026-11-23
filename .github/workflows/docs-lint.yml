@@ -29,7 +29,7 @@ permissions:
 jobs:
   vale:
     name: Vale
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04
     permissions:
       contents: read
       checks: write
@@ -38,9 +38,13 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: errata-ai/vale-action@85f9f7f2c5f449ac0ae5b66662961bae3f77ca6a # v2.1.2
+      # Vale and reviewdog can still fail the step, for example on a broken rule.
+      # continue-on-error keeps the job green, as the check is not required.
+      - uses: vale-cli/vale-action@518a9136acc6e6668ce7c00d367051e0941e87ff # v3.0.0
+        continue-on-error: true
         with:
           version: 3.28.1
+          sync: false
           files: umh-core/docs
           vale_flags: "--config=umh-core/docs/.vale.ini"
           reporter: github-pr-annotations

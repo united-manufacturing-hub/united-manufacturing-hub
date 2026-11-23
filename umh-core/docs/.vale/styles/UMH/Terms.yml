@@ -13,9 +13,9 @@
 # limitations under the License.
 
 # The words of the terminology table in umh-core/docs/CLAUDE.md that are wrong
-# in every context. Words that are right in some contexts, such as device,
-# endpoint, receives or connection, stay with the review. Change this file and
-# the table together.
+# in every context. Direction words are in Direction.yml. Words that are right
+# in some contexts, such as device, endpoint or connection, stay with the
+# review. Change this file and the table together.
 extends: substitution
 message: "Use '%s' instead of '%s'. See the terminology table in umh-core/docs/CLAUDE.md."
 level: warning
