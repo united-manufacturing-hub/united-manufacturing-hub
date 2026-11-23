@@ -33,24 +33,9 @@ const ContainerUpdateObservedStateTimeout = 10 * time.Millisecond
 
 // Health assessment thresholds.
 const (
-	CPUHighThresholdPercent   = 70.0 // Degraded if above this - lowered from 90% to prevent throttling
-	CPUMediumThresholdPercent = 60.0 // Warning level (but still Active)
-
 	MemoryHighThresholdPercent   = 80.0 // Degraded if above this - lowered from 90% for earlier detection
 	MemoryMediumThresholdPercent = 70.0 // Warning level (but still Active)
 
 	DiskHighThresholdPercent   = 85.0 // Degraded if above this - lowered from 90% for safety margin
 	DiskMediumThresholdPercent = 75.0 // Warning level (but still Active)
-)
-
-// Resource scaling limits.
-const (
-	// CPUThrottleRatioThreshold defines when CPU throttling is considered significant.
-	// If more than 5% of periods are throttled, the CPU is considered throttled.
-	CPUThrottleRatioThreshold = 0.05
-
-	// CPUThrottleWindow defines the sliding window duration for throttle ratio calculation.
-	// 60 seconds aligns with Prometheus/K8s rate windows for counter-derived metrics
-	// and avoids rapid Degraded/Active flips during bursty throttle events.
-	CPUThrottleWindow = 60 * time.Second
 )

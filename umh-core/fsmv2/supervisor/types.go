@@ -144,9 +144,6 @@ type WorkerContext[TObserved fsmv2.ObservedState, TDesired fsmv2.DesiredState] s
 	// Structs
 	identity deps.Identity
 
-	// metricsClaim is set when the worker is registered and read by its collector goroutine.
-	metricsClaim atomic.Uint64
-
 	// Strings (16 bytes each - pointer + length)
 	// lastObservedStateName caches the constructed observed state name (e.g., "running_healthy_connected").
 	// Constructed by supervisor as: phase.Prefix() + lowercase(state.String())

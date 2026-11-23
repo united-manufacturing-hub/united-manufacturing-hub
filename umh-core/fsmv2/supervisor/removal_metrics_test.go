@@ -81,14 +81,14 @@ func stateDurationStates(hierarchyPath string) []string {
 }
 
 // exportTestWorkerMetrics exports the way the collector does after it saves an observation.
-func exportTestWorkerMetrics(hierarchyPath string, claim metrics.WorkerMetricsClaim, gaugeValue float64) {
+func exportTestWorkerMetrics(claim *metrics.WorkerMetricsHandle, gaugeValue float64) {
 	workerMetrics := deps.Metrics{
 		Counters: map[string]int64{removalTestCounter: 3},
 		Gauges:   map[string]float64{removalTestGauge: gaugeValue},
 	}
 	observed := fsmv2.Observation[struct{}]{}.SetWorkerMetrics(workerMetrics)
 
-	metrics.ExportWorkerMetrics(hierarchyPath, claim, observed)
+	claim.Export(observed)
 }
 
 // gaugeValues returns the values of every series of metricName for hierarchyPath.
@@ -115,9 +115,9 @@ func gaugeValues(metricName, hierarchyPath string) []float64 {
 	return values
 }
 
-// supervisorWithState builds a supervisor whose one worker stays in state.
-// Any state-duration series other tests left for the same hierarchy path is
-// deleted first, so the spec starts clean.
+// supervisorWithState builds a supervisor whose one worker stays in state. Any
+// state-duration series other tests left for the same hierarchy path is deleted
+// first, so the spec starts clean.
 func supervisorWithState(state *mockState) *supervisor.Supervisor[*supervisor.TestObservedState, *supervisor.TestDesiredState] {
 	state.nextState = state
 
@@ -156,7 +156,7 @@ var _ = Describe("The worker metrics of a worker", func() {
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		exportTestWorkerMetrics(hierarchyPath, s.WorkerMetricsClaimForTest(mockIdentity().ID), 1)
+		exportTestWorkerMetrics(s.TestWorkerMetrics(mockIdentity().ID), 1)
 		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(HaveLen(1))
 		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(HaveLen(1))
 
@@ -174,11 +174,11 @@ var _ = Describe("The worker metrics of a worker", func() {
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		removedClaim := s.WorkerMetricsClaimForTest(mockIdentity().ID)
-		exportTestWorkerMetrics(hierarchyPath, removedClaim, 1)
+		removedClaim := s.TestWorkerMetrics(mockIdentity().ID)
+		exportTestWorkerMetrics(removedClaim, 1)
 
 		Expect(s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)).To(Succeed())
-		exportTestWorkerMetrics(hierarchyPath, removedClaim, 1)
+		exportTestWorkerMetrics(removedClaim, 1)
 
 		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(BeEmpty())
 		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(BeEmpty())
@@ -190,13 +190,13 @@ var _ = Describe("The worker metrics of a worker", func() {
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		removedClaim := s.WorkerMetricsClaimForTest(mockIdentity().ID)
+		removedClaim := s.TestWorkerMetrics(mockIdentity().ID)
 
 		Expect(s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)).To(Succeed())
 		Expect(s.AddWorker(mockIdentity(), &mockWorker{initialState: state})).To(Succeed())
-		exportTestWorkerMetrics(hierarchyPath, s.WorkerMetricsClaimForTest(mockIdentity().ID), 1)
+		exportTestWorkerMetrics(s.TestWorkerMetrics(mockIdentity().ID), 1)
 
-		exportTestWorkerMetrics(hierarchyPath, removedClaim, 99)
+		exportTestWorkerMetrics(removedClaim, 99)
 
 		Expect(gaugeValues(removalTestGaugeMetric, hierarchyPath)).To(ConsistOf(1.0))
 	})
@@ -268,7 +268,7 @@ var _ = Describe("Shutdown", func() {
 		_ = root.Start(runCtx)
 
 		Eventually(root.ListWorkers, 5*time.Second).Should(HaveLen(1))
-		exportTestWorkerMetrics(identity.HierarchyPath, root.WorkerMetricsClaimForTest(identity.ID), 1)
+		exportTestWorkerMetrics(root.TestWorkerMetrics(identity.ID), 1)
 		Expect(seriesLabels(0, removalTestGaugeMetric, identity.HierarchyPath)).To(HaveLen(1))
 
 		root.Shutdown()

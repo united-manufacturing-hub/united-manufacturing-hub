@@ -353,9 +353,6 @@ func (s *Supervisor[TObserved, TDesired]) newCollector(worker fsmv2.Worker, iden
 
 			return workerCtx.currentState.String()
 		},
-		MetricsClaim: func() metrics.WorkerMetricsClaim {
-			return metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load())
-		},
 		ShutdownRequestedProvider: func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -532,7 +529,6 @@ func (s *Supervisor[TObserved, TDesired]) newWorkerContext(worker fsmv2.Worker, 
 
 // Caller must hold s.mu.
 func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContext[TObserved, TDesired], identity deps.Identity, workerLogger deps.FSMLogger) {
-	workerCtx.metricsClaim.Store(uint64(metrics.ClaimWorkerMetrics(identity.HierarchyPath)))
 	s.workers[identity.ID] = workerCtx
 
 	// Cache the first worker ID for lock-free access in GetHierarchyPathUnlocked()
@@ -562,8 +558,6 @@ func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	}
 
 	workerCtx.mu.RUnlock()
-
-	metrics.CleanupWorkerMetrics(workerCtx.identity.HierarchyPath, metrics.WorkerMetricsClaim(workerCtx.metricsClaim.Load()))
 }
 
 // RemoveWorkerForRestart removes a worker from the registry without

@@ -1,7 +1,7 @@
 # CPU Health
 
 {% hint style="info" %}
-The CPU health check is on by default from UMH Core v0.44.46. See [Turn the check on or off](#turn-the-check-on-or-off).
+The CPU health check is the only CPU status. From UMH Core v0.45.3, it always runs and `USE_FSMV2_CPU` is ignored. On v0.44.46 to v0.45.2, it is on by default and `USE_FSMV2_CPU=false` turns it off. On v0.44.37 to v0.44.45, it runs only when the container is started with `USE_FSMV2_CPU=true`. The check does not need Management Console credentials: it also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
 {% endhint %}
 
 UMH Core checks whether an instance has the CPU it needs. The Management Console shows the result as a CPU status on the instance's detail page. While CPU health is degraded, new bridges wait (see [When a new bridge waits for CPU](#when-a-new-bridge-waits-for-cpu)).
@@ -100,7 +100,7 @@ This section moved to its own page. To make the `Pressure` line show a percentag
 
 ## Metrics
 
-With the CPU health check on, UMH Core publishes the gauges below on the Prometheus endpoint on port 8080. [Read the metrics](../../agent/metrics.md#read-the-metrics) explains how to read the endpoint. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
+With the CPU health check, UMH Core publishes the gauges below on the Prometheus endpoint on port 8080. [Read the metrics](../../agent/metrics.md#read-the-metrics) explains how to read the endpoint. UMH Core measures the CPU once per second and updates the gauges after each measurement. Each gauge is exposed as `umh_fsmv2_worker_<name>`, with a `hierarchy_path` label that ends in `(cpu)`. Select them with `{hierarchy_path=~".*\\(cpu\\)"}`. A query that uses the name without the `umh_fsmv2_worker_` prefix matches nothing, and Prometheus reports no error for it.
 
 When UMH Core cannot read a file it needs for the CPU usage or capacity (the `CPU not measured` message above), every gauge keeps its previous value, and nothing marks it stale. Only the age of `umh_fsmv2_worker_cpu_last_sample_unix` shows such a freeze.
 
@@ -139,13 +139,6 @@ The flags come in three kinds:
 - An `_available` flag reads 0 when the latest measurement could not supply the figure. `cpu_host_headroom_available` reads 0 when the container is pinned to a subset of the machine's CPUs. It also reads 0 when the machine's CPU count could not be read. The first is a deployment choice. The second is a read failure worth investigating.
 
 `cpu_host_headroom_cores` has no flag of its own. Trust it only when `cpu_host_headroom_available`, `cpu_host_busy_cores_available` and `cpu_host_busy_ring_active` all read 1.
-
-## Turn the check on or off
-
-- The check is on by default from v0.44.46. On v0.44.37 to v0.44.45 it is off unless the container starts with `-e USE_FSMV2_CPU=true`.
-- To turn it off, add `-e USE_FSMV2_CPU=false` to the `docker run` command that starts the container. UMH Core reads `USE_FSMV2_CPU` at startup, so changing it means recreating the container.
-- Since v0.44.42, the check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
-- With the check off, the 70% CPU usage rule applies instead. An instance is then degraded while the whole machine's CPU usage is at 70% or more. It is also degraded while the kernel throttles the container in more than 5% of scheduling periods over 60 seconds. Both apply whether or not work is being delayed, and even when the container has a CPU limit.
 
 ## Known limitation
 

@@ -30,7 +30,9 @@ The Usage and Peak Usage rows appear while the badge is Active or Degraded. Each
 | Neutral | `Communicator not running` | The transport worker is stopped or stopping. |
 | Neutral | `Communicator status unknown` | umh-core could not read the communicator status. |
 
-## Metrics
+## Reference
+
+### Metrics
 
 The communicator reports on port 8080 how many of its requests to the Management Console failed, by cause. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint, and [FSMv2 metrics](../agent/metrics.md#fsmv2-metrics) explains the `hierarchy_path` label. The failed logins are the series whose `hierarchy_path` ends in `(transport)`. A counter appears only after its first count.
 

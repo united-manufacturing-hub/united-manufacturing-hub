@@ -19,38 +19,14 @@ import (
 	"testing"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/register"
 	fsmv2cpu "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/cpu"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/workers/configworker/snapshot"
 )
 
-// newCPUConstructedWorker mirrors newConstructedWorker, but with a controllable
-// CPU flag. It returns the worker and the registry it was given.
-func newCPUConstructedWorker(t *testing.T, cpuEnabled bool) (*configworker.ConfigworkerWorker, *dynamicchildren.Registry) {
-	t.Helper()
-
-	shared := dynamicchildren.NewWriter().Registry()
-	register.SetGlobalDeps[*dynamicchildren.Registry](workerType, shared)
-	t.Cleanup(func() { register.ClearGlobalDeps(workerType) })
-	register.SetGlobalDeps[bool](configworker.CPUEnabledDepsKey, cpuEnabled)
-	t.Cleanup(func() { register.ClearGlobalDeps(configworker.CPUEnabledDepsKey) })
-
-	identity := deps.Identity{ID: workerType + "-001", WorkerType: workerType}
-
-	w, err := configworker.NewConfigworkerWorker(identity, deps.NewNopFSMLogger(), nil)
-	if err != nil {
-		t.Fatalf("NewConfigworkerWorker: %v", err)
-	}
-
-	return w, shared
-}
-
 // withClient returns the registry behind a freshly published client, which is
-// deliberately NOT the one newCPUConstructedWorker hands the worker. So the
+// deliberately NOT the one newConstructedWorker hands the worker. So the
 // child appears there only if the worker went through the client; a reconcile
 // writing its own registry directly would fail the upsert test.
 func withClient(t *testing.T) *dynamicchildren.Registry {
@@ -63,30 +39,16 @@ func withClient(t *testing.T) *dynamicchildren.Registry {
 	return dynWriter.Registry()
 }
 
-func TestCollectObservedStateUpsertsCPUWhenEnabled(t *testing.T) {
-	w, _ := newCPUConstructedWorker(t, true)
+func TestCollectObservedStateUpsertsCPU(t *testing.T) {
+	w := newConstructedWorker(t)
 	clientShared := withClient(t)
 
 	desired := &fsmv2.WrappedDesiredState[snapshot.ConfigworkerConfig]{}
 	if _, err := w.CollectObservedState(context.Background(), desired); err != nil {
-		t.Fatalf("CollectObservedState (cpu enabled): %v", err)
+		t.Fatalf("CollectObservedState: %v", err)
 	}
 
 	if !clientShared.Contains(fsmv2cpu.Ref) {
-		t.Fatalf("cpu enabled: registry does not contain %v after reconcile", fsmv2cpu.Ref)
-	}
-}
-
-func TestCollectObservedStateDoesNotUpsertCPUWhenDisabled(t *testing.T) {
-	w, _ := newCPUConstructedWorker(t, false)
-	clientShared := withClient(t)
-
-	desired := &fsmv2.WrappedDesiredState[snapshot.ConfigworkerConfig]{}
-	if _, err := w.CollectObservedState(context.Background(), desired); err != nil {
-		t.Fatalf("CollectObservedState (cpu disabled): %v", err)
-	}
-
-	if clientShared.Contains(fsmv2cpu.Ref) {
-		t.Fatalf("cpu disabled: registry contains %v after reconcile, but the flag is off", fsmv2cpu.Ref)
+		t.Fatalf("registry does not contain %v after reconcile", fsmv2cpu.Ref)
 	}
 }

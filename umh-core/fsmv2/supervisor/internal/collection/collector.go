@@ -60,9 +60,8 @@ type CollectorConfig[TObserved any] struct {
 	Worker                    fsmv2.Worker
 	Store                     storage.TriangularStoreInterface
 	Logger                    deps.FSMLogger
-	StateProvider             func() string                     // Returns current FSM state name (injected by supervisor)
-	ShutdownRequestedProvider func() bool                       // Returns current shutdown requested status (injected by supervisor)
-	MetricsClaim              func() metrics.WorkerMetricsClaim // nil exports no worker metrics
+	StateProvider             func() string // Returns current FSM state name (injected by supervisor)
+	ShutdownRequestedProvider func() bool   // Returns current shutdown requested status (injected by supervisor)
 	// ChildrenCountsProvider is the legacy two-int interface. New workers should
 	// consume ChildrenView instead and read HealthyCount / UnhealthyCount as fields.
 	// The collector still calls both setters during migration; counts agree because
@@ -115,6 +114,7 @@ type Collector[TObserved any] struct {
 	cancel        context.CancelFunc
 	goroutineDone chan struct{}
 	restartChan   chan struct{}
+	workerMetrics *metrics.WorkerMetricsHandle
 	config        CollectorConfig[TObserved]
 	state         collectorState
 	mu            sync.RWMutex
@@ -124,11 +124,15 @@ type Collector[TObserved any] struct {
 
 // NewCollector creates a new collector with the given configuration.
 // The type parameter TObserved is inferred from the config parameter.
+//
+// The collector claims the worker-metric series of the worker's hierarchy path,
+// so build it only for a worker that is being added. Stop deletes the series.
 func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
 	return &Collector[TObserved]{
-		config:      config,
-		state:       collectorStateCreated,
-		restartChan: make(chan struct{}, 1),
+		config:        config,
+		state:         collectorStateCreated,
+		restartChan:   make(chan struct{}, 1),
+		workerMetrics: metrics.ForWorker(config.Identity.HierarchyPath),
 	}
 }
 
@@ -173,12 +177,9 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	return c.running
 }
 
-func (c *Collector[TObserved]) metricsClaim() metrics.WorkerMetricsClaim {
-	if c.config.MetricsClaim == nil {
-		return 0
-	}
-
-	return c.config.MetricsClaim()
+// WorkerMetrics returns the handle the collector exports the worker's metrics through.
+func (c *Collector[TObserved]) WorkerMetrics() *metrics.WorkerMetricsHandle {
+	return c.workerMetrics
 }
 
 // TriggerNow signals the observation loop to collect immediately.
@@ -230,9 +231,9 @@ func (c *Collector[TObserved]) Restart() {
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	c.Stop(stopCtx)
+	c.stopObservationLoop(stopCtx)
 
-	// Reset state so we can start again (Stop sets state to stopped)
+	// Reset state so we can start again (stopObservationLoop sets state to stopped)
 	c.mu.Lock()
 	c.state = collectorStateCreated
 	c.restartChan = make(chan struct{}, 1)
@@ -252,7 +253,17 @@ func (c *Collector[TObserved]) Restart() {
 	}
 }
 
+// Stop stops the observation loop for good and deletes the worker-metric
+// series the collector exported. A collection that returns after Stop exports
+// nothing.
 func (c *Collector[TObserved]) Stop(ctx context.Context) {
+	c.stopObservationLoop(ctx)
+	c.workerMetrics.Release()
+}
+
+// stopObservationLoop stops the observation loop and waits for it to exit,
+// bounded by ctx and 5 seconds. Restart uses it to keep the worker's metrics.
+func (c *Collector[TObserved]) stopObservationLoop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
@@ -601,7 +612,7 @@ func (c *Collector[TObserved]) collectAndSaveObservedState(ctx context.Context) 
 	saveDuration := time.Since(saveStartTime)
 
 	metrics.RecordObservationSave(c.config.Identity.HierarchyPath, changed, saveDuration)
-	metrics.ExportWorkerMetrics(c.config.Identity.HierarchyPath, c.metricsClaim(), observed)
+	c.workerMetrics.Export(observed)
 
 	if changed {
 		c.logTrace("observation_saved",
