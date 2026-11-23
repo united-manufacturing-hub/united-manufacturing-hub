@@ -27,6 +27,11 @@ import (
 // Version is what a new Server's /version reports.
 const Version = "1.2.3"
 
+// inputConnection is the input's connection counters as /metrics serves them.
+type inputConnection struct {
+	up, lost, failed int64
+}
+
 // Server is a fake Benthos that answers the four endpoints a scrape reads:
 // /ping, /ready, /version and /metrics. A new Server answers like a healthy,
 // idle Benthos. Its methods are safe to call while it is being scraped.
@@ -236,11 +241,6 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-// inputConnection is the input's connection counters as /metrics serves them.
-type inputConnection struct {
-	up, lost, failed int64
 }
 
 // writeCounters writes the counters in Benthos's exposition shape: one series
