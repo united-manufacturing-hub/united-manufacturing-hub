@@ -23,7 +23,7 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 5. Deploy.
 
 There is no read flow to configure and no address table to map, so the protocol and address steps of
-the general [bridge walkthrough](../data-flows/bridges.md) don't apply.
+the general [bridge walkthrough](../data-flows/create-a-bridge.md) don't apply.
 
 {% hint style="warning" %}
 **Drop the version, and no dashes.** `data_contract_name` is the bare contract name: no leading

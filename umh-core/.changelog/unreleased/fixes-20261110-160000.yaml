@@ -1,0 +1,3 @@
+kind: fixes
+body: Updated the OpenTelemetry OTLP trace exporters (v1.44.0 to v1.46.0), so a verbose OpenTelemetry logger can no longer write the collector endpoint URL to the log. Only a tracing setup with a custom verbose OpenTelemetry logger was exposed (CVE-2026-81870). Images built before v0.17.0 still contain the older exporters
+time: 2026-11-10T16:00:00.000000+01:00

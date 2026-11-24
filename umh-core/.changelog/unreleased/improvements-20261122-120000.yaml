@@ -1,0 +1,3 @@
+kind: improvements
+body: Updated the bundled Redpanda Connect components from v4.117.0 to v4.118.0. See the [Redpanda Connect v4.118.0 release notes](https://github.com/redpanda-data/connect/releases/tag/v4.118.0) for the full list
+time: 2026-11-22T12:00:00.000000+01:00
