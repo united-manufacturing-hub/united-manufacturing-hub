@@ -1,0 +1,3 @@
+kind: fixes
+body: Sparkplug B input now writes Bytes, File and array metrics to the UNS as base64 strings, and names their datatype in spb_datatype. Before, it dropped them without a warning. DataSet and Template metrics are still not supported, and the input now logs a warning when it drops one
+time: 2026-11-05T15:17:30.698505+01:00
