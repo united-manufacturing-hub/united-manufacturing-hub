@@ -18,10 +18,10 @@ It has five parts:
 flowchart LR
     P["<b>umh.v1</b><br/>Prefix"]
     subgraph L["Location path"]
-        L0["<b>acme</b><br/>Enterprise"]
-        L1["<b>cologne</b><br/>Site"]
-        L2["<b>packaging</b><br/>Area"]
-        L3["<b>line_1</b><br/>Line"]
+        L0["<b>acme</b><br/>Level 0"]
+        L1["<b>cologne</b><br/>Level 1"]
+        L2["<b>packaging</b><br/>Level 2"]
+        L3["<b>line_1</b><br/>Level 3"]
         L0 --> L1 --> L2 --> L3
     end
     C["<b>_pump_v1</b><br/>Data contract"]
@@ -43,7 +43,9 @@ Each part is one or more levels, separated by dots. A level is never empty, so a
 
 ## Location path
 
-The location path says where the data comes from, for example enterprise, site, area, line and machine. Any naming scheme works, such as ISA-95 or KKS. Only the first level, usually the enterprise, is required. A level of the location path does not start with `_`, because the first level that starts with `_` is the data contract.
+The location path says where the data comes from. It has one or more levels, numbered from level 0. Only level 0 is required.
+
+You decide what each level stands for. ISA-95, KKS or any other naming standard works. With ISA-95, the levels are enterprise, site, area, line and machine, as in the topic above. A level of the location path does not start with `_`, because the first level that starts with `_` is the data contract.
 
 The topics of a bridge start with its **bridge location**: the instance location plus the bridge's levels. The bridge's levels extend the instance location and never overwrite its levels. In a bridge, `{{ .location_path }}` holds the bridge location in dotted form, such as `acme.cologne.packaging`. [Bridges](../data-flows/bridges.md#configuration) explains where the levels are set.
 
@@ -95,12 +97,12 @@ A topic pattern matches a topic when it matches any part of it. These parts of t
 | `_pump_v(?:1\|2)` | Versions 1 and 2 of the data model `pump`, each version listed by its number. |
 | `$` | The end of the topic. Use it to match one tag name only. |
 
-These patterns match topics of the area `acme.cologne.packaging`:
+These patterns match topics at the location path `acme.cologne.packaging`:
 
 | Matches | Topic pattern |
 |---|---|
-| All `_pump_v1` topics of the area itself | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` |
-| All `_pump_v1` topics of the area and every level below it | `^umh\.v1\.acme\.cologne\.packaging\.(?:[^._][^.]*\.)*_pump_v1\.` |
+| All `_pump_v1` topics at `acme.cologne.packaging` itself | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` |
+| All `_pump_v1` topics at `acme.cologne.packaging` and every level below it | `^umh\.v1\.acme\.cologne\.packaging\.(?:[^._][^.]*\.)*_pump_v1\.` |
 | Only the tag name `pressure` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.pressure$` |
 | Versions 1 and 2 of `pump` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v(?:1\|2)\.` |
 
