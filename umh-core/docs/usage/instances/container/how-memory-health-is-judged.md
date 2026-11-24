@@ -4,7 +4,7 @@
 The memory monitor is a preview and off by default. It turns on when the container starts with `-e USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](README.md#configuration).
 {% endhint %}
 
-Without the preview, UMH Core judges memory by one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. Memory is degraded above 80%.
+Without the preview, UMH Core judges memory by one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. Memory is degraded from 80%.
 
 With the preview on, UMH Core measures memory once per second and judges it on four causes. Memory is degraded while any of them holds:
 

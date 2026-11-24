@@ -10,11 +10,11 @@ Every instance serves its metrics on port 8080, at the path `/metrics`, in the P
 docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics
 ```
 
-The install command from the Management Console names the container `umh-core` and does not publish port 8080. For Prometheus to scrape the instance, remove the container and start it again with the same `docker run` command plus `-p <host-ip>:8080:8080`. `docker restart` keeps the old port mappings. The endpoint has no authentication, so give `<host-ip>` an address on a trusted network, for example `127.0.0.1` when Prometheus runs on the same host. Without it, Docker publishes the port on every interface of the host.
+The install command from the Management Console names the container `umh-core` and does not publish port 8080. For Prometheus to scrape the instance, remove the container and start it again with the same `docker run` command plus `-p <host-ip>:8080:8080`. `docker restart` keeps the old port mappings. The endpoint has no authentication, so give `<host-ip>` an address on a trusted network, for example `127.0.0.1` when Prometheus runs directly on the same host. When Prometheus runs in a container on a Docker bridge network, `127.0.0.1` is that container itself, so give an address of the host that the Prometheus container can reach. Without it, Docker publishes the port on every interface of the host.
 
 The port inside the container is always 8080, because umh-core sets `agent.metricsPort` in `config.yaml` back to 8080 on every start. To use another port on the host, change the host side of the mapping, for example `-p <host-ip>:9100:8080`.
 
-Prometheus renames umh-core's `instance` label to `exported_instance`, unless the scrape job sets `honor_labels: true`. In Prometheus queries, write `exported_instance="Core"` where the component pages write `instance="Core"`.
+Prometheus renames umh-core's `instance` label to `exported_instance`, unless the scrape job sets `honor_labels: true`. With the default setting, write `exported_instance="Core"` in Prometheus queries where the component pages write `instance="Core"`. With `honor_labels: true`, keep `instance`.
 
 Most series appear only after umh-core records their first value. The FSMv2 counters, for example, appear after their first count. A missing series therefore does not mean the component is missing. `umh_core_errors_total` is the exception. It exists at 0 from the moment umh-core creates the component.
 

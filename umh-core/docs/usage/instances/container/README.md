@@ -83,12 +83,12 @@ With the [memory monitor preview](how-memory-health-is-judged.md) on, memory deg
 
 ### Memory and disk
 
-| Resource | Degraded above | Warning from |
-|---|---|---|
-| Memory | 80% of the total | 70% |
-| Disk | 85% of the `/data` volume | 75% |
+| Resource | Degraded from | Active again below | Warning from |
+|---|---|---|---|
+| Memory | 80% of the total | 80% | 70% |
+| Disk | 85% of the `/data` volume | 85% | 75% |
 
-A warning does not change the badge. The badge stays Active and does not show the warning. With the memory monitor preview, [Memory monitor preview thresholds](#memory-monitor-preview-thresholds) replaces the memory row.
+Memory and disk recover at the same value they degrade at. A warning does not change the badge. The badge stays Active and does not show the warning. With the memory monitor preview, [Memory monitor preview thresholds](#memory-monitor-preview-thresholds) replaces the memory row.
 
 ### CPU thresholds
 
@@ -145,10 +145,12 @@ To alert when the container degrades:
 umh_container_health_status{component="overall"} == 2
 ```
 
-When UMH Core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. To alert when the CPU health check has not measured for a minute:
+When UMH Core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. Before the first successful measurement, `umh_fsmv2_worker_cpu_last_sample_unix` does not exist. To alert when the CPU health check has not measured for a minute, including when it never measured, use a `for:` duration of a few minutes so that the first seconds after a start do not fire:
 
 ```promql
 time() - umh_fsmv2_worker_cpu_last_sample_unix > 60
+or
+absent(umh_fsmv2_worker_cpu_last_sample_unix)
 ```
 
 The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go) for the `umh_container_*` gauges, and in [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go) for the CPU and memory gauges.
