@@ -38,6 +38,10 @@ Do not describe known defects on any page. Add the docs update to the ticket tha
 - The title tells the kind of page, because the sidebar has no group headings: a noun is something to understand ("Write Flow"), an imperative is something to do ("Set up a write flow"), a symptom is something that went wrong ("Bridges Do Not Start").
 - Order the children the same way: parts first, then explanations, then guides, then troubleshooting.
 
+## Images
+
+Add an image as a Markdown image, `![alt text](path)`, not as an HTML `<figure>`. The alt text says what the screenshot shows. GitBook shows a Markdown image at the full width of the page, so a screenshot of a small UI element includes enough of the screen around it to read well at that width.
+
 ## Config snippets
 
 `config.yaml` is parsed strictly: one unknown key rejects the whole file. A few keys are silently ignored in the wrong place instead, such as `debug_level` inside `protocolConverterServiceConfig`. Check every snippet against the structs in `umh-core/pkg/config` on `staging`.
