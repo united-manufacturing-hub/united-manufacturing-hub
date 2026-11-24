@@ -10,7 +10,7 @@ A plugin card shows the plugin's health badge and a summary of its state. **Open
 
 **Add plugin** on the **Add a plugin** card opens **Select a plugin**, which lists the plugins you can add. A plugin that the instance already has shows **Already added**.
 
-The tab is unavailable when plugins are not enabled for your organization, or when the instance's UMH Core version does not support them. In the second case, hovering over the tab shows `This instance does not support plugins yet — update umh-core.`
+The tab is unavailable when plugins are not enabled for your organization, or when the instance runs a UMH Core version older than v0.44.29. In the second case, hovering over the tab shows `This instance does not support plugins yet — update umh-core.`
 
 ## Available plugins
 

@@ -8,15 +8,17 @@ The Agent card on the instance details page shows the identity and the version o
 
 | Field | Shows |
 |---|---|
-| Status badge | The health of the agent. See [When the Agent shows Degraded](#when-the-agent-shows-degraded). |
+| Status badge | The health of the agent. See [Agent states](#agent-states). |
 | Name | The name of the instance. The **Rename** button changes it. |
 | Location | The location path of the instance, one level per line. It is set when you create the instance and cannot be changed on the card. |
 | Core Version | The version of UMH Core. Hover over it to see the versions of S6 Overlay, Benthos and Redpanda. A marker next to the version shows when the release channel has a newer version. |
 | Release Channel | The release channel the instance follows, from `agent.releaseChannel` in the config file: `stable`, `nightly` or `enterprise`. It shows `n/a` when `agent.releaseChannel` is missing or has another value. The `RELEASE_CHANNEL` environment variable overwrites the key on every start, so to change the channel, start a new container with the new value. |
 
+UMH Core bundles third-party software, such as S6 Overlay, Benthos and Redpanda, together with the libraries they depend on. For a software bill of materials (SBOM) that lists every component and its version, contact UMH.
+
 The **Logs** button opens the logs of the agent. The agent writes them to `/data/logs/umh-core/`. See [Container Layout](../../../reference/container-layout.md#logs). The **Metrics** button is not available yet.
 
-### When the Agent shows Degraded
+## Agent states
 
 The Agent shows Degraded while the emergency setting *Turn off bridge admission* is on. The badge reason then starts with `Bridge admission is off (agent.enableResourceLimitBlocking: false).` New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit. [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission) explains how to turn bridge admission back on.
 
