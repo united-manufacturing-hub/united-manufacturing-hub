@@ -487,8 +487,8 @@ type WorkerMetricsHandle struct {
 	hierarchyPath string
 }
 
-// ForWorker returns the handle a collector exports its worker's metrics through.
-func ForWorker(hierarchyPath string) *WorkerMetricsHandle {
+// NewWorkerMetricsHandle returns the handle a collector exports its worker's metrics through.
+func NewWorkerMetricsHandle(hierarchyPath string) *WorkerMetricsHandle {
 	return &WorkerMetricsHandle{exporter: workerMetricsExporter, hierarchyPath: hierarchyPath}
 }
 
