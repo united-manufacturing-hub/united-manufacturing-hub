@@ -21,9 +21,11 @@ Subpages follow the component's internal structure in umh-core, the FSMv1 or FSM
 A component page, such as Bridges, and a part page, such as Read Flow or Write Flow, hold no steps. Pages written before this rule, Bridges among them, still do. Move their steps when you rework the page, and do not copy their shape. Leave out any section that doesn't apply, and keep this order:
 
 1. What the component or part is, in the primary reader's words, with no internals.
-2. What the Management Console shows. One sentence on what a status means is fine. The steps to fix it go to a troubleshooting child page.
-3. The rules of the component or part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this section.
-4. `## Reference`, the last section of the page, with these subsections. Only a short list of next steps may follow it.
+2. What the Management Console shows: the card and its fields.
+3. `## <Name> states`: every state or status the badge can show, one table row each, with what it means. One sentence on what a status means is fine. The steps to fix it go to a troubleshooting child page.
+4. `## <Name> thresholds`: the values at which a state changes, with the value it degrades at and the value it recovers at. Leave the section out when the component has no thresholds. An explanation child page explains why a threshold is set where it is, and links here for the values.
+5. The rules of the component or part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this section.
+6. `## Reference`, the last section of the page, with these subsections. Only a short list of next steps may follow it.
    - `### Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
    - `### Metrics`: what the component or part tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there.
 
