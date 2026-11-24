@@ -1,3 +1,0 @@
-kind: new
-body: Azure Blob Storage output (azure_blob_storage) can now store blob index tags with each blob through the new tags field, so the blobs can be found and filtered by tag in Azure. A tag key that Azure does not allow is rejected when the config is loaded. With blob_type APPEND, tags are only set on a blob that the output creates, not on one that already exists
-time: 2026-11-22T12:01:00.000000+01:00

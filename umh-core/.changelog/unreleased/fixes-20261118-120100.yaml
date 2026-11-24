@@ -1,3 +1,0 @@
-kind: fixes
-body: OPC UA input no longer stops reading when a server sends a notification it has no subscription for. Such a notification is now dropped and logged instead of ending the input
-time: 2026-11-18T12:01:00.000000+01:00

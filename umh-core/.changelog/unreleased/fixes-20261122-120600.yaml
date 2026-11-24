@@ -1,3 +1,0 @@
-kind: fixes
-body: AWS DynamoDB CDC input (aws_dynamodb_cdc) no longer emits duplicate events or skips events when the snapshot and the change stream overlap within the same second or across time zones. It also resumes an interrupted snapshot with the right segment count, and keeps retrying when refreshing the table's shards fails instead of stopping
-time: 2026-11-22T12:06:00.000000+01:00

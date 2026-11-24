@@ -1,3 +1,0 @@
-kind: fixes
-body: OPC UA input now publishes every value under the node it was read from when the server rejects the deadband filter. Before, values could appear under another node's name and tag in the Topic Browser, with no error
-time: 2026-11-18T12:00:00.000000+01:00
