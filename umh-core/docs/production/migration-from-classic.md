@@ -41,8 +41,9 @@ pipeline:
 # Consumer patterns
 input:
   uns:
-    topics: ["umh.v1.+.+.+.+._raw.+"]        # For simple sensor data
-    topics: ["umh.v1.+.+.+.+._temperature.+"]  # For structured temperature data
+    umh_topics:   # regex patterns
+      - 'umh\.v1\.acme\.cologne\..*\._raw\..*'           # For simple sensor data
+      - 'umh\.v1\.acme\.cologne\..*\._temperature\..*'   # For structured temperature data
 ```
 
 ### Configuration Changes
@@ -129,7 +130,8 @@ dataFlow:
       benthos:
         input:
           uns:
-            topics: ["umh.v1.+.+.+.+._raw.+"]
+            umh_topics:   # regex patterns
+              - 'umh\.v1\.acme\.cologne\..*\._raw\..*'
         pipeline:
           processors:
             - mapping: |
@@ -251,40 +253,57 @@ pipeline:
 **UMH Core (Virtual Paths in Topics):**
 ```yaml
 # Core data model with virtual paths
-datamodels:
-  - name: CNCHead
-    version: v1
-    structure:
-      pos:
-        x: { type: timeseries }
-        y: { type: timeseries }
-        z: { type: timeseries }
-      temperature: { type: timeseries }
-      collision: { type: timeseries }
+dataModels:
+  - name: cnc-head
+    version:
+      v1:
+        structure:
+          pos:
+            x:
+              _payloadshape: timeseries-number
+            y:
+              _payloadshape: timeseries-number
+            z:
+              _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          collision:
+            _payloadshape: timeseries-boolean
 
 # Core stream processor
-streamprocessors:
-  - name: cnc_head_sp
-    contract: _cnc_head:v1
-    sources:
-      x_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_x"
-      y_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_y"
-      z_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_z"
-      temp_raw: "umh.v1.corp.plant.line.cnc._raw.head_temperature"
-      collision_raw: "umh.v1.corp.plant.line.cnc._raw.head_collision"
-    mapping:
-      pos.x: "x_raw"
-      pos.y: "y_raw"  
-      pos.z: "z_raw"
-      temperature: "temp_raw"
-      collision: "collision_raw"
+streamProcessor:
+  - name: cnc-head-sp
+    desiredState: active
+    streamProcessorServiceConfig:
+      location:
+        0: corp
+        1: plant
+        2: line
+        3: cnc
+      config:
+        model:
+          name: cnc-head
+          version: v1
+        sources:
+          x_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_x"
+          y_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_y"
+          z_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_z"
+          temp_raw: "umh.v1.corp.plant.line.cnc._raw.head_temperature"
+          collision_raw: "umh.v1.corp.plant.line.cnc._raw.head_collision"
+        mapping:
+          pos:
+            x: "x_raw"
+            y: "y_raw"
+            z: "z_raw"
+          temperature: "temp_raw"
+          collision: "collision_raw"
 
 # Result: Individual topics with virtual paths
-# umh.v1.corp.plant.line.cnc._cnc_head.pos.x
-# umh.v1.corp.plant.line.cnc._cnc_head.pos.y
-# umh.v1.corp.plant.line.cnc._cnc_head.pos.z
-# umh.v1.corp.plant.line.cnc._cnc_head.temperature
-# umh.v1.corp.plant.line.cnc._cnc_head.collision
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.pos.x
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.pos.y
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.pos.z
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.temperature
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.collision
 ```
 
 **Migration Benefits:**
