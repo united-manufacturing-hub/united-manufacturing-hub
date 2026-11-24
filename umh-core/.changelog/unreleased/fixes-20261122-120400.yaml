@@ -1,3 +1,0 @@
-kind: fixes
-body: InfluxDB metrics exporter (metrics.influxdb) stops writing metrics when benthos shuts down. Before, it kept writing the same values at each interval until the process exited
-time: 2026-11-22T12:04:00.000000+01:00

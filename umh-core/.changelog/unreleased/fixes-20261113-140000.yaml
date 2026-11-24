@@ -1,3 +1,0 @@
-kind: fixes
-body: Rebuilt with Go 1.27.4, which clears twelve Go standard library and toolchain advisories (GO-2026-6848 to GO-2026-6859). The one in the shipped runtime, CVE-2026-97054 (a crash in HTTP/1 servers that limit the request body size), could only be reached through a configured HTTP input such as otlp_http. The other eleven affect only builds with cgo or malicious build inputs. Images built before v0.17.0 still use Go 1.27.3
-time: 2026-11-13T14:00:00.000000+01:00

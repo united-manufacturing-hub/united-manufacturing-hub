@@ -1,3 +1,0 @@
-kind: fixes
-body: UNS input (uns) no longer hangs on shutdown while its consumer group is rebalancing, for example when another benthos with the same consumer_group starts or stops at the same time
-time: 2026-11-22T12:05:00.000000+01:00
