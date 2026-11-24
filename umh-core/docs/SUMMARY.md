@@ -10,7 +10,6 @@
   * [Instances](usage/instances/README.md)
     * [Agent](usage/instances/agent/README.md)
       * [Metrics](usage/instances/agent/metrics.md)
-        * [Collect Metrics with Prometheus](usage/instances/agent/collect-metrics-with-prometheus.md)
     * [Container](usage/instances/container/README.md)
       * [How CPU Health Is Judged](usage/instances/container/how-cpu-health-is-judged.md)
       * [How Memory Health Is Judged](usage/instances/container/how-memory-health-is-judged.md)

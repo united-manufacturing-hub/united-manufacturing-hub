@@ -6,7 +6,7 @@ An instance is a running UMH Core container: a single Docker container that host
 
 **Instances** lists every instance you can access, one row each:
 
-<figure><img src="./images/instance-list.png" alt="The instance list with one UMH Core instance" width="861"><figcaption></figcaption></figure>
+![The instance list with one UMH Core instance](./images/instance-list.png)
 
 | Column | Shows |
 |---|---|
@@ -26,7 +26,7 @@ The row menu has these entries:
 - **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license and audit logs enabled for your organization.
 - **Delete**.
 
-<figure><img src="./images/instance-list-row-menu.png" alt="The row menu of an online UMH Core instance" width="861"><figcaption></figcaption></figure>
+![The row menu of an online UMH Core instance](./images/instance-list-row-menu.png)
 
 ## The instance details page
 
@@ -66,4 +66,4 @@ Every other setting is a key in `config.yaml` or an environment variable of the 
 
 ### Metrics
 
-Every instance serves Prometheus metrics on port 8080. [Collect Metrics with Prometheus](agent/collect-metrics-with-prometheus.md) explains how to reach them. [Metrics](agent/metrics.md) explains the series, and [Read the metrics](agent/metrics.md#read-the-metrics) explains why Prometheus renames the `instance` label.
+Every instance serves Prometheus metrics on port 8080. [Read the metrics](agent/metrics.md#read-the-metrics) explains how to reach them, and each component page explains its own metrics.

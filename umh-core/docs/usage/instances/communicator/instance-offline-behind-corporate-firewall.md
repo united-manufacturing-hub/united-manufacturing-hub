@@ -6,20 +6,7 @@ The cause is usually one of three: the firewall blocks the connection, the netwo
 
 ## Which error the instance reports
 
-The Management Console does not show why the connection fails (see [Communicator](README.md#the-communicator-card)). The error counters of the communicator do. [Collect Metrics with Prometheus](../agent/collect-metrics-with-prometheus.md) explains how to collect them, and [Metrics: Communicator error counters](../agent/metrics.md#communicator-error-counters) explains each counter. To read them once, run this on the Docker host, wait a minute and run it again. A counter that rose between the two runs is the cause. The `-Y off` keeps `wget` from sending the request through the proxy of the container, which cannot reach `localhost`:
-
-```bash
-docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics | grep -E 'network_errors_total|proxy_block_errors_total|auth_failures_total|instance_deleted_total|server_errors_total|rate_limit_errors_total|cloudflare_errors_total'
-```
-
-| Counter that rises | What to do |
-|---|---|
-| `umh_fsmv2_worker_network_errors_total` | Continue with [Find the cause](#find-the-cause). |
-| `umh_fsmv2_worker_proxy_block_errors_total` | Ask your IT department to allow `management.umh.app` on the proxy. |
-| `umh_fsmv2_worker_auth_failures_total` | Check the `AUTH_TOKEN` of your `docker run` command. If the token is correct, continue with [Find the cause](#find-the-cause). |
-| Any other counter | See [Metrics: Communicator error counters](../agent/metrics.md#communicator-error-counters). |
-
-If no counter rises, read the full `/metrics` output.
+The Management Console does not show why the connection fails. The error counters of the communicator do. [Communicator Shows Degraded: Error counters](communicator-shows-degraded.md#error-counters) explains how to find the counter that rises. Continue with [Find the cause](#find-the-cause) when `umh_fsmv2_worker_network_errors_total` rises, or when `umh_fsmv2_worker_auth_failures_total` rises and the `AUTH_TOKEN` is correct.
 
 ## Find the cause
 
