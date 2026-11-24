@@ -54,10 +54,10 @@ The data contract says what the data is and which shape its payload has. It alwa
 - `_raw` and `_historian` are built in and have no version. `_raw` holds unvalidated device data, for exploring a device.
 - Every other data contract belongs to one version of a data model and is written `_<model>_v<version>`, such as `_pump_v1`. The Management Console creates it when you create a version of a data model.
 
-A data contract is an entry under `datacontracts:` in `config.yaml`. It names the data model and the one version of it that the contract enforces:
+A data contract is an entry under `dataContracts:` in `config.yaml`. It names the data model and the one version of it that the contract enforces:
 
 ```yaml
-datacontracts:
+dataContracts:
   - name: _pump_v1
     model:
       name: pump
