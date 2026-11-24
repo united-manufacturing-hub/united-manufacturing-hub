@@ -29,8 +29,8 @@ type WorkerMetricsHandle struct {
 	hierarchyPath string
 }
 
-// ForWorker makes a newly added worker the only one that exports and deletes hierarchyPath's series.
-func ForWorker(hierarchyPath string) *WorkerMetricsHandle {
+// ClaimWorkerMetrics makes a newly added worker the only one that exports hierarchyPath's worker metrics, and deletes the series a previous owner left there.
+func ClaimWorkerMetrics(hierarchyPath string) *WorkerMetricsHandle {
 	return workerMetricsExporter.claim(hierarchyPath)
 }
 

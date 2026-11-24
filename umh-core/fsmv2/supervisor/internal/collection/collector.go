@@ -132,7 +132,7 @@ func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[T
 		config:        config,
 		state:         collectorStateCreated,
 		restartChan:   make(chan struct{}, 1),
-		workerMetrics: metrics.ForWorker(config.Identity.HierarchyPath),
+		workerMetrics: metrics.ClaimWorkerMetrics(config.Identity.HierarchyPath),
 	}
 }
 
