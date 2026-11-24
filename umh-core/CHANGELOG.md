@@ -2,16 +2,13 @@
 
 ## [0.45.4]
 
-### New Features
-
-- parquet_encode processor (parquet_encode) now skips type coercion for schemas without logical types, so it encodes them faster
-- Azure Blob Storage output (azure_blob_storage) can now store blob index tags with each blob through the new tags field, so the blobs can be found and filtered by tag in Azure. A tag key that Azure does not allow is rejected when the config is loaded. With blob_type APPEND, tags are only set on a blob that the output creates, not on one that already exists
-
 ### Improvements
 
 - Updated the bundled Redpanda Connect components from v4.116.1 to v4.117.0. See the [Redpanda Connect v4.117.0 release notes](https://github.com/redpanda-data/connect/releases/tag/v4.117.0) for the full list
+- parquet_encode processor (parquet_encode) now skips type coercion for schemas without logical types, so it encodes them faster
 - The CPU status now exclusively uses the CPU health check. `USE_FSMV2_CPU` is ignored and can be removed from the container's environment; the 70% CPU usage rule is no longer available. The `agent.useFSMv2CPU` setting in `config.yaml` is still accepted and has no effect. The `umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` Prometheus gauges now always report the CPU health check's 60-second average of the container's own usage, so an alert built on the old reading may need adjusting.
 - Updated the bundled Redpanda Connect components from v4.117.0 to v4.118.0. See the [Redpanda Connect v4.118.0 release notes](https://github.com/redpanda-data/connect/releases/tag/v4.118.0) for the full list
+- Azure Blob Storage output (azure_blob_storage) can now store blob index tags with each blob through the new tags field, so the blobs can be found and filtered by tag in Azure. A tag key that Azure does not allow is rejected when the config is loaded. With blob_type APPEND, tags are only set on a blob that the output creates, not on one that already exists
 
 ### Fixes
 
