@@ -26,7 +26,7 @@ flowchart LR
     end
     C["<b>_pump_v1</b><br/>Data contract"]
     V["<b>motor</b><br/>Virtual path<br/>optional"]
-    N["<b>current</b><br/>Tag name"]
+    N["<b>current</b><br/>Name"]
     P --> L0
     L3 --> C --> V --> N
 ```
@@ -36,8 +36,8 @@ flowchart LR
 | Prefix | `umh.v1` | Always `umh.v1`. |
 | Location path | `acme.cologne.packaging.line_1` | One or more levels. The first level is required. |
 | Data contract | `_pump_v1` | The first level that starts with `_`. |
-| Virtual path | `motor` | Optional. Any number of levels between the data contract and the tag name. |
-| Tag name | `current` | The last level. Required. |
+| Virtual path | `motor` | Optional. Any number of levels between the data contract and the name. |
+| Name | `current` | The last level. Required. |
 
 Each part is one or more levels, separated by dots. A level is never empty, so a topic has no `..`.
 
@@ -68,14 +68,14 @@ dataContracts:
 
 Every message whose topic carries `_pump_v1` must match version `v1` of the data model `pump`. [Data Contracts](../data-modeling/data-contracts.md) explains how the contract is enforced.
 
-## Virtual path and tag name
+## Virtual path and name
 
-Everything after the data contract is defined by the data model, or by the bridge for `_raw`. The tag name is the last level. The levels between the data contract and the tag name are the virtual path, which groups related tag names like folders.
+Everything after the data contract is defined by the data model, or by the bridge for `_raw`. The name is the last level. The levels between the data contract and the name are the virtual path, which groups related names like folders.
 
-The tag name works for both kinds of data:
+The name works for both kinds of data:
 
-- **Time-series data**: the tag name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the tag name.
-- **Relational data**: the tag name is an action whose payload is a whole record. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the tag name.
+- **Time-series data**: the name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the name.
+- **Relational data**: the name is an action whose payload is a whole record. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the name.
 
 ## Characters
 
@@ -95,7 +95,7 @@ A topic pattern matches a topic when it matches any part of it. These parts of t
 | `\.` | A literal dot. A plain `.` matches any character, so `umh.v1.acme` also matches `umhxv1xacme`. Write every dot as `\.`. |
 | `(?:[^._][^.]*\.)*` | Any number of location levels, including none. `[^._]` keeps the data contract out of the match. |
 | `_pump_v(?:1\|2)` | Versions 1 and 2 of the data model `pump`, each version listed by its number. |
-| `$` | The end of the topic. Use it to match one tag name only. |
+| `$` | The end of the topic. Use it to match one name only. |
 
 These patterns match topics at the location path `acme.cologne.packaging`:
 
@@ -103,7 +103,7 @@ These patterns match topics at the location path `acme.cologne.packaging`:
 |---|---|
 | All `_pump_v1` topics at `acme.cologne.packaging` itself | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` |
 | All `_pump_v1` topics at `acme.cologne.packaging` and every level below it | `^umh\.v1\.acme\.cologne\.packaging\.(?:[^._][^.]*\.)*_pump_v1\.` |
-| Only the tag name `pressure` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.pressure$` |
+| Only the name `pressure` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.pressure$` |
 | Versions 1 and 2 of `pump` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v(?:1\|2)\.` |
 
 ## Next Steps
