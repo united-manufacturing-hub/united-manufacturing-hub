@@ -45,7 +45,19 @@ A bridge publishes and subscribes at its **bridge location**: the instance locat
 The data contract says what the data is and which shape its payload has. It always starts with `_`.
 
 - `_raw` and `_historian` are built in and have no version. `_raw` holds unvalidated device data, for exploring a device.
-- Every other data contract belongs to one version of a data model and is written `_<model>_v<version>`, such as `_pump_v1`. The Management Console creates it when you create a version of a data model. See [Data Contracts](../data-modeling/data-contracts.md).
+- Every other data contract belongs to one version of a data model and is written `_<model>_v<version>`, such as `_pump_v1`. The Management Console creates it when you create a version of a data model.
+
+A data contract is an entry under `datacontracts:` in `config.yaml`. It names the data model and the one version of it that the contract enforces:
+
+```yaml
+datacontracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+```
+
+Every message whose topic carries `_pump_v1` must match version `v1` of the data model `pump`. [Data Contracts](../data-modeling/data-contracts.md) explains how the contract is enforced.
 
 ## Virtual path and name
 
