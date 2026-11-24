@@ -75,8 +75,6 @@ The tag name works for both kinds of data:
 - **Time-series data**: the tag name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the tag name.
 - **Relational data**: the tag name is an action whose payload is a whole record. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the tag name.
 
-A read flow sets the tag name in the message metadata `tag_name`. See [Read Flow](../data-flows/read-flow.md).
-
 ## Characters
 
 A level may contain letters, digits, `_` and `-`. Any other character, a space included, is rejected.
