@@ -26,7 +26,8 @@ pipeline:
           msg.meta.data_contract = "_historian";
 
 # Consumer patterns  
-topics: ["umh.v1.+.+.+.+._historian.+"]
+topics:   # regex patterns
+  - 'umh\.v1\.acme\.cologne\.(.*\.)?_historian\..*'
 ```
 
 **UMH Core (Current):**
@@ -42,8 +43,8 @@ pipeline:
 input:
   uns:
     umh_topics:   # regex patterns
-      - 'umh\.v1\.acme\.cologne\..*\._raw\..*'           # For simple sensor data
-      - 'umh\.v1\.acme\.cologne\..*\._temperature\..*'   # For structured temperature data
+      - 'umh\.v1\.acme\.cologne\.(.*\.)?_raw\..*'              # For simple sensor data
+      - 'umh\.v1\.acme\.cologne\.(.*\.)?_temperature_v1\..*'   # For structured temperature data
 ```
 
 ### Configuration Changes
@@ -111,7 +112,7 @@ pipeline:
   processors:
     - tag_processor:
         defaults: |
-          msg.meta.data_contract = "_historian";  # Auto-saved to database
+          msg.meta.data_contract = "_historian";  // Auto-saved to database
 ```
 
 **UMH Core:**
@@ -121,7 +122,7 @@ pipeline:
   processors:
     - tag_processor:
         defaults: |
-          msg.meta.data_contract = "_raw";  # NOT saved to database automatically
+          msg.meta.data_contract = "_raw";  // NOT saved to database automatically
 
 # Database integration requires explicit configuration
 dataFlow:
@@ -131,7 +132,7 @@ dataFlow:
         input:
           uns:
             umh_topics:   # regex patterns
-              - 'umh\.v1\.acme\.cologne\..*\._raw\..*'
+              - 'umh\.v1\.acme\.cologne\.(.*\.)?_raw\..*'
         pipeline:
           processors:
             - mapping: |
@@ -140,9 +141,9 @@ dataFlow:
                 root.value = this.value
                 # Extract location from topic
                 let parts = metadata("umh_topic").split(".")
-                root.enterprise = parts.1
-                root.site = parts.2
-                root.tag_name = parts.7
+                root.enterprise = $parts.index(2)
+                root.site = $parts.index(3)
+                root.tag_name = $parts.index(-1)
         output:
           sql_insert:
             driver: "postgres"
@@ -197,7 +198,7 @@ protocolConverter:
             input:
               kafka:
                 addresses: ["classic-kafka:9092"]
-                topics: ["umh.v1.+.+.+.+._historian.+"]
+                topics: ["umh.v1.acme.cologne.packaging.line1._historian.temperature"]
             pipeline:
               processors:
                 - mapping: |
@@ -232,7 +233,7 @@ pipeline:
     - tag_processor:
         defaults: |
           msg.meta.data_contract = "_historian";
-          msg.meta.tag_name = "head";  # Groups appear inside payload
+          msg.meta.tag_name = "head";  // Groups appear inside payload
 
 # Classic payload with tag groups
 {
@@ -269,6 +270,13 @@ dataModels:
             _payloadshape: timeseries-number
           collision:
             _payloadshape: timeseries-boolean
+
+# Core data contract, validates the stream processor's output
+dataContracts:
+  - name: _cnc-head_v1
+    model:
+      name: cnc-head
+      version: v1
 
 # Core stream processor
 streamProcessor:

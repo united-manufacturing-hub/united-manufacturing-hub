@@ -108,8 +108,8 @@ Result:
 
 ### The Special _raw Contract
 
-```yaml
-# No explicit definition needed - always available
+```javascript
+// No explicit definition needed - always available
 msg.meta.data_contract = "_raw";
 ```
 
