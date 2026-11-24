@@ -87,7 +87,7 @@ A topic pattern matches a topic when it matches any part of it. These parts of t
 | `^` | The start of the topic. Without `^` at the start, the pattern also matches topics that only contain it. |
 | `\.` | A literal dot. A plain `.` matches any character, so `umh.v1.acme` also matches `umhxv1xacme`. Write every dot as `\.`. |
 | `(?:[^._][^.]*\.)*` | Any number of location levels, including none. `[^._]` keeps the data contract out of the match. |
-| `_pump_v[1-2]` | Versions 1 and 2 of the data model `pump`. |
+| `_pump_v(?:1\|2)` | Versions 1 and 2 of the data model `pump`, each version listed by its number. |
 | `$` | The end of the topic. Use it to match one name only. |
 
 These patterns match topics at the bridge location:
@@ -97,7 +97,7 @@ These patterns match topics at the bridge location:
 | All `_pump_v1` topics at the bridge location | `^umh\.v1\.{{ .location_path }}\._pump_v1\.` |
 | All `_pump_v1` topics at the bridge location and every level below it | `^umh\.v1\.{{ .location_path }}\.(?:[^._][^.]*\.)*_pump_v1\.` |
 | Only the name `pressure` | `^umh\.v1\.{{ .location_path }}\._pump_v1\.pressure$` |
-| Versions 1 and 2 of `pump` | `^umh\.v1\.{{ .location_path }}\._pump_v[1-2]\.` |
+| Versions 1 and 2 of `pump` | `^umh\.v1\.{{ .location_path }}\._pump_v(?:1\|2)\.` |
 
 In a write flow topic pattern, `{{ .location_path }}` is replaced by the bridge location with every dot written as `\.`. The pattern stays correct when the bridge location changes.
 
@@ -105,7 +105,7 @@ In a write flow topic pattern, `{{ .location_path }}` is replaced by the bridge 
 
 Some features accept fewer topics:
 
-- A write flow subscribes only to topics at its bridge location or below it, and each topic pattern names one data contract, in one or more versions.
+- A write flow subscribes only to topics at its bridge location or below it, and each topic pattern names one data contract. It names one version, such as `_pump_v1`, or lists several versions by number, such as `_pump_v(?:1|2)`. The Management Console writes versions in these two forms.
 - A message whose data contract belongs to a data model must match that model. See [Data Contracts](../data-modeling/data-contracts.md).
 
 ## Next Steps
