@@ -23,15 +23,14 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// The engine measures a rise against the oldest reading still in its window,
-// and that reading is the one from before the error. When scrapes are sparse
-// — a Benthos unreachable for minutes, then back with an error — the
-// pre-error reading ages out of the window first, and the entry used to
-// clear ErrorWindow after THAT reading instead of ten minutes after the
-// error. With a gap of 9m59s the entry survived two seconds.
+// When scrapes are sparse — a Benthos unreachable for minutes, then back with
+// an error — the reading before the error is far older than the error. An
+// error must still count for ten minutes after the scrape that saw it, not
+// ten minutes after that older reading: with a gap of 9m59s, a window that
+// measured against the older reading would clear after two seconds.
 //
-// Every case below has exactly two scrapes before the hold is measured: a
-// clean one, then one `gap` later that carries the error.
+// Every case below has exactly two scrapes before the error's window is
+// measured: a clean one, then one `gap` later that carries the error.
 var _ = Describe("An error after a gap in successful scrapes", func() {
 	errorAfterGap := func(gap time.Duration) (*Tracker, time.Time) {
 		start := failureT
@@ -56,9 +55,8 @@ var _ = Describe("An error after a gap in successful scrapes", func() {
 		func(gap time.Duration) {
 			t, roseAt := errorAfterGap(gap)
 
-			// One second before the window is up the error must still be
-			// held. Without the fix the entry is long gone here: it cleared
-			// ErrorWindow after the baseline, which is `gap` earlier.
+			// One second before the window is up the error must still
+			// count, although the baseline is `gap` older than the error.
 			justInside := roseAt.Add(ErrorWindow - time.Second)
 			f := t.observe(testPort, outputErrors(1), justInside).Failures
 			ok, reason := f.ErrorFree()
@@ -67,7 +65,7 @@ var _ = Describe("An error after a gap in successful scrapes", func() {
 			Expect(reason).To(ContainSubstring("output error"))
 			Expect(f.Entries).To(HaveLen(1))
 			Expect(f.Entries[0].LastErrorAt).To(Equal(roseAt),
-				"the held entry keeps the error's own time")
+				"the entry keeps the error's own time")
 
 			// One second past the window it clears, with no restart.
 			f = t.observe(testPort, outputErrors(1), roseAt.Add(ErrorWindow+time.Second)).Failures
@@ -101,7 +99,7 @@ var _ = Describe("An error after a gap in successful scrapes", func() {
 	})
 
 	// Each rise counts until ErrorWindow after the scrape that saw it, even
-	// once the reading before it has aged out of the engine's window.
+	// when the reading before it is older than the window.
 	It("counts every error within the window when the readings are sparse", func() {
 		start := failureT
 		t := NewTracker(func() time.Time { return start })
@@ -123,7 +121,7 @@ var _ = Describe("An error after a gap in successful scrapes", func() {
 		Expect(f.Entries[0].Count).To(Equal(int64(1)), "only the error seen at T+18m is left")
 	})
 
-	It("recounts a held entry as its errors age out", func() {
+	It("recounts an entry as its errors age out", func() {
 		start := failureT
 		t := NewTracker(func() time.Time { return start })
 
@@ -135,8 +133,8 @@ var _ = Describe("An error after a gap in successful scrapes", func() {
 		Expect(f.Entries).To(HaveLen(1))
 		Expect(f.Entries[0].Count).To(Equal(int64(3)), "all three errors are within the window")
 
-		// At T+20m the engine's window holds only the T+12m reading and
-		// stops firing, so the entry is held; the rise at T+12m still counts.
+		// At T+20m the rise seen at T+9m has aged out; the rise at T+12m
+		// still counts.
 		f = t.observe(testPort, outputErrors(3), start.Add(20*time.Minute)).Failures
 		Expect(f.Entries).To(HaveLen(1))
 		Expect(f.Entries[0].Count).To(Equal(int64(1)), "the two errors seen at T+9m are 11m old")

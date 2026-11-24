@@ -196,15 +196,18 @@ var _ = Describe("The error window", func() {
 	})
 
 	// errorTable()'s error signals reach the availability the generated
-	// diagnosis suite expects for each case.
+	// diagnosis suite expects for each case. The sum's Reduction.Min is 1,
+	// so, as diagnosis.Run documents for m == 1, one readable tick after an
+	// outage is already Ready, and CaseBelowFloor drives no readable tick and
+	// reads AllAbsent.
 	It("conforms to the table", func() {
 		errorWant := map[diagnosis.Case]diagnosis.Availability{
 			diagnosis.CaseLive:          diagnosis.Ready,
 			diagnosis.CaseBriefOutage:   diagnosis.NoneReady,
 			diagnosis.CaseLongOutage:    diagnosis.AllAbsent,
 			diagnosis.CaseUnsupported:   diagnosis.Ready,
-			diagnosis.CasePostOutageDip: diagnosis.NoneReady,
-			diagnosis.CaseBelowFloor:    diagnosis.NoneReady,
+			diagnosis.CasePostOutageDip: diagnosis.Ready,
+			diagnosis.CaseBelowFloor:    diagnosis.AllAbsent,
 		}
 
 		want := map[Signal]map[diagnosis.Case]diagnosis.Availability{}
@@ -215,6 +218,7 @@ var _ = Describe("The error window", func() {
 		outcomes := diagnosis.Run(errorTable(), diagnosis.NewEnvironment(), failureFeed{})
 
 		seen := map[Signal]map[diagnosis.Case]bool{}
+
 		for _, o := range outcomes {
 			sig := Signal(o.Signal)
 			if seen[sig] == nil {
@@ -297,13 +301,13 @@ var _ = Describe("The error window", func() {
 })
 
 // failureFeed is the diagnosis.Run feed for errorTable(): every error
-// counter readable and unchanged, or every error counter unknown.
+// counter readable and not risen, or every error counter unknown.
 type failureFeed struct{}
 
 func (failureFeed) Readable(time.Time) errorReadings {
-	s := errorReadings{errors: map[Signal]diagnosis.Reading{}}
+	s := errorReadings{increases: map[Signal]diagnosis.Reading{}}
 	for _, c := range errorCounters {
-		s.errors[c.name] = diagnosis.Known(0)
+		s.increases[c.name] = diagnosis.Known(0)
 	}
 
 	return s
@@ -312,5 +316,5 @@ func (failureFeed) Readable(time.Time) errorReadings {
 // Unreadable leaves every error reading out of the map; a missing key reads
 // as an unknown reading.
 func (failureFeed) Unreadable(time.Time) errorReadings {
-	return errorReadings{errors: map[Signal]diagnosis.Reading{}}
+	return errorReadings{increases: map[Signal]diagnosis.Reading{}}
 }

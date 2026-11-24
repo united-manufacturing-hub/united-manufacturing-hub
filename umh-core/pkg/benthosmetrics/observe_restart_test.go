@@ -82,7 +82,7 @@ func (s *scrapes) wantFailure(when string, n int64, ago string) {
 
 var _ = Describe("Benthos restarts and scrape gaps", func() {
 	// The config is fixed, Benthos restarts, and its counter starts again at
-	// 0. The seed adds no false rise.
+	// 0. The empty baseline adds no false rise.
 	It("clears at once on a restart to zero", func() {
 		firedAt(3).at(failureT.Add(time.Second), testPort, 0).wantErrorFree("first scrape after a restart to 0")
 	})

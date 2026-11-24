@@ -31,28 +31,27 @@ import (
 // changes and gaps itself, and before observing such a scrape calls
 // resetForNewInstance or resetAfterGap.
 type failureTracker struct {
-	// engine holds the windows that turn error counters into fired error
-	// signals.
+	// engine holds one window per error counter. Each scrape feeds it how
+	// much each counter rose since lastCounts, dated at that scrape, and the
+	// window sums those increases over ErrorWindow. So each increase counts
+	// for ErrorWindow after the scrape that saw it, however old the reading
+	// before it is.
 	engine *diagnosis.Engine[errorReadings]
 
-	// lastCounts holds the previous scrape's error counters, keyed by the
-	// counter's name. It is nil only before the first scrape, which is the
-	// baseline. After resetForNewInstance it is empty, and a counter missing
+	// lastCounts is the baseline the next scrape's increases are measured
+	// from: the previous scrape's error counters, keyed by the counter's
+	// name. It is nil only before the first scrape, which is the baseline
+	// itself. After resetForNewInstance it is empty, and a counter missing
 	// from it reads as 0.
 	lastCounts map[Signal]int64
 
-	// rises holds, per error counter, each rise still within ErrorWindow,
-	// oldest first. An entry's Count is their sum.
-	rises map[Signal][]errorRise
-
-	// lastEntries holds the previous scrape's failure entries, for carrying
-	// an open entry's LastErrorAt forward. It is nil before the first scrape
-	// and after any reset.
-	lastEntries []FailureEntry
+	// lastErrorAt holds, per error counter, the last scrape at which it rose
+	// since the last reset.
+	lastErrorAt map[Signal]time.Time
 
 	// notConnectedSince holds, for each connection check with something not
-	// connected, the scrape at which that started. Like lastEntries, it is
-	// nil before the first scrape and after any reset.
+	// connected, the scrape at which that started. It is nil before the
+	// first scrape and after any reset.
 	notConnectedSince map[Signal]time.Time
 }
 
@@ -69,51 +68,36 @@ type failureReading struct {
 	connections map[Signal]int64
 }
 
-// errorRise is one scrape at which an error counter rose, and by how much.
-type errorRise struct {
-	at time.Time
-	by int64
-}
-
 // newFailureTracker returns the failureTracker for a Tracker's first scrape.
-// Its engine has no seed, so the first scrape is the baseline and errors
-// counted before it are not reported.
+// It has no baseline yet, so the first scrape becomes it and errors counted
+// before it are not reported.
 func newFailureTracker() *failureTracker {
-	return &failureTracker{engine: mustNewEngine(errorTable())}
-}
-
-// resetForNewInstance forgets every failure after a restart or a port change
-// detected at time at. The new instance's counters count from 0, so every
-// error they hold at the next reading is new.
-func (ft *failureTracker) resetForNewInstance(at time.Time) {
-	ft.reset(nil, at)
-}
-
-// resetAfterGap forgets every failure after a gap longer than ErrorWindow
-// that ended at time at. The previous scrape's error counters stay the
-// baseline, so only errors counted after them are new.
-func (ft *failureTracker) resetAfterGap(at time.Time) {
-	ft.reset(ft.lastCounts, at)
-}
-
-// reset starts the error state over at time at. The new engine's first
-// reading is each error counter at its value in errorCounts, or 0 when
-// errorCounts has none.
-//
-// The seed is dated one poll before at. Dating it at the previous scrape
-// fails after a long gap: the engine drops a window whose newest reading is
-// older than DemoteSpan, so the seed would be gone before the next reading.
-func (ft *failureTracker) reset(errorCounts map[Signal]int64, at time.Time) {
-	ft.engine = mustNewEngine(errorTable())
-	ft.engine.Observe(seedErrors(errorCounts), diagnosis.Environment{}, at.Add(-ScrapeInterval))
-
-	if errorCounts == nil {
-		errorCounts = map[Signal]int64{}
+	return &failureTracker{
+		engine:      mustNewEngine(errorTable()),
+		lastErrorAt: map[Signal]time.Time{},
 	}
+}
 
-	ft.lastCounts = errorCounts
-	ft.rises = nil
-	ft.lastEntries = nil
+// resetForNewInstance forgets every failure after a restart or a port change.
+// The new instance's counters count from 0, so every error they hold at the
+// next reading is new.
+func (ft *failureTracker) resetForNewInstance() {
+	ft.reset(map[Signal]int64{})
+}
+
+// resetAfterGap forgets every failure after a gap longer than ErrorWindow.
+// The previous scrape's error counters stay the baseline, so only errors
+// counted after them are new.
+func (ft *failureTracker) resetAfterGap() {
+	ft.reset(ft.lastCounts)
+}
+
+// reset starts the error state over with baseline as the counts the next
+// scrape's increases are measured from.
+func (ft *failureTracker) reset(baseline map[Signal]int64) {
+	ft.engine = mustNewEngine(errorTable())
+	ft.lastCounts = baseline
+	ft.lastErrorAt = map[Signal]time.Time{}
 	ft.notConnectedSince = nil
 }
 
@@ -133,57 +117,48 @@ func (ft *failureTracker) countsDropped(m Metrics) bool {
 // judged against.
 func (ft *failureTracker) observe(current failureReading) FailureReport {
 	ft.notConnectedSince = firstNotConnectedSince(ft.notConnectedSince, current.connections, current.at)
-	ft.recordRises(current)
-	fired, _ := ft.engine.Observe(errorReadingsOf(current.errorCounts), diagnosis.Environment{}, current.at)
+
+	increases := ft.increases(current)
+	ft.recordLastErrors(increases, current.at)
+
+	fired, _ := ft.engine.Observe(errorReadingsOf(increases), diagnosis.Environment{}, current.at)
 	failures := ft.judge(fired, current)
 
 	ft.lastCounts = current.errorCounts
-	ft.lastEntries = failures.Entries
 
 	return failures
 }
 
-// recordRises adds each error counter's rise since the previous scrape to
-// ft.rises, dated at current, and drops every rise older than ErrorWindow.
-// The first scrape is the baseline, so it records nothing.
-func (ft *failureTracker) recordRises(current failureReading) {
-	if ft.rises == nil {
-		ft.rises = make(map[Signal][]errorRise, len(errorCounters))
-	}
-
+// increases returns how much each error counter rose since ft.lastCounts.
+// The first scrape is the baseline, so every increase is 0 there. The
+// counters never drop here: observe resets the tracker first (see restarted).
+func (ft *failureTracker) increases(current failureReading) map[Signal]int64 {
+	out := make(map[Signal]int64, len(errorCounters))
 	for _, c := range errorCounters {
-		kept := slices.DeleteFunc(ft.rises[c.name], func(r errorRise) bool {
-			return current.at.Sub(r.at) > ErrorWindow
-		})
-
+		var by int64
 		if ft.lastCounts != nil {
-			if by := current.errorCounts[c.name] - ft.lastCounts[c.name]; by > 0 {
-				kept = append(kept, errorRise{at: current.at, by: by})
-			}
+			by = current.errorCounts[c.name] - ft.lastCounts[c.name]
 		}
 
-		ft.rises[c.name] = kept
+		out[c.name] = by
 	}
+
+	return out
 }
 
-// recentErrors returns how many errors the counter named signal rose by
-// within ErrorWindow, each rise timed by the scrape that saw it, so a rise
-// whose baseline reading is older than the window still counts.
-func (ft *failureTracker) recentErrors(signal Signal) int64 {
-	var n int64
-	for _, r := range ft.rises[signal] {
-		n += r.by
+// recordLastErrors dates each error counter that rose at the scrape at.
+func (ft *failureTracker) recordLastErrors(increases map[Signal]int64, at time.Time) {
+	for name, by := range increases {
+		if by > 0 {
+			ft.lastErrorAt[name] = at
+		}
 	}
-
-	return n
 }
 
 // judge builds the FailureReport for the reading current: error entries first,
-// then connection entries, each group with the larger Count first. ft still
-// holds the previous scrape's counts and entries, or what a reset left of
-// them; only notConnectedSince and rises are already updated for current.
+// then connection entries, each group with the larger Count first.
 func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading) FailureReport {
-	errorEntries := append(ft.firedErrorEntries(fired, current), ft.heldErrorEntries(fired, current)...)
+	errorEntries := ft.errorEntries(fired, current)
 	connectionEntries := ft.notConnectedEntries(current)
 
 	sortByCountDesc(errorEntries)
@@ -195,52 +170,26 @@ func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading)
 	}
 }
 
-// firedErrorEntries returns one error entry per fired error signal. Its
-// Count is how much the counter went up within ErrorWindow (see
-// recentErrors), and its LastErrorAt is the last scrape at which the counter
-// rose.
-func (ft *failureTracker) firedErrorEntries(fired []diagnosis.Fired, current failureReading) []FailureEntry {
+// errorEntries returns one error entry per fired error signal. Its Count is
+// the errors within ErrorWindow, read off the engine's window as it stands
+// now: a Fired's own Value is frozen at the tick the signal fired.
+func (ft *failureTracker) errorEntries(fired []diagnosis.Fired, current failureReading) []FailureEntry {
 	var entries []FailureEntry
 
 	for _, f := range fired {
 		c := errorCounterOf(Signal(f.Signal))
+		count, _ := ft.engine.Reduction(f.Signal, f.Signal).Get()
+
 		entries = append(entries, FailureEntry{
 			Signal:      c.name,
 			Label:       c.label,
-			Count:       ft.recentErrors(c.name),
+			Count:       int64(count),
 			Since:       f.Since,
-			LastErrorAt: ft.lastRise(current, c.name, f.Since),
+			LastErrorAt: redate(current.at, ft.lastErrorAt[c.name]),
 		})
 	}
 
 	return entries
-}
-
-// heldErrorEntries returns the previous scrape's error entries whose signal no
-// longer fires but whose LastErrorAt is still within ErrorWindow. The engine
-// measures a rise from the oldest reading in its window, the one before the
-// error, so after sparse scrapes it stops firing before ErrorWindow has
-// passed since the error itself. A held entry's Count is recounted, so errors
-// that aged out of the window no longer count. ft.lastEntries is nil after a
-// reset, so nothing is held across a restart or a gap longer than ErrorWindow.
-func (ft *failureTracker) heldErrorEntries(fired []diagnosis.Fired, current failureReading) []FailureEntry {
-	var held []FailureEntry
-
-	for _, previous := range ft.lastEntries {
-		if previous.Connection || isFiring(fired, previous.Signal) {
-			continue
-		}
-
-		if current.at.Sub(previous.LastErrorAt) > ErrorWindow {
-			continue
-		}
-
-		previous.Count = ft.recentErrors(previous.Signal)
-		previous.LastErrorAt = redate(current.at, previous.LastErrorAt)
-		held = append(held, previous)
-	}
-
-	return held
 }
 
 // notConnectedEntries returns one connection entry per connection check with
@@ -266,35 +215,6 @@ func (ft *failureTracker) notConnectedEntries(current failureReading) []FailureE
 	return entries
 }
 
-// lastRise returns when the error counter named signal last rose, for the
-// entry that opened at since.
-func (ft *failureTracker) lastRise(current failureReading, signal Signal, since time.Time) time.Time {
-	// A counter missing from ft.lastCounts reads as 0, so after a restart
-	// every non-zero counter rose.
-	if current.errorCounts[signal] > ft.lastCounts[signal] {
-		return current.at
-	}
-
-	previous, ok := ft.lastEntry(signal, since)
-	if !ok {
-		return since
-	}
-
-	return redate(current.at, previous.LastErrorAt)
-}
-
-// lastEntry returns the previous scrape's entry with the same signal and
-// Since.
-func (ft *failureTracker) lastEntry(signal Signal, since time.Time) (FailureEntry, bool) {
-	for _, previous := range ft.lastEntries {
-		if previous.Signal == signal && previous.Since.Equal(since) {
-			return previous, true
-		}
-	}
-
-	return FailureEntry{}, false
-}
-
 // firstNotConnectedSince returns, per connection check with something not
 // connected, when that started: the time from previous, or at if previous
 // has none.
@@ -314,11 +234,6 @@ func firstNotConnectedSince(previous map[Signal]time.Time, counts map[Signal]int
 	}
 
 	return out
-}
-
-// isFiring reports whether fired holds the signal named signal.
-func isFiring(fired []diagnosis.Fired, signal Signal) bool {
-	return slices.ContainsFunc(fired, func(f diagnosis.Fired) bool { return f.Signal == string(signal) })
 }
 
 // redate returns t re-dated from at by the monotonic time elapsed between

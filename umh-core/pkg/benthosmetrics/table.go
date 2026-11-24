@@ -46,10 +46,11 @@ type readings struct {
 	outputSent    diagnosis.Reading
 }
 
-// errorReadings is one scrape's error counters as the error engine reads
-// them: one reading per errorCounters entry, keyed by the counter's name.
+// errorReadings is what the error engine reads off one scrape: how much each
+// errorCounters entry rose since the previous scrape, keyed by the counter's
+// name.
 type errorReadings struct {
-	errors map[Signal]diagnosis.Reading
+	increases map[Signal]diagnosis.Reading
 }
 
 // table declares what the engine measures: the input and output messages per
@@ -77,10 +78,11 @@ func table() diagnosis.Table[readings] {
 }
 
 // errorTable declares what the error engine measures: one error signal per
-// errorCounters entry. An error signal is on from a new error until
-// ErrorWindow passes without one, and comes back at once on the next error.
+// errorCounters entry, the sum of the counter's increases over ErrorWindow.
+// An error signal is on from a new error until ErrorWindow passes without
+// one, and comes back at once on the next error.
 func errorTable() diagnosis.Table[errorReadings] {
-	increase := newIncrease()
+	sum := newSum()
 
 	signals := make([]diagnosis.Signal[errorReadings], 0, len(errorCounters))
 	for _, counter := range errorCounters {
@@ -88,17 +90,14 @@ func errorTable() diagnosis.Table[errorReadings] {
 			Name: string(counter.name),
 			Instruments: []diagnosis.Instrument[errorReadings]{{
 				Measurement: diagnosis.Measurement[errorReadings]{
-					Name:    string(counter.name),
-					Extract: func(s errorReadings) diagnosis.Reading { return s.errors[counter.name] },
-					// Counter is false: observe resets the failureTracker
-					// whenever a counter drops (see restarted), so this
-					// window never sees a counter reset.
-					Reduction: increase,
+					Name:      string(counter.name),
+					Extract:   func(s errorReadings) diagnosis.Reading { return s.increases[counter.name] },
+					Reduction: sum,
 					Span:      ErrorWindow,
 				},
 				Marks: diagnosis.Marks{
-					// Fire once the counter rose by 1 or more; clear once the
-					// increase is back to 0.
+					// Fire once the counter rose by 1 or more within the
+					// window; clear once every increase aged out of it.
 					Fire:  diagnosis.Mark{At: 0.5},
 					Clear: diagnosis.Mark{At: 0, Inclusive: true},
 					// NewEngine requires a Worst; nothing reads the severity
@@ -117,37 +116,31 @@ func errorTable() diagnosis.Table[errorReadings] {
 	}
 }
 
-// newIncrease returns the diagnosis reduction for error signals: how much a
-// counter went up from the oldest to the newest reading in its window. It
-// needs at least two readings, and panics on a constructor error, a bug here.
-func newIncrease() diagnosis.Reduction {
-	r, err := diagnosis.NewReduction("increase", 2, func(p []diagnosis.Point) float64 {
-		return p[len(p)-1].Value - p[0].Value
+// newSum returns the diagnosis reduction for error signals: the sum of the
+// increases in the window, as pkg/memoryhealth sums its OOM kills. It needs
+// one reading, and panics on a constructor error, a bug here.
+func newSum() diagnosis.Reduction {
+	r, err := diagnosis.NewReduction("sum", 1, func(p []diagnosis.Point) float64 {
+		var sum float64
+		for _, point := range p {
+			sum += point.Value
+		}
+
+		return sum
 	})
 	if err != nil {
-		panic(fmt.Sprintf("benthosmetrics: invalid increase reduction: %v", err))
+		panic(fmt.Sprintf("benthosmetrics: invalid sum reduction: %v", err))
 	}
 
 	return r
 }
 
-// errorReadingsOf turns one scrape's error counters into the readings the
-// error engine reads.
-func errorReadingsOf(errorCounts map[Signal]int64) errorReadings {
-	s := errorReadings{errors: make(map[Signal]diagnosis.Reading, len(errorCounts))}
-	for name, v := range errorCounts {
-		s.errors[name] = diagnosis.Known(float64(v))
-	}
-
-	return s
-}
-
-// seedErrors is the readings a reset error engine observes first: each
-// error counter at its value in errorCounts, or 0 when errorCounts has none.
-func seedErrors(errorCounts map[Signal]int64) errorReadings {
-	s := errorReadings{errors: make(map[Signal]diagnosis.Reading, len(errorCounters))}
-	for _, c := range errorCounters {
-		s.errors[c.name] = diagnosis.Known(float64(errorCounts[c.name]))
+// errorReadingsOf turns one scrape's error counter increases into the
+// readings the error engine reads.
+func errorReadingsOf(increases map[Signal]int64) errorReadings {
+	s := errorReadings{increases: make(map[Signal]diagnosis.Reading, len(increases))}
+	for name, v := range increases {
+		s.increases[name] = diagnosis.Known(float64(v))
 	}
 
 	return s
