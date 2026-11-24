@@ -170,7 +170,7 @@ Extract the Benthos pipeline section and paste it into Core's `config.yaml → d
 | **Benthos pipelines** | Individual pods | `config.yaml → dataFlow` | Export configs from ConfigMaps |
 | **Node-RED flows** | Node-RED pod | External container | Run separately, connect via MQTT/HTTP |
 | **Grafana dashboards** | Bundled Grafana | External Grafana | Point at TimescaleDB |
-| **TimescaleDB** | TimescaleDB pod | External database | Use Bridge to forward data |
+| **TimescaleDB** | TimescaleDB pod | External database | Write to it with a bridge's write flow |
 
 ### 3. Verify Migration
 

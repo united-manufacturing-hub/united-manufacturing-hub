@@ -8,7 +8,7 @@ If the tree stays empty while your instance is producing data, or a topic you ex
 
 A topic reaches the tree in three steps:
 
-1. A bridge or stream processor publishes a message for the topic to the Unified Namespace of its instance.
+1. A [bridge](../data-flows/bridges.md) or [stream processor](../data-flows/stream-processor.md) publishes a message for the topic to the [Unified Namespace](README.md) of its instance.
 2. The Topic Browser of that instance reads the message and keeps the latest value of every topic it has seen.
 3. The Topic Browser collects what it reads into batches and sends each batch to the Management Console as an update. Each batch carries at most one value per topic, the latest. While the instance is offline, no updates arrive.
 

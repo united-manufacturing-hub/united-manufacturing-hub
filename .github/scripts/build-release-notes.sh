@@ -15,7 +15,7 @@
 
 # Writes the Linear release notes for $VERSION into the file named by $1.
 #
-# The notes are the `## [VERSION]` section of the CHANGELOG (image-only lines
+# The notes are the release notes of release-notes.sh (image-only lines
 # stripped; the image-rich changelog lives at umh.app/insights/changelog) then a
 # footer linking there. An empty/missing section yields just the footer plus a
 # workflow warning on dry-runs, or a hard failure on a real sync.
@@ -26,6 +26,7 @@
 #
 # Env:  VERSION         bare semver, e.g. 0.44.21 (required)
 #       CHANGELOG_FILE   source changelog (default: umh-core/CHANGELOG.md)
+#       RELEASE_TAGS     passed on to release-notes.sh
 #       DRY_RUN          'true' downgrades empty-notes failure to a warning
 # Args: $1              output notes path (required)
 #
@@ -34,19 +35,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${VERSION:?VERSION is required}"
-CHANGELOG_FILE="${CHANGELOG_FILE:-umh-core/CHANGELOG.md}"
+export CHANGELOG_FILE="${CHANGELOG_FILE:-umh-core/CHANGELOG.md}"
 OUT="${1:?output notes path is required (arg 1)}"
 
-# Extract the `## [VERSION]` section, stopping at the next `## [` heading. The
-# `## Unreleased` heading sits above all versioned entries, so it is never
-# crossed mid-extraction. Then drop image-only lines.
-awk -v v="$VERSION" '
-  $0 == "## [" v "]" {found=1; next}
-  /^## \[/ {if (found) exit}
-  found {print}
-' "$CHANGELOG_FILE" \
-  | sed -E '/^[[:space:]]*!\[[^]]*\]\([^)]*\)[[:space:]]*$/d' > "$OUT"
+notes="$("$SCRIPT_DIR/release-notes.sh")"
+printf '%s\n' "$notes" | sed -E '/^[[:space:]]*!\[[^]]*\]\([^)]*\)[[:space:]]*$/d' > "$OUT"
 
 # Test for non-whitespace content, not just non-zero size: an image-only
 # section leaves blank lines after the image-strip above, which a `-s` test

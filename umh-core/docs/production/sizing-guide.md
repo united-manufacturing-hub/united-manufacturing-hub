@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | CPU | 4 vCPU | 8 vCPU |
 | Memory | 8 GB | 16 GB |
-| Disk | 250 GB free on top of the OS | 250 GB free on top of the OS, plus the Historian's disk for your retention |
+| Disk | 250 GB free on top of the OS, about 2,000 messages per second at the default retention | 250 GB free on top of the OS, about 2,000 messages per second at the default retention, plus the Historian's disk for your retention |
 | Example cloud instance | AWS `c8i.xlarge`, Azure `D4ls_v6` | AWS `c8i.2xlarge`, Azure `D8ls_v6` |
 | Architecture | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) | x86_64 or ARM64, [not Raspberry Pi](#supported-architectures) |
 
@@ -14,7 +14,7 @@ This is a starting point for about 15 running [flows](../usage/data-flows/README
 
 The CPU and memory figures on this page count running flows, not bridges:
 
-- a [bridge](../usage/data-flows/bridges.md) counts as 2 running flows, 1 for its read flow and 1 for its write flow
+- a [bridge](../usage/data-flows/bridges.md) counts 1 for its read flow and 1 for its write flow: 2 when both run, 1 when only one does
 - a [stand-alone flow](../usage/data-flows/stand-alone-flow.md) counts as 1
 - a [stream processor](../usage/data-flows/stream-processor.md) counts as 1
 
@@ -22,11 +22,11 @@ The CPU figures assume vCPUs as fast as those of the example instances, not over
 
 ## CPU
 
-UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and its own services. Each running flow adds 0.2 vCPU for monitoring overhead, plus the flow's own work.
-
-A flow's own work depends on what it does. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags. A flow that writes many log lines also adds more overhead than one that writes few, because UMH Core analyses every log line. Above about 10,000 messages per second, plan more vCPU and [contact us](../get-help.md).
+UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/README.md) (Redpanda) and its own services. Its overhead for your flows is 0.2 vCPU per running flow, so 0.4 vCPU for a bridge with a read and write flow both configured and running. A flow that logs heavily costs more than one that logs little, because UMH Core analyses every log line. Debug logging raises it further; leave it off outside troubleshooting.
 
 Part of the 0.2 vCPU monitoring overhead goes to reading each flow's metrics. By default, a separate monitoring service does this for each flow. Adding `-e USE_FSMV2_BENTHOS_METRICS=true` to the `docker run` command moves this work into the UMH Core process, where it costs less CPU. Remove and recreate the container for the change to apply, because `docker restart` keeps the old environment. Still plan 0.2 vCPU per flow: it is a conservative budget that also covers the log analysis, which this variable does not change.
+
+Your flows' own work comes on top of that overhead, and depends on what they do. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags, and a single high-rate bridge can need more than the overhead budget by itself. Above an estimated 10,000 messages per second on the instance, plan more vCPU and [contact us](../get-help.md).
 
 On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full physical core, as on AWS Graviton, the same vCPU count gives at least as much. UMH Core counts each vCPU as one core.
 
@@ -48,7 +48,7 @@ UMH Core needs 3.5 GB for the Unified Namespace and 150 MB for the agent. Each r
 
 ## Disk
 
-Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. By default it keeps seven days of messages for replay, and you can change that. At seven days' retention, plan about 0.07–0.09 GB per message per second.
+Most of the disk holds the [Unified Namespace](../usage/unified-namespace/README.md) buffer. A new instance keeps seven days of messages for replay, and you can change that. An older `config.yaml` that has no `defaultTopicCleanupPolicy` uses `compact` instead, which keeps only the latest message per key, so the figures below do not describe it. [Topic retention on new instances](../reference/configuration-reference.md#topic-retention-on-new-instances) explains how to check yours and move it to seven-day replay. At seven days' retention, plan about 0.08–0.11 GB per message per second.
 
 ```text
 disk = (messages per second × bytes per message × retention in seconds + what the partition already holds) ÷ 0.75

@@ -1,7 +1,7 @@
 # Enable CPU pressure stats
 
 {% hint style="info" %}
-UMH Core reads CPU pressure only while the CPU health check is on. It is on by default from
+UMH Core reads CPU pressure as part of the CPU health check, which is on by default from
 v0.44.46. See [CPU Health](README.md).
 {% endhint %}
 

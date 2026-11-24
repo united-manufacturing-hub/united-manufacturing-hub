@@ -72,7 +72,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									CPU:           legacyCPUWithHostCores(),
+									CPU:           cpuWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -128,55 +128,6 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(decision.Message()).To(BeEmpty())
 			})
 
-			It("should use cgroup CPU quota when available for bridge limits", func() {
-				// Container with cgroup limit of 2 cores
-				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
-					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
-						constants.CoreInstanceName: {
-							ID:           constants.CoreInstanceName,
-							CurrentState: "active",
-							DesiredState: "active",
-							LastObservedState: &container.ContainerObservedStateSnapshot{
-								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									OverallHealth: models.Active,
-									CPUHealth:     models.Active,
-									MemoryHealth:  models.Active,
-									DiskHealth:    models.Active,
-									CPU: &models.CPU{
-										CgroupCores: 2.0, // Limited to 2 cores
-									},
-								},
-							},
-						},
-					},
-				}
-
-				// Max bridges should be (2-1) * 5 = 5 (1 core reserved for Redpanda)
-				cgroupMaxBridges := (2 - 1) * bridgeadmission.BridgesPerCore
-
-				// Add exactly at cgroup limit
-				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
-				for i := range cgroupMaxBridges {
-					instances[string(rune('a'+i))] = &pkgfsm.FSMInstanceSnapshot{
-						ID:           string(rune('a' + i)),
-						CurrentState: "active",
-						DesiredState: "active",
-					}
-				}
-
-				snapshot.Managers[constants.ProtocolConverterManagerName] = &MockManagerSnapshot{
-					Instances: instances,
-				}
-
-				decision := service.BridgeAdmission(snapshot, "new-bridge")
-
-				Expect(decision.Admitted()).To(BeFalse())
-				Expect(decision.Message()).To(ContainSubstring("Cannot create bridge - limit exceeded"))
-				Expect(decision.Message()).To(ContainSubstring("5 bridges maximum"))
-				Expect(decision.Message()).To(ContainSubstring("2.0 CPU cores"))
-				Expect(decision.Message()).To(ContainSubstring("1 core reserved for Redpanda"))
-			})
-
 			stageContainerWithCPU := func(cpu *models.CPU) {
 				snapshot.Managers[constants.ContainerManagerName] = &MockManagerSnapshot{
 					Instances: map[string]*pkgfsm.FSMInstanceSnapshot{
@@ -223,10 +174,10 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				Expect(decision.Message()).To(ContainSubstring("2.0 CPU cores"))
 			})
 
-			It("should use the host's cores the legacy monitor reports when no CPU limit is set", func() {
+			It("should use the host's cores the monitor reports when no CPU limit is set", func() {
 				hostCeiling := (runtime.NumCPU() - 1) * bridgeadmission.BridgesPerCore
 
-				stageContainerWithCPU(legacyCPUWithHostCores())
+				stageContainerWithCPU(cpuWithHostCores())
 
 				instances := make(map[string]*pkgfsm.FSMInstanceSnapshot)
 				for i := range hostCeiling {
@@ -300,7 +251,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
 											Health: &models.Health{
-												Message: "CPU usage at 85%",
+												Message: "CPU running near full\nCPU averaged 85% of the machine over the last minute and this instance has little headroom left. Add CPU capacity, or reduce the load on it.",
 											},
 										},
 									},
@@ -312,7 +263,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 					Expect(decision.Admitted()).To(BeFalse())
-					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU usage at 85%"))
+					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU running near full\nCPU averaged 85%"))
 				})
 
 				It("should block a throttled box through its degraded CPU health, not through a throttle check of its own", func() {
@@ -333,10 +284,8 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										MemoryHealth:  models.Active,
 										DiskHealth:    models.Active,
 										CPU: &models.CPU{
-											Health:        &models.Health{Message: "CPU throttled (15.0% periods throttled)"},
-											IsThrottled:   true,
-											ThrottleRatio: 0.15,
-											CgroupCores:   2.0,
+											Health:    &models.Health{Message: "CPU limited\nThis instance hit its CPU limit and was paused until the next cycle, in 15% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."},
+											CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{ThrottleRatio: 0.15, CapacityCores: 2.0}},
 										},
 									},
 								},
@@ -347,7 +296,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 					Expect(decision.Admitted()).To(BeFalse())
-					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU throttled (15.0% periods throttled)"))
+					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU limited\nThis instance hit its CPU limit"))
 				})
 			})
 
@@ -458,7 +407,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 										DiskHealth:    models.Degraded,
 										CPU: &models.CPU{
 											Health: &models.Health{
-												Message: "CPU overloaded",
+												Message: "CPU contention\nTasks in this instance spent 23% of the last minute waiting for a free CPU core. Reduce the load on this instance, or give it more CPU. If other workloads share this server they may be competing for it.",
 											},
 										},
 										Memory: &models.Memory{
@@ -480,7 +429,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 					decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 					Expect(decision.Admitted()).To(BeFalse())
-					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU overloaded"))
+					Expect(decision.Message()).To(HavePrefix("CPU degraded: CPU contention\n"))
 				})
 			})
 		})
@@ -544,10 +493,8 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
 									CPU: &models.CPU{
-										Health:        &models.Health{Message: "CPU throttled (20.0% periods throttled)"},
-										IsThrottled:   true,
-										ThrottleRatio: 0.20,
-										CgroupCores:   2.0,
+										Health:    &models.Health{Message: "CPU limited\nThis instance hit its CPU limit and was paused until the next cycle, in 20% of CPU scheduling periods over the last minute. Work is being delayed. Raise this instance's CPU limit, or reduce the load on it."},
+										CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{ThrottleRatio: 0.20, CapacityCores: 2.0}},
 									},
 								},
 							},
@@ -559,7 +506,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 				decision := service.BridgeAdmission(snapshot, "new-bridge")
 
 				Expect(decision.Admitted()).To(BeFalse())
-				Expect(decision.Message()).To(ContainSubstring("CPU throttled"))
+				Expect(decision.Message()).To(ContainSubstring("CPU limited"))
 
 				// Note: The FSM reconciliation logic (not tested here) should allow
 				// transition from to_be_created -> to_be_removed even when BridgeAdmission refuses
@@ -581,7 +528,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
 									DiskHealth:    models.Active,
-									CPU:           legacyCPUWithHostCores(),
+									CPU:           cpuWithHostCores(),
 								},
 							},
 						},
@@ -623,7 +570,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									CPU:           legacyCPUWithHostCores(),
+									CPU:           cpuWithHostCores(),
 									OverallHealth: models.Degraded,
 									CPUHealth:     models.Degraded,
 									MemoryHealth:  models.Active,
@@ -663,7 +610,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									CPU:           legacyCPUWithHostCores(),
+									CPU:           cpuWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -710,7 +657,7 @@ var _ = Describe("ProtocolConverter Resource Limiting", func() {
 							DesiredState: "active",
 							LastObservedState: &container.ContainerObservedStateSnapshot{
 								ServiceInfoSnapshot: container_monitor.ServiceInfo{
-									CPU:           legacyCPUWithHostCores(),
+									CPU:           cpuWithHostCores(),
 									OverallHealth: models.Active,
 									CPUHealth:     models.Active,
 									MemoryHealth:  models.Active,
@@ -783,10 +730,8 @@ func (m *MockManagerSnapshot) GetManagerTick() uint64 {
 	return m.Tick
 }
 
-// legacyCPUWithHostCores is the CPU record the legacy monitor reports for a
-// container without a CPU limit.
-func legacyCPUWithHostCores() *models.CPU {
-	hostCores := runtime.NumCPU()
-
-	return &models.CPU{CoreCount: &hostCores}
+// cpuWithHostCores is the CPU record the monitor reports for a container
+// without a CPU limit: the machine's cores are the capacity.
+func cpuWithHostCores() *models.CPU {
+	return &models.CPU{CPUHealth: &models.CPUHealth{Details: cpuhealth.Details{CapacityCores: float64(runtime.NumCPU())}}}
 }

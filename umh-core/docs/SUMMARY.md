@@ -100,3 +100,4 @@
 * [Website](https://www.umh.app/)
 * [Blog](https://learn.umh.app/)
 * [Changelog](https://www.umh.app/insights/changelog)
+* [Trust Center](https://trust.umh.app/)
