@@ -14,7 +14,7 @@ Use stand-alone flows for:
 Use bridges instead for:
 - Reading from or writing to PLCs, MES and other external systems
 - Data that needs UNS organization
-- External systems whose connection needs health monitoring
+- External systems that need a connection probe, which checks whether they are reachable
 
 ## UI Capabilities
 
@@ -49,7 +49,7 @@ The configuration interface has multiple sections:
 - **Input (YAML)**: What the flow reads (see [Benthos-UMH inputs](https://docs.umh.app/benthos-umh/input))
 - **Processing (YAML)**: Transform data with processors
 - **Output (YAML)**: Where the flow writes, any Redpanda Connect output (generic, not auto-generated like bridges)
-- **Examples**: Pre-built templates including database bridges
+- **Examples**: Pre-built templates, including ones that write to databases
 
 ### Step 3: Use Example Templates
 

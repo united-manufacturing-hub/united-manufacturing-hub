@@ -2,8 +2,6 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization.
-
 A bridge (UI: "Bridges", YAML: `protocolConverter:`) connects the Unified Namespace (UNS) to one external system, such as an OPC UA server, a Siemens S7 or a Modbus controller. Its read flow reads from the external system and publishes to the UNS. Its write flow subscribes to UNS topics and writes to the external system.
 
 It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle. [Connection Probe](connection-probe.md) and [Read Flow](read-flow.md) describe the parts. To create a bridge, see [Create a bridge](create-a-bridge.md).
@@ -114,11 +112,11 @@ protocolConverter:
 
 | Field | Description |
 |---|---|
-| `name` | Unique ID for this converter instance |
+| `name` | Unique name of the bridge |
 | `desiredState` | `active` to run immediately, or `stopped` to keep it defined but off. |
 | `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., general OPC UA debug logging via the `OPC_DEBUG=debug` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. |
 | `protocolConverterServiceConfig.location` | The bridge's levels. The instance location (`agent.location`) plus these levels is the bridge location. Optional, but useful to identify per-machine data. |
-| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow that pushes data from the UNS to the device, set with `source`, `processing` and `destination`. |
+| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow: subscribes to UNS topics and writes to the external system, set with `source`, `processing` and `destination`. |
 | `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](../../reference/variables.md#variables) for details. |
 
 **Location Path:**

@@ -57,7 +57,7 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | State                              | Meaning                                                      | Status Reason Examples                                           | Enter                                            | Exit                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | **stopped**                        | All sub‑services stopped.                                    | `"stopped"`                                                      | *stop\_done* or after create.                    | *start* → **starting\_connection**                                                             |
-| *starting\_connection*             | Waiting for connection to establish.                         | `"starting: waiting for connection"`                            | *start*                                          | *start\_connection\_up* → **starting\_redpanda**                                               |
+| *starting\_connection*             | Waiting for the connection probe to reach the external system. | `"starting: waiting for connection"`                            | *start*                                          | *start\_connection\_up* → **starting\_redpanda**                                               |
 | *starting\_redpanda*                | Connection up, waiting for message broker.                   | `"starting: redpanda not healthy"`                              | *start\_connection\_up*                          | *start\_redpanda\_up* → **starting\_dfc**                                                      |
 | *starting\_dfc*                     | Connection + Redpanda up, waiting for flow.                  | `"starting: flow not running"`                                  | *start\_redpanda\_up*                            | *start\_dfc\_up* → **idle**<br>*start\_failed\_dfc\_missing* → **starting\_failed\_dfc\_missing** |
 | **starting\_failed\_dfc**           | Flow component failed to start.                              | `"starting failed: flow in error state"`                        | *start\_failed\_dfc*                             | Manual retry or removal                                                                       |
@@ -92,7 +92,7 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | *starting\_waiting\_for\_service\_to\_remain\_running* | Stability grace period.                                |
 | **idle**                                               | Flow running, no msgs for idle window.                 |
 | **active**                                             | Processing messages.                                   |
-| ⚠️ **degraded**                                        | Flow running but error state (e.g., endpoint retries). |
+| ⚠️ **degraded**                                        | Flow running but in an error state (e.g., retries to reach the external system). |
 | *stopping*                                             | Graceful SIGTERM underway.                             |
 
 > **Idle/Active timeout:** default 30 s (`BRIDGE_IDLE_WINDOW`).
