@@ -29,19 +29,19 @@ import (
 )
 
 const (
-	collectorClaimGauge       = "collector_claim_test_gauge"
-	collectorClaimGaugeMetric = "umh_fsmv2_worker_" + collectorClaimGauge
+	collectorHandleGauge       = "collector_handle_test_gauge"
+	collectorHandleGaugeMetric = "umh_fsmv2_worker_" + collectorHandleGauge
 )
 
-// collectorClaimGaugeValues returns the values of the test gauge's series for hierarchyPath.
-func collectorClaimGaugeValues(hierarchyPath string) []float64 {
+// collectorHandleGaugeValues returns the values of the test gauge's series for hierarchyPath.
+func collectorHandleGaugeValues(hierarchyPath string) []float64 {
 	families, err := prometheus.DefaultGatherer.Gather()
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 	var values []float64
 
 	for _, family := range families {
-		if family.GetName() != collectorClaimGaugeMetric {
+		if family.GetName() != collectorHandleGaugeMetric {
 			continue
 		}
 
@@ -59,10 +59,10 @@ func collectorClaimGaugeValues(hierarchyPath string) []float64 {
 
 var _ = Describe("Collector worker-metric export", func() {
 	identity := deps.Identity{
-		ID:            "collector-claim",
-		Name:          "collector-claim",
+		ID:            "collector-handle",
+		Name:          "collector-handle",
 		WorkerType:    "testwrapping",
-		HierarchyPath: "collector-claim(testwrapping)",
+		HierarchyPath: "collector-handle(testwrapping)",
 	}
 
 	var (
@@ -72,7 +72,7 @@ var _ = Describe("Collector worker-metric export", func() {
 
 	BeforeEach(func() {
 		dependencies = deps.NewBaseDependencies(deps.NewNopFSMLogger(), nil, identity)
-		dependencies.MetricsRecorder().SetGauge(collectorClaimGauge, 7)
+		dependencies.MetricsRecorder().SetGauge(collectorHandleGauge, 7)
 		worker := &wrappingTestWorker{baseDeps: dependencies, observed: fsmv2.Observation[struct{}]{}}
 
 		coll = collection.NewCollector[fsmv2.Observation[struct{}]](collection.CollectorConfig[fsmv2.Observation[struct{}]]{
@@ -88,17 +88,17 @@ var _ = Describe("Collector worker-metric export", func() {
 		Expect(coll.Start(context.Background())).To(Succeed())
 		DeferCleanup(coll.Stop, context.Background())
 		Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
-		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(ConsistOf(7.0))
+		Expect(collectorHandleGaugeValues(identity.HierarchyPath)).To(ConsistOf(7.0))
 	})
 
 	It("keeps exporting the worker metrics after the observation loop restarts", func() {
 		coll.Restart()
-		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(ConsistOf(7.0))
+		Expect(collectorHandleGaugeValues(identity.HierarchyPath)).To(ConsistOf(7.0))
 
-		dependencies.MetricsRecorder().SetGauge(collectorClaimGauge, 8)
+		dependencies.MetricsRecorder().SetGauge(collectorHandleGauge, 8)
 		Expect(coll.CollectFinalObservation(context.Background())).To(Succeed())
 
-		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(ConsistOf(8.0))
+		Expect(collectorHandleGaugeValues(identity.HierarchyPath)).To(ConsistOf(8.0))
 	})
 
 	It("deletes the worker metrics on Stop and drops a collection that returns after it", func() {
@@ -106,9 +106,9 @@ var _ = Describe("Collector worker-metric export", func() {
 
 		coll.Stop(context.Background())
 		handle.Export(fsmv2.Observation[struct{}]{}.SetWorkerMetrics(deps.Metrics{
-			Gauges: map[string]float64{collectorClaimGauge: 7},
+			Gauges: map[string]float64{collectorHandleGauge: 7},
 		}))
 
-		Expect(collectorClaimGaugeValues(identity.HierarchyPath)).To(BeEmpty())
+		Expect(collectorHandleGaugeValues(identity.HierarchyPath)).To(BeEmpty())
 	})
 })

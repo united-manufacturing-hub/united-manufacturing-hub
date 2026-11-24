@@ -81,14 +81,14 @@ func stateDurationStates(hierarchyPath string) []string {
 }
 
 // exportTestWorkerMetrics exports the way the collector does after it saves an observation.
-func exportTestWorkerMetrics(claim *metrics.WorkerMetricsHandle, gaugeValue float64) {
+func exportTestWorkerMetrics(handle *metrics.WorkerMetricsHandle, gaugeValue float64) {
 	workerMetrics := deps.Metrics{
 		Counters: map[string]int64{removalTestCounter: 3},
 		Gauges:   map[string]float64{removalTestGauge: gaugeValue},
 	}
 	observed := fsmv2.Observation[struct{}]{}.SetWorkerMetrics(workerMetrics)
 
-	claim.Export(observed)
+	handle.Export(observed)
 }
 
 // gaugeValues returns the values of every series of metricName for hierarchyPath.
@@ -174,11 +174,11 @@ var _ = Describe("The worker metrics of a worker", func() {
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		removedClaim := s.TestWorkerMetrics(mockIdentity().ID)
-		exportTestWorkerMetrics(removedClaim, 1)
+		removedHandle := s.TestWorkerMetrics(mockIdentity().ID)
+		exportTestWorkerMetrics(removedHandle, 1)
 
 		Expect(s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)).To(Succeed())
-		exportTestWorkerMetrics(removedClaim, 1)
+		exportTestWorkerMetrics(removedHandle, 1)
 
 		Expect(seriesLabels(0, removalTestGaugeMetric, hierarchyPath)).To(BeEmpty())
 		Expect(seriesLabels(0, removalTestCounterMetric, hierarchyPath)).To(BeEmpty())
@@ -190,13 +190,13 @@ var _ = Describe("The worker metrics of a worker", func() {
 		hierarchyPath := s.GetHierarchyPath()
 
 		Expect(s.TestTick(context.Background())).To(Succeed())
-		removedClaim := s.TestWorkerMetrics(mockIdentity().ID)
+		removedHandle := s.TestWorkerMetrics(mockIdentity().ID)
 
 		Expect(s.RemoveWorkerForRestart(context.Background(), mockIdentity().ID)).To(Succeed())
 		Expect(s.AddWorker(mockIdentity(), &mockWorker{initialState: state})).To(Succeed())
 		exportTestWorkerMetrics(s.TestWorkerMetrics(mockIdentity().ID), 1)
 
-		exportTestWorkerMetrics(removedClaim, 99)
+		exportTestWorkerMetrics(removedHandle, 99)
 
 		Expect(gaugeValues(removalTestGaugeMetric, hierarchyPath)).To(ConsistOf(1.0))
 	})

@@ -71,22 +71,22 @@ func (e *WorkerMetricsExporter) claim(hierarchyPath string) *WorkerMetricsHandle
 		e.deleteSeries(hierarchyPath)
 	}
 
-	claim := &WorkerMetricsHandle{exporter: e, hierarchyPath: hierarchyPath}
-	e.owners[hierarchyPath] = claim
+	handle := &WorkerMetricsHandle{exporter: e, hierarchyPath: hierarchyPath}
+	e.owners[hierarchyPath] = handle
 
-	return claim
+	return handle
 }
 
-func (e *WorkerMetricsExporter) release(claim *WorkerMetricsHandle) {
+func (e *WorkerMetricsExporter) release(handle *WorkerMetricsHandle) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.owners[claim.hierarchyPath] != claim {
+	if e.owners[handle.hierarchyPath] != handle {
 		return
 	}
 
-	delete(e.owners, claim.hierarchyPath)
-	e.deleteSeries(claim.hierarchyPath)
+	delete(e.owners, handle.hierarchyPath)
+	e.deleteSeries(handle.hierarchyPath)
 }
 
 func (e *WorkerMetricsExporter) deleteSeries(hierarchyPath string) {

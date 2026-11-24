@@ -23,14 +23,14 @@ import (
 )
 
 const (
-	claimTestPath          = "claim-internal-test(worker)"
-	claimTestGauge         = "claim_internal_test_gauge"
-	claimTestGaugeMetric   = "umh_fsmv2_worker_" + claimTestGauge
-	claimTestCounter       = "claim_internal_test_counter"
-	claimTestCounterMetric = "umh_fsmv2_worker_" + claimTestCounter
+	handleTestPath          = "handle-internal-test(worker)"
+	handleTestGauge         = "handle_internal_test_gauge"
+	handleTestGaugeMetric   = "umh_fsmv2_worker_" + handleTestGauge
+	handleTestCounter       = "handle_internal_test_counter"
+	handleTestCounterMetric = "umh_fsmv2_worker_" + handleTestCounter
 )
 
-var _ = Describe("WorkerMetricsExporter claims", func() {
+var _ = Describe("WorkerMetricsHandle", func() {
 	var (
 		registry *prometheus.Registry
 		exporter *WorkerMetricsExporter
@@ -48,7 +48,7 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 		var values []float64
 
 		for _, family := range families {
-			if family.GetName() != claimTestGaugeMetric {
+			if family.GetName() != handleTestGaugeMetric {
 				continue
 			}
 
@@ -67,7 +67,7 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 		var values []float64
 
 		for _, family := range families {
-			if family.GetName() != claimTestCounterMetric {
+			if family.GetName() != handleTestCounterMetric {
 				continue
 			}
 
@@ -79,23 +79,23 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 		return values
 	}
 
-	exportGauge := func(claim *WorkerMetricsHandle, value float64) {
-		exporter.export(claim, &deps.Metrics{Gauges: map[string]float64{claimTestGauge: value}})
+	exportGauge := func(handle *WorkerMetricsHandle, value float64) {
+		exporter.export(handle, &deps.Metrics{Gauges: map[string]float64{handleTestGauge: value}})
 	}
 
 	It("starts a worker added again at a removed worker's path from its own counter values", func() {
-		removedWorker := exporter.claim(claimTestPath)
-		exporter.export(removedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 100}})
+		removedWorker := exporter.claim(handleTestPath)
+		exporter.export(removedWorker, &deps.Metrics{Counters: map[string]int64{handleTestCounter: 100}})
 		removedWorker.Release()
 
-		addedWorker := exporter.claim(claimTestPath)
-		exporter.export(addedWorker, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
+		addedWorker := exporter.claim(handleTestPath)
+		exporter.export(addedWorker, &deps.Metrics{Counters: map[string]int64{handleTestCounter: 3}})
 
 		Expect(counterValues()).To(ConsistOf(3.0))
 	})
 
 	It("drops an export from a removed worker", func() {
-		removedWorker := exporter.claim(claimTestPath)
+		removedWorker := exporter.claim(handleTestPath)
 		exportGauge(removedWorker, 1)
 
 		removedWorker.Release()
@@ -105,8 +105,8 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 	})
 
 	It("keeps a worker added later at the same path from the removed worker's exports and cleanup", func() {
-		removedWorker := exporter.claim(claimTestPath)
-		addedWorker := exporter.claim(claimTestPath)
+		removedWorker := exporter.claim(handleTestPath)
+		addedWorker := exporter.claim(handleTestPath)
 		exportGauge(addedWorker, 1)
 
 		exportGauge(removedWorker, 99)
@@ -116,26 +116,26 @@ var _ = Describe("WorkerMetricsExporter claims", func() {
 	})
 
 	It("deletes the previous owner's series and counter baselines when a new worker claims the path", func() {
-		previousOwner := exporter.claim(claimTestPath)
+		previousOwner := exporter.claim(handleTestPath)
 		exporter.export(previousOwner, &deps.Metrics{
-			Gauges:   map[string]float64{claimTestGauge: 5},
-			Counters: map[string]int64{claimTestCounter: 100},
+			Gauges:   map[string]float64{handleTestGauge: 5},
+			Counters: map[string]int64{handleTestCounter: 100},
 		})
 
-		newOwner := exporter.claim(claimTestPath)
+		newOwner := exporter.claim(handleTestPath)
 		Expect(gaugeValues()).To(BeEmpty())
 
-		exporter.export(newOwner, &deps.Metrics{Counters: map[string]int64{claimTestCounter: 3}})
+		exporter.export(newOwner, &deps.Metrics{Counters: map[string]int64{handleTestCounter: 3}})
 
 		Expect(counterValues()).To(ConsistOf(3.0))
 	})
 
-	It("treats a nil claim as one that exports and releases nothing", func() {
-		var noClaim *WorkerMetricsHandle
+	It("treats a nil handle as one that exports and releases nothing", func() {
+		var noHandle *WorkerMetricsHandle
 
 		Expect(func() {
-			noClaim.Export(nil)
-			noClaim.Release()
+			noHandle.Export(nil)
+			noHandle.Release()
 		}).NotTo(Panic())
 	})
 })
