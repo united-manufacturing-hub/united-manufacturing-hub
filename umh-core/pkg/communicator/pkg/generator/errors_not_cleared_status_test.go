@@ -72,7 +72,7 @@ var _ = Describe("The not-cleared count in the status message", func() {
 
 		// With the flag off the count stays 0, whatever the store answers.
 		setBenthosMetricsFlag("")
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{
+		registerBenthosWorkers(map[string]*benthosmetrics.FailureReport{
 			dfcBenthosName: stuckOutputError(time.Now()),
 		})
 

@@ -311,7 +311,7 @@ var _ = Describe("The Failures lookup", func() {
 		Expect(f).To(BeNil())
 
 		// A stored sample carries its Failures.
-		stored := &benthosmetrics.Failures{
+		stored := &benthosmetrics.FailureReport{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
 			}},
@@ -359,7 +359,7 @@ var _ = Describe("ErrorsNotClearedCount", func() {
 
 		return &fsmv2.Observation[simple.Status[Scrape]]{
 			CollectedAt: now.Add(-100 * time.Millisecond),
-			Status: simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.Failures{
+			Status: simple.Status[Scrape]{Result: Scrape{Sample: benthosmetrics.Sample{Failures: &benthosmetrics.FailureReport{
 				ObservedAt: now,
 				Entries: []benthosmetrics.FailureEntry{{
 					Signal: "output_error", Label: "output error", Count: 1,

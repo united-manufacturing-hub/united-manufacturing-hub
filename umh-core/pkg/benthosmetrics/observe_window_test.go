@@ -46,7 +46,7 @@ type errorTimeline struct {
 	tracker  *Tracker
 	next     time.Time
 	errorsAt func(time.Time) int64
-	failures Failures
+	failures FailureReport
 }
 
 func newErrorTimeline(start time.Time, errorsAt func(time.Time) int64) *errorTimeline {
@@ -85,7 +85,7 @@ var _ = Describe("The error window", func() {
 
 		Expect(tl.failures.Entries).To(HaveLen(1))
 		e := tl.failures.Entries[0]
-		Expect(e.Signal).To(Equal("output_error"))
+		Expect(e.Signal).To(Equal(SignalOutputError))
 		Expect(e.Label).To(Equal("output error"))
 		Expect(e.Count).To(Equal(int64(1)))
 		Expect(e.Since).To(Equal(failureT))
@@ -159,7 +159,7 @@ var _ = Describe("The error window", func() {
 		Expect(reason).To(Equal("benthos reported 5 output errors in the last 10m, last one just now"))
 	})
 
-	// Scrape stores observe's Failures on the sample, so a rise between two
+	// Scrape stores observe's FailureReport on the sample, so a rise between two
 	// real scrapes reaches the sample as not error-free.
 	It("carries the failures on Scrape", func() {
 		var outputError int64
@@ -207,21 +207,22 @@ var _ = Describe("The error window", func() {
 			diagnosis.CaseBelowFloor:    diagnosis.NoneReady,
 		}
 
-		want := map[string]map[diagnosis.Case]diagnosis.Availability{}
+		want := map[Signal]map[diagnosis.Case]diagnosis.Availability{}
 		for _, c := range errorCounters {
 			want[c.name] = errorWant
 		}
 
 		outcomes := diagnosis.Run(errorTable(), diagnosis.NewEnvironment(), failureFeed{})
 
-		seen := map[string]map[diagnosis.Case]bool{}
+		seen := map[Signal]map[diagnosis.Case]bool{}
 		for _, o := range outcomes {
-			if seen[o.Signal] == nil {
-				seen[o.Signal] = map[diagnosis.Case]bool{}
+			sig := Signal(o.Signal)
+			if seen[sig] == nil {
+				seen[sig] = map[diagnosis.Case]bool{}
 			}
 
-			seen[o.Signal][o.Case] = true
-			w, ok := want[o.Signal]
+			seen[sig][o.Case] = true
+			w, ok := want[sig]
 			Expect(ok).To(BeTrue(), "signal %q is not an errorCounters entry", o.Signal)
 			Expect(o.Availability).To(Equal(w[o.Case]),
 				"signal %q, case %v", o.Signal, o.Case)
@@ -237,12 +238,12 @@ var _ = Describe("The error window", func() {
 		}
 	})
 
-	// Failures.HasErrorNotClearedInTime judges each error entry against its
+	// FailureReport.HasErrorNotClearedInTime judges each error entry against its
 	// own LastErrorAt, so an entry stuck past its window counts even while
 	// another counter keeps rising.
 	It("counts an entry stuck past its window while another counter keeps rising", func() {
 		now := failureT.Add(12 * time.Minute)
-		f := Failures{
+		f := FailureReport{
 			ObservedAt: now,
 			Entries: []FailureEntry{
 				{Signal: "output_error", LastErrorAt: failureT},
@@ -280,8 +281,8 @@ var _ = Describe("The error window", func() {
 	// ErrorWindow plus margin behind the scrape.
 	It("gives an entry its margin before it counts as not cleared", func() {
 		now := failureT.Add(15 * time.Minute)
-		failuresWithLastErrorAgo := func(age time.Duration) Failures {
-			return Failures{ObservedAt: now, Entries: []FailureEntry{{
+		failuresWithLastErrorAgo := func(age time.Duration) FailureReport {
+			return FailureReport{ObservedAt: now, Entries: []FailureEntry{{
 				Signal: "output_error", Since: now.Add(-age), LastErrorAt: now.Add(-age),
 			}}}
 		}
@@ -300,7 +301,7 @@ var _ = Describe("The error window", func() {
 type failureFeed struct{}
 
 func (failureFeed) Readable(time.Time) errorReadings {
-	s := errorReadings{errors: map[string]diagnosis.Reading{}}
+	s := errorReadings{errors: map[Signal]diagnosis.Reading{}}
 	for _, c := range errorCounters {
 		s.errors[c.name] = diagnosis.Known(0)
 	}
@@ -311,5 +312,5 @@ func (failureFeed) Readable(time.Time) errorReadings {
 // Unreadable leaves every error reading out of the map; a missing key reads
 // as an unknown reading.
 func (failureFeed) Unreadable(time.Time) errorReadings {
-	return errorReadings{errors: map[string]diagnosis.Reading{}}
+	return errorReadings{errors: map[Signal]diagnosis.Reading{}}
 }

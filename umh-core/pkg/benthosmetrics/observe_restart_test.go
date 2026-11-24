@@ -27,7 +27,7 @@ import (
 // scrapes is one Tracker and the failures of its latest observe call.
 type scrapes struct {
 	tracker  *Tracker
-	failures Failures
+	failures FailureReport
 }
 
 func newScrapes() *scrapes {

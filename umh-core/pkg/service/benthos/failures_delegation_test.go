@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // The lookup path of IsMetricsErrorFree: with the flag on the answer comes
-// from the fsmv2benthosmetrics.Failures lookup, with the flag off nobody asks.
+// from the fsmv2benthosmetrics.FailureReport lookup, with the flag off nobody asks.
 
 package benthos
 
@@ -94,14 +94,14 @@ func setBenthosMetricsFlag(v string) {
 // with the given failures, under the given Benthos S6 name, as the last
 // sample the worker stored. Setting the returned reader's err makes every
 // later read fail.
-func stubStoredFailures(s6Name string, failures *benthosmetrics.Failures) *stubFailuresReader {
+func stubStoredFailures(s6Name string, failures *benthosmetrics.FailureReport) *stubFailuresReader {
 	return stubStoredFailuresAt(s6Name, failures, time.Now())
 }
 
 // stubStoredFailuresAt is stubStoredFailures for a sample collected at
 // collectedAt. A Failures without its own ObservedAt is stamped with
 // collectedAt, as a real scrape stamps it.
-func stubStoredFailuresAt(s6Name string, failures *benthosmetrics.Failures, collectedAt time.Time) *stubFailuresReader {
+func stubStoredFailuresAt(s6Name string, failures *benthosmetrics.FailureReport, collectedAt time.Time) *stubFailuresReader {
 	if failures != nil && failures.ObservedAt.IsZero() {
 		failures.ObservedAt = collectedAt
 	}
@@ -156,7 +156,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		setBenthosMetricsFlag("true")
 
 		at := time.Now()
-		stubStoredFailures(name, &benthosmetrics.Failures{
+		stubStoredFailures(name, &benthosmetrics.FailureReport{
 			ObservedAt: at,
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
@@ -173,7 +173,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	// counters that hold nine lifetime output errors.
 	It("lets empty failures beat lifetime counters with the flag on", func() {
 		setBenthosMetricsFlag("true")
-		stubStoredFailures(name, &benthosmetrics.Failures{})
+		stubStoredFailures(name, &benthosmetrics.FailureReport{})
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(outputErrorMetrics(9))
 		Expect(ok).To(BeTrue(),
@@ -211,7 +211,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	// answer error-free.
 	It("does not ask the Failures lookup with an FSMv1 monitor backend", func() {
 		setBenthosMetricsFlag("true")
-		stubStoredFailures(name, &benthosmetrics.Failures{
+		stubStoredFailures(name, &benthosmetrics.FailureReport{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
 			}},
@@ -245,7 +245,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	It("answers 'no Benthos metrics yet' when the store read fails", func() {
 		setBenthosMetricsFlag("true")
 
-		reader := stubStoredFailures(name, &benthosmetrics.Failures{})
+		reader := stubStoredFailures(name, &benthosmetrics.FailureReport{})
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeTrue(), "a fresh error-free sample is error-free")
 		Expect(reason).To(BeEmpty())
@@ -264,7 +264,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		setBenthosMetricsFlag("true")
 
 		collectedAt := time.Now().Add(-2 * time.Second)
-		stored := &benthosmetrics.Failures{
+		stored := &benthosmetrics.FailureReport{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
 				LastErrorAt: collectedAt.Add(-4 * time.Minute),
@@ -277,7 +277,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, 4m ago"),
 			"still inside the health freshness rule")
 
-		aged := &benthosmetrics.Failures{
+		aged := &benthosmetrics.FailureReport{
 			Entries: []benthosmetrics.FailureEntry{{
 				Signal: "output_error", Label: "output error", Count: 1,
 			}},
@@ -293,7 +293,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	// also answer "no fresh Benthos metrics", not error-free.
 	It("answers 'no fresh Benthos metrics' for old error-free Failures too", func() {
 		setBenthosMetricsFlag("true")
-		stubStoredFailuresAt(name, &benthosmetrics.Failures{}, time.Now().Add(-2*constants.BenthosMaxMetricsAndConfigAge))
+		stubStoredFailuresAt(name, &benthosmetrics.FailureReport{}, time.Now().Add(-2*constants.BenthosMaxMetricsAndConfigAge))
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "an old sample fails closed")
@@ -304,7 +304,7 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	// back since it was taken — has no known age, so it is not fresh either.
 	It("answers 'no fresh Benthos metrics' for Failures from the future", func() {
 		setBenthosMetricsFlag("true")
-		stubStoredFailuresAt(name, &benthosmetrics.Failures{}, time.Now().Add(time.Hour))
+		stubStoredFailuresAt(name, &benthosmetrics.FailureReport{}, time.Now().Add(time.Hour))
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
 		Expect(ok).To(BeFalse(), "a sample from the future fails closed")

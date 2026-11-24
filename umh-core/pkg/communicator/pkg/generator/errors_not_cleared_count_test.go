@@ -88,7 +88,7 @@ func setBenthosMetricsFlag(v string) {
 // "benthos_metrics" worker per S6 name, and whose store holds the given
 // Failures as each worker's stored sample. A nil Failures stores no sample
 // for that name.
-func registerBenthosWorkers(failures map[string]*benthosmetrics.Failures) {
+func registerBenthosWorkers(failures map[string]*benthosmetrics.FailureReport) {
 	obs := map[string]*fsmv2.Observation[simple.Status[fsmv2benthosmetrics.Scrape]]{}
 
 	for s6Name, f := range failures {
@@ -117,10 +117,10 @@ func registerBenthosWorkers(failures map[string]*benthosmetrics.Failures) {
 // stuckOutputError is the stored Failures of a Benthos instance whose
 // output_error entry did not clear: its last error is the error window plus
 // the margin, and one more minute, behind the scrape.
-func stuckOutputError(at time.Time) *benthosmetrics.Failures {
+func stuckOutputError(at time.Time) *benthosmetrics.FailureReport {
 	lastError := at.Add(-benthosmetrics.ErrorWindow).Add(-notClearedMargin).Add(-time.Minute)
 
-	return &benthosmetrics.Failures{
+	return &benthosmetrics.FailureReport{
 		ObservedAt: at,
 		Entries: []benthosmetrics.FailureEntry{{
 			Signal:      "output_error",
@@ -145,7 +145,7 @@ var _ = Describe("The not-cleared count", func() {
 
 		now := time.Now()
 
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{
+		registerBenthosWorkers(map[string]*benthosmetrics.FailureReport{
 			dfcBenthosName: stuckOutputError(now),
 		})
 		Expect(benthosErrorsNotClearedInstanceCount(context.Background())).To(Equal(1),
@@ -154,7 +154,7 @@ var _ = Describe("The not-cleared count", func() {
 		// A last error inside the window plus margin does not count: this
 		// entry cleared 30 s late, within notClearedMargin.
 		recentError := now.Add(-benthosmetrics.ErrorWindow - 30*time.Second)
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{
+		registerBenthosWorkers(map[string]*benthosmetrics.FailureReport{
 			dfcBenthosName: {
 				ObservedAt: now,
 				Entries: []benthosmetrics.FailureEntry{{
@@ -177,7 +177,7 @@ var _ = Describe("The not-cleared count", func() {
 
 		now := time.Now()
 
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{
+		registerBenthosWorkers(map[string]*benthosmetrics.FailureReport{
 			dfcBenthosName: {
 				ObservedAt: now,
 				Entries: []benthosmetrics.FailureEntry{{
@@ -198,7 +198,7 @@ var _ = Describe("The not-cleared count", func() {
 	It("is zero when no lookup answers", func() {
 		setBenthosMetricsFlag("true")
 
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{dfcBenthosName: nil})
+		registerBenthosWorkers(map[string]*benthosmetrics.FailureReport{dfcBenthosName: nil})
 		Expect(benthosErrorsNotClearedInstanceCount(context.Background())).To(BeZero(),
 			"no stored sample answers nothing")
 	})
@@ -207,7 +207,7 @@ var _ = Describe("The not-cleared count", func() {
 	It("is zero with no registered Benthos workers", func() {
 		setBenthosMetricsFlag("true")
 
-		registerBenthosWorkers(map[string]*benthosmetrics.Failures{})
+		registerBenthosWorkers(map[string]*benthosmetrics.FailureReport{})
 		Expect(benthosErrorsNotClearedInstanceCount(context.Background())).To(BeZero(),
 			"a registry with no Benthos workers counts nothing")
 	})

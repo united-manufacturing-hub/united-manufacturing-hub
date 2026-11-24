@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The reason Failures.ErrorFree writes for the first entry, and the kind
+// The reason FailureReport.ErrorFree writes for the first entry, and the kind
 // an entry is.
 
 package benthosmetrics
@@ -24,9 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("The reason Failures.ErrorFree writes", func() {
+var _ = Describe("The reason FailureReport.ErrorFree writes", func() {
 	reason := func(count int64) string {
-		f := Failures{Entries: []FailureEntry{{
+		f := FailureReport{Entries: []FailureEntry{{
 			Signal: "output_error",
 			Label:  "output error",
 			Count:  count,
@@ -55,7 +55,7 @@ var _ = Describe("The kind of a FailureEntry", func() {
 
 		Expect(e.Connection).To(BeFalse(), "an error entry is not a connection entry")
 
-		ok, reason := (&Failures{Entries: []FailureEntry{e}}).ErrorFree()
+		ok, reason := (&FailureReport{Entries: []FailureEntry{e}}).ErrorFree()
 		Expect(ok).To(BeFalse())
 		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, just now"),
 			"not \"benthos reports 1 output error not connected\"")
@@ -66,7 +66,7 @@ var _ = Describe("The kind of a FailureEntry", func() {
 
 		Expect(e.Connection).To(BeTrue())
 
-		ok, reason := (&Failures{Entries: []FailureEntry{e}}).ErrorFree()
+		ok, reason := (&FailureReport{Entries: []FailureEntry{e}}).ErrorFree()
 		Expect(ok).To(BeFalse())
 		Expect(reason).To(Equal("benthos reports 1 input not connected"))
 	})
@@ -91,7 +91,7 @@ var _ = Describe("The time in the reason", func() {
 	}
 
 	reasonFor := func(entries ...FailureEntry) string {
-		f := Failures{Entries: entries, ObservedAt: observedT}
+		f := FailureReport{Entries: entries, ObservedAt: observedT}
 		ok, r := f.ErrorFree()
 		ExpectWithOffset(1, ok).To(BeFalse())
 
