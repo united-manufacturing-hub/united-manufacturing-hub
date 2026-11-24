@@ -54,8 +54,8 @@ func (s *Supervisor[TObserved, TDesired]) TestMarkAsStarted() {
 	s.startWorkerRunners(supervisorCtx)
 }
 
-// TestWorkerMetrics returns the claim workerID's collector exports its
-// worker metrics under, and panics for an unknown worker. A test keeps it to export
+// TestWorkerMetrics returns the handle that workerID's collector exports its
+// worker metrics through, and panics for an unknown worker. A test keeps it to export
 // the way a collection that returns after the worker's removal does.
 // DO NOT USE in production code.
 func (s *Supervisor[TObserved, TDesired]) TestWorkerMetrics(workerID string) *metrics.WorkerMetricsHandle {
