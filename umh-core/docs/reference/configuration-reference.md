@@ -176,7 +176,7 @@ protocolConverter:
 | `protocolConverterServiceConfig.location`  | The bridge's levels. The instance location (`agent.location`) plus these levels is the bridge location. Optional, but useful to identify per-machine data. |
 | `protocolConverterServiceConfig.config.connection.nmap` | Connection probe: a TCP check of whether the external system is reachable. |
 | `protocolConverterServiceConfig.config.dataflowcomponent_read.benthos` | Read flow: the Benthos pipeline that reads from the external system and publishes to the UNS. |
-| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow that pushes data from the UNS to the device, set with `source`, `processing` and `destination`. |
+| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow: subscribes to UNS topics and writes their data to the external system, set with `source`, `processing` and `destination`. |
 | `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](variables.md#variables) for details. |
 
 ### Benthos-UMH Processors

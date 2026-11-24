@@ -1,0 +1,25 @@
+# Copyright 2026 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The direction words of the terminology table in umh-core/docs/CLAUDE.md, but
+# only right after a bridge or a flow, with at most one adverb in between, so
+# "the write flow writes what the PLC sends" does not match. Alone, words like
+# "sends" or "receives" are right in other contexts, such as the Management
+# Console or `docker pull`. Change this file and the table together.
+extends: existence
+message: "Avoid '%s'. Name the direction at the external system: a read flow reads, a write flow subscribes to topics and writes. See umh-core/docs/CLAUDE.md."
+level: warning
+ignorecase: true
+tokens:
+  - '\b(?:bridges?|flows?)\s+(?:(?:also|then|now|only|still|\w+ly)\s+)?(?:brings?|sends?|push(?:es)?|pulls?|ingests?|forwards?|receives?)\b'

@@ -1,6 +1,4 @@
-#!/bin/sh
-
-# Copyright 2025 UMH Systems GmbH
+# Copyright 2026 UMH Systems GmbH
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,17 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-while true; do
-  echo "NMAP_SCAN_START"
-  echo "NMAP_TIMESTAMP: $(date -Iseconds)"
-  SCAN_START=$(date +%s.%N)
-  echo "NMAP_COMMAND: nmap -n -Pn -p 443 umh.app -v"
-  nmap -n -Pn -p 443 umh.app -v
-  EXIT_CODE=$?
-  SCAN_END=$(date +%s.%N)
-  SCAN_DURATION=$(echo "$SCAN_END - $SCAN_START" | bc)
-  echo "NMAP_EXIT_CODE: $EXIT_CODE"
-  echo "NMAP_DURATION: $SCAN_DURATION"
-  echo "NMAP_SCAN_END"
-  sleep 1
-done
+# A topic is one concrete UNS topic. A regular expression over topics is a topic pattern.
+extends: existence
+message: "A topic is one concrete UNS topic. Call the regular expression a topic pattern. See umh-core/docs/CLAUDE.md."
+level: warning
+ignorecase: true
+tokens:
+  - '\btopics?\b(?!\s+patterns?\b)[^.]{0,40}?\b(?:is|are) (?:a )?regular expressions?'
