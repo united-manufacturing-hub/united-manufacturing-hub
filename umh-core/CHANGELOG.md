@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.45.5]
+
+### Improvements
+
+- Maintenance release: internal changes only, no user-visible changes.
+
 ## [0.45.4]
 
 ### Improvements
