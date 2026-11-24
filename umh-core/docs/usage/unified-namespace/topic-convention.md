@@ -17,11 +17,18 @@ It has five parts:
 ```mermaid
 flowchart LR
     P["<b>umh.v1</b><br/>Prefix"]
-    L["<b>acme.cologne.packaging.line_1</b><br/>Location path"]
+    subgraph L["Location path"]
+        L0["<b>acme</b><br/>Enterprise"]
+        L1["<b>cologne</b><br/>Site"]
+        L2["<b>packaging</b><br/>Area"]
+        L3["<b>line_1</b><br/>Line"]
+        L0 --> L1 --> L2 --> L3
+    end
     C["<b>_pump_v1</b><br/>Data contract"]
     V["<b>motor</b><br/>Virtual path<br/>optional"]
-    N["<b>current</b><br/>Name"]
-    P --> L --> C --> V --> N
+    N["<b>current</b><br/>Tag name"]
+    P --> L0
+    L3 --> C --> V --> N
 ```
 
 | Part | Example | Rule |
@@ -29,8 +36,8 @@ flowchart LR
 | Prefix | `umh.v1` | Always `umh.v1`. |
 | Location path | `acme.cologne.packaging.line_1` | One or more levels. The first level is required. |
 | Data contract | `_pump_v1` | The first level that starts with `_`. |
-| Virtual path | `motor` | Optional. Any number of levels between the data contract and the name. |
-| Name | `current` | The last level. Required. |
+| Virtual path | `motor` | Optional. Any number of levels between the data contract and the tag name. |
+| Tag name | `current` | The last level. Required. |
 
 Each part is one or more levels, separated by dots. A level is never empty, so a topic has no `..`.
 
@@ -38,7 +45,7 @@ Each part is one or more levels, separated by dots. A level is never empty, so a
 
 The location path says where the data comes from, for example enterprise, site, area, line and machine. Any naming scheme works, such as ISA-95 or KKS. Only the first level, usually the enterprise, is required. A level of the location path does not start with `_`, because the first level that starts with `_` is the data contract.
 
-A bridge publishes and subscribes at its **bridge location**: the instance location plus the bridge's levels. The bridge's levels extend the instance location and never overwrite its levels. In a bridge, `{{ .location_path }}` holds the bridge location in dotted form, such as `acme.cologne.packaging`. [Bridges](../data-flows/bridges.md#configuration) explains where the levels are set.
+The topics of a bridge start with its **bridge location**: the instance location plus the bridge's levels. The bridge's levels extend the instance location and never overwrite its levels. In a bridge, `{{ .location_path }}` holds the bridge location in dotted form, such as `acme.cologne.packaging`. [Bridges](../data-flows/bridges.md#configuration) explains where the levels are set.
 
 ## Data contract
 
@@ -59,16 +66,16 @@ datacontracts:
 
 Every message whose topic carries `_pump_v1` must match version `v1` of the data model `pump`. [Data Contracts](../data-modeling/data-contracts.md) explains how the contract is enforced.
 
-## Virtual path and name
+## Virtual path and tag name
 
-Everything after the data contract is defined by the data model, or by the bridge for `_raw`. The name is the last level. The levels between the data contract and the name are the virtual path, which groups related names like folders.
+Everything after the data contract is defined by the data model, or by the bridge for `_raw`. The tag name is the last level. The levels between the data contract and the tag name are the virtual path, which groups related tag names like folders.
 
-The name works for both kinds of data:
+The tag name works for both kinds of data:
 
-- **Time-series data**: the name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the name.
-- **Relational data**: the name is an action whose payload is a whole record. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the name.
+- **Time-series data**: the tag name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the tag name.
+- **Relational data**: the tag name is an action whose payload is a whole record. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the tag name.
 
-A read flow sets the name in the message metadata `tag_name`. See [Read Flow](../data-flows/read-flow.md).
+A read flow sets the tag name in the message metadata `tag_name`. See [Read Flow](../data-flows/read-flow.md).
 
 ## Characters
 
@@ -78,7 +85,7 @@ Write levels in lowercase, with `_` between words, such as `line_1` and `inlet_t
 
 ## Topic patterns
 
-A **topic** is one concrete address, such as the one above. A **topic pattern** is a regular expression that matches topics. A write flow subscribes to topics with topic patterns, and so does the `uns` input of a stand-alone flow.
+A **topic** is one concrete address, such as the one above. A **topic pattern** is a regular expression that matches topics. The `uns` input of a stand-alone flow subscribes to topics with topic patterns.
 
 A topic pattern matches a topic when it matches any part of it. These parts of the syntax matter most:
 
@@ -88,25 +95,16 @@ A topic pattern matches a topic when it matches any part of it. These parts of t
 | `\.` | A literal dot. A plain `.` matches any character, so `umh.v1.acme` also matches `umhxv1xacme`. Write every dot as `\.`. |
 | `(?:[^._][^.]*\.)*` | Any number of location levels, including none. `[^._]` keeps the data contract out of the match. |
 | `_pump_v(?:1\|2)` | Versions 1 and 2 of the data model `pump`, each version listed by its number. |
-| `$` | The end of the topic. Use it to match one name only. |
+| `$` | The end of the topic. Use it to match one tag name only. |
 
-These patterns match topics at the bridge location:
+These patterns match topics of the area `acme.cologne.packaging`:
 
 | Matches | Topic pattern |
 |---|---|
-| All `_pump_v1` topics at the bridge location | `^umh\.v1\.{{ .location_path }}\._pump_v1\.` |
-| All `_pump_v1` topics at the bridge location and every level below it | `^umh\.v1\.{{ .location_path }}\.(?:[^._][^.]*\.)*_pump_v1\.` |
-| Only the name `pressure` | `^umh\.v1\.{{ .location_path }}\._pump_v1\.pressure$` |
-| Versions 1 and 2 of `pump` | `^umh\.v1\.{{ .location_path }}\._pump_v(?:1\|2)\.` |
-
-In a write flow topic pattern, `{{ .location_path }}` is replaced by the bridge location with every dot written as `\.`. The pattern stays correct when the bridge location changes.
-
-## Rules per feature
-
-Some features accept fewer topics:
-
-- A write flow subscribes only to topics at its bridge location or below it, and each topic pattern names one data contract. It names one version, such as `_pump_v1`, or lists several versions by number, such as `_pump_v(?:1|2)`. The Management Console writes versions in these two forms.
-- A message whose data contract belongs to a data model must match that model. See [Data Contracts](../data-modeling/data-contracts.md).
+| All `_pump_v1` topics of the area itself | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` |
+| All `_pump_v1` topics of the area and every level below it | `^umh\.v1\.acme\.cologne\.packaging\.(?:[^._][^.]*\.)*_pump_v1\.` |
+| Only the tag name `pressure` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.pressure$` |
+| Versions 1 and 2 of `pump` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v(?:1\|2)\.` |
 
 ## Next Steps
 
