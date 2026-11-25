@@ -14,7 +14,7 @@ Wait a minute, then check again. See [How live updates work](topic-browser.md#ho
 
 Open the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the detail page of the instance that should report the topic. Check the badge, and also read the reason in the information icon beside it: the badge can read **Active** while one of the reasons below applies.
 
-- **The reason starts with `starting`.** The Topic Browser is still starting, for example after a restart. Wait until the reason no longer starts with `starting`, then check again.
+- **The reason starts with `starting`, or is `benthos started` or `redpanda started`.** The Topic Browser is still starting, for example after a restart. Wait until the reason reads `started up`, `data activity detected` or `no data activity`, then check again.
 - **The reason is `redpanda degraded`.** The Topic Browser cannot read messages because Redpanda is degraded. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded). The Topic Browser recovers on its own once Redpanda does.
 - **The reason is `benthos degraded`.** The process that reads the messages for the Topic Browser fails. Open its log with the **Logs** button on the Topic Browser card. If the log does not show a cause you can fix, continue with [Restart the container](#restart-the-container).
 - **`internal.topicbrowser.desiredState` is `stopped` in the `config.yaml` of the instance.** The Topic Browser is turned off. See [When the Topic Browser is turned off](#when-the-topic-browser-is-turned-off).
@@ -77,7 +77,7 @@ docker restart umh-core
 
 Replace `umh-core` with the name of your container if you named it differently.
 
-After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count starts from zero. Each topic shows again once a message for it arrives, so a topic that sends data rarely can take a while to come back. A Management Console tab that stayed open during the restart can keep showing the older topics, with their age growing. To see only the topics reported since the restart, sign out of the Management Console and sign back in.
+After the restart, wait until the reason on the Topic Browser card reads `started up`, `data activity detected` or `no data activity`. Its **Topics** count starts from zero. Each topic shows again once a message for it arrives, so a topic that sends data rarely can take a while to come back. A Management Console tab that stayed open during the restart can keep showing the older topics, with their age growing. To see only the topics reported since the restart, sign out of the Management Console and sign back in.
 
 ## Getting help
 
