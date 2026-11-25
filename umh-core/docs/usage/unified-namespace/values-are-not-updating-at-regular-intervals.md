@@ -19,10 +19,6 @@ A source can publish less often than you expect for one of these reasons:
 - **The bridge reads only on change.** An OPC UA bridge with `subscribeEnabled: true` in its input, for example, gets a value from the server only when the value changes. To read at fixed times instead, set `subscribeEnabled: false` in the OPC UA input of the bridge. The bridge then reads every `pollRate` milliseconds, 1,000 by default, and the downsampler still drops unchanged values.
 - **A stream processor publishes when its inputs arrive.** It publishes each time one of the topics it reads sends a value, once every one of them has sent at least one. It can be no more regular than those topics, so check them first.
 
-### Keep values the downsampler drops
-
-To get a value even when it does not change, set `msg.meta.ds_max_time` for that tag in the tag processor of the bridge. For example, `"10m"` gives at least one value every ten minutes. To keep every reading, set `msg.meta.ds_ignore`. The [downsampler documentation](https://docs.umh.app/benthos-umh/processing/downsampler) describes both. If you save the data contract to the historian, it stores the extra values too.
-
 ### Compare the measured and arrival times
 
 Open the **Details** tab and compare **Measured** with **Arrived in UMH**. A large gap between the two has one of two causes: the value was delayed at the device or in the bridge before it reached the Unified Namespace, or the clock of the device differs from the clock of the instance. The Topic Browser does not cause that gap.
