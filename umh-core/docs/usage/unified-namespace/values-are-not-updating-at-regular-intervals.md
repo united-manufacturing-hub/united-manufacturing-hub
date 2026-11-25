@@ -27,7 +27,7 @@ Open the **Details** tab and compare **Measured** with **Arrived in UMH**. A lar
 
 If the source publishes as often as you expect, the gaps you see come from how the Topic Browser sends updates. These are normal:
 
-- **The gaps between values change over time.** The Topic Browser adapts the interval between its batches to the size of recent batches and to the CPU use of its own process. Small batches lengthen the gaps, and so does high CPU use.
+- **The gaps between values change over time.** The Topic Browser adapts the interval between its batches to the amount of data it has recently read and to the CPU use of its own process. Less data lengthens the gaps, and so does high CPU use.
 - **The History tab shows fewer values than the source publishes.** Each batch carries at most one value per topic, the latest. A source that publishes every 100 milliseconds still shows one value per batch, so the History tab is a sample. To keep every reading, save the data contract with a Historian bridge, as [Save data to the Historian](../historian/save-to-historian.md) describes.
 - **Values on a quiet instance wait longer.** The Topic Browser decides whether a batch is due only when it reads a new message from the Unified Namespace. On an instance that publishes little, a value can wait until the next message of any topic arrives.
 
