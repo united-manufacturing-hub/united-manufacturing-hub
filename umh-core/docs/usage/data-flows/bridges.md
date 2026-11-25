@@ -82,7 +82,7 @@ To view debug logs, go to the bridge and select **Logs**.
 
 **IT protocols (MQTT, HTTP, Kafka) can provide relational data** - when you select "relational" as the data type in the UI, the bridge automatically uses [`nodered_js` processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) to handle complex business records like work orders or batch reports.
 
-For converting time-series to relational data, see [Stream Processors](stream-processor.md#time-series-to-relational-challenges) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
+For converting time-series to relational data, see [Stream Processors](stream-processor.md) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
 
 ## Reference
 
@@ -117,7 +117,7 @@ protocolConverter:
 | `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., general OPC UA debug logging via the `OPC_DEBUG=debug` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. |
 | `protocolConverterServiceConfig.location` | The bridge's levels. The instance location (`agent.location`) plus these levels is the bridge location. Optional, but useful to identify per-machine data. |
 | `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow: subscribes to UNS topics and writes to the external system, set with `source`, `processing` and `destination`. |
-| `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](../../reference/variables.md#variables) for details. |
+| `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](../../reference/variables.md#user-defined-variables) for details. |
 
 **Location Path:**
 ```yaml
