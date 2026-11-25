@@ -101,7 +101,9 @@ The **Topic Browser** card on the instance's detail page shows one value. **Topi
 
 While that process runs, the card's badge reads **Active**. The information icon beside the badge gives the state of the Topic Browser itself, for example `benthos degraded` when the Benthos process fails or `redpanda degraded` when Redpanda is degraded. The badge can read **Active** while Redpanda is degraded, so read the information icon too. The Redpanda card shows the cause of a Redpanda failure; see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
-## Configuration
+## Reference
+
+### Configuration
 
 One key controls the Topic Browser, in the `config.yaml` of the instance. [Configuration reference](../../reference/configuration-reference.md) lists it with the rest of `internal` and warns not to edit that section without guidance from UMH support.
 
@@ -109,7 +111,7 @@ One key controls the Topic Browser, in the `config.yaml` of the instance. [Confi
 |---|---|---|
 | `internal.topicbrowser.desiredState` | `active` | `stopped` turns off the Topic Browser on this instance: it collects no topics, and both the tree and the [GraphQL API](#graphql-api) stop updating. The change takes effect without a restart. |
 
-## Metrics
+### Metrics
 
 The metrics show the state of the Topic Browser and of its Benthos process, so you can alert when either is degraded. The Topic Browser reports on port 8080 and runs on FSMv1, so it uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains how to reach the endpoint. Its series carry these labels:
 
@@ -118,7 +120,7 @@ The metrics show the state of the Topic Browser and of its Benthos process, so y
 | The Topic Browser | `topic_browser_instance` | `topic-browser` |
 | Its Benthos process | `benthos_instance` | `topicbrowser-topic-browser` |
 
-Prometheus renames the `instance` label to `exported_instance` when it scrapes, unless the scrape job sets `honor_labels: true`. Queries therefore use `exported_instance`, as the alert below does.
+In Prometheus queries, the `instance` label becomes `exported_instance`, as [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains.
 
 To raise an alert while the Benthos process of the Topic Browser is degraded, use:
 
@@ -128,6 +130,6 @@ umh_core_service_current_state{component="benthos_instance", exported_instance="
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
-## GraphQL API
+### GraphQL API
 
 For the endpoint, the schema, example queries and every configuration option, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).
