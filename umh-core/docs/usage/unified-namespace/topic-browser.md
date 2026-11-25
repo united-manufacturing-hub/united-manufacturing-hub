@@ -39,7 +39,7 @@ The right panel opens with the full topic string and a button that copies it. Be
 | Field | Shows |
 |---|---|
 | **Current value** | The latest value, with how long ago it arrived beside it. |
-| **Instance** | The instances that reported the topic, as a dropdown. An instance is marked `(offline)` when it is not reachable, and `(not in the filter)` when the header filter excludes it. |
+| **Instance** | The instance that reported the topic, as a link. When several instances report it, a dropdown lists all of them. An instance is marked `(offline)` when it is not reachable, and `(not in the filter)` when the header filter excludes it. |
 | **Bridge** or **Stream** | What produced the topic. The row reads **Stream** when a stream processor produced it and **Bridge** when a protocol converter did. It is absent when neither did. |
 | **Data contract** | The contract applied to the data. |
 
