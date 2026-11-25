@@ -34,6 +34,15 @@ type connectionCounters struct {
 	ConnectionUp     int64 `json:"connection_up"`
 }
 
+// down reports whether the input or output these counters belong to is down:
+// ConnectionUp <= ConnectionLost (its last connect did not succeed) and
+// ConnectionFailed or ConnectionLost is above 0, so a first connect still in
+// progress counts as up. Benthos sets these counters in input/async_reader.go
+// and output/async_writer.go; names.go links both.
+func (c connectionCounters) down() bool {
+	return c.ConnectionUp <= c.ConnectionLost && (c.ConnectionFailed > 0 || c.ConnectionLost > 0)
+}
+
 // InputMetrics contains the metrics of one leaf input path.
 type InputMetrics struct {
 	Path  string `json:"path"`
@@ -98,6 +107,28 @@ func (m Metrics) OutputSentTotal() int64 {
 	var total int64
 	for _, out := range m.Outputs {
 		total += out.Sent
+	}
+
+	return total
+}
+
+// outputErrorTotal returns the sum of Error across every output instance,
+// so a switch/broker/fallback config reports the true total instead of only
+// the last route's error count.
+func (m Metrics) outputErrorTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Error
+	}
+
+	return total
+}
+
+// processorErrorTotal returns the sum of Error across every processor.
+func (m Metrics) processorErrorTotal() int64 {
+	var total int64
+	for _, proc := range m.Process.Processors {
+		total += proc.Error
 	}
 
 	return total
