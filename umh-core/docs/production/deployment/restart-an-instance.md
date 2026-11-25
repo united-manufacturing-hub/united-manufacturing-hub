@@ -10,11 +10,11 @@ A restart stops every bridge and flow this instance runs. It collects nothing un
 
 ## Restart the instance
 
-1. Find out how the instance was started. `docker ps` and `docker compose ls` show what runs where; if someone else deployed it, ask them. A wrong name, or a restart policy you did not expect, makes the restart do something you did not intend.
-2. Use that manager's restart procedure:
+1. Identify the system that manages this instance and the specific deployment to restart. If someone else deployed it, ask them. A wrong target, or a restart policy you did not expect, makes the restart do something you did not intend.
+2. Use that system's restart procedure. These cover the common cases, and a management interface such as Portainer may drive one of them:
    - Docker: the [`docker restart`](https://docs.docker.com/reference/cli/docker/container/restart/) documentation.
-   - Docker Compose: the [`docker compose restart`](https://docs.docker.com/reference/cli/docker/compose/restart/) documentation.
-   - Kubernetes, Docker Swarm, Portainer and other managers restart containers their own way; use their documentation.
+   - Docker Compose: the [`docker compose restart`](https://docs.docker.com/reference/cli/docker/compose/restart/) documentation. In the project that runs the instance, restart only the UMH Core service, named `umh` in our Compose files: `docker compose restart umh`. Without the service name, the command restarts every service in the project, including any databases and dashboards.
+   - Kubernetes, Docker Swarm, Portainer and other systems restart containers their own way; use their documentation.
 
 ## What a restart does not do
 
