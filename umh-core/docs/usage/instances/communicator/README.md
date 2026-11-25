@@ -57,11 +57,13 @@ The communicator reports these series on port 8080. All are FSMv2 component seri
 | `umh_fsmv2_worker_pull_failures` | counter | Fetches that failed. The error counters below count the cause. |
 | `umh_fsmv2_worker_messages_pulled` | counter | Messages fetched. |
 | `umh_fsmv2_worker_bytes_pulled` | counter | Bytes fetched. |
+| `umh_fsmv2_worker_last_pull_latency_ms` | gauge | How long the most recent fetch took, in milliseconds, also when it failed. |
 | `umh_fsmv2_worker_push_ops` | counter | Attempts to send messages to the Management Console. |
 | `umh_fsmv2_worker_push_success` | counter | Sends that succeeded. |
 | `umh_fsmv2_worker_push_failures` | counter | Sends that failed. The error counters below count the cause. |
 | `umh_fsmv2_worker_messages_pushed` | counter | Messages sent. |
 | `umh_fsmv2_worker_bytes_pushed` | counter | Bytes sent. |
+| `umh_fsmv2_worker_last_push_latency_ms` | gauge | How long the most recent send took, in milliseconds, also when it failed. |
 | `umh_fsmv2_worker_pending_messages` | gauge | Messages that wait to be sent or delivered again after a failure. |
 | `umh_fsmv2_worker_pending_messages_delivered` | counter | Waiting messages that were delivered later. |
 | `umh_fsmv2_worker_partial_deliveries` | counter | Deliveries in which only some of the fetched messages fit into the queue inside umh-core. |
