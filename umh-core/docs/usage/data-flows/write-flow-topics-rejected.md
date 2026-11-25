@@ -6,7 +6,7 @@ This page covers a write flow whose topic patterns break the topic rules: the de
 
 The message appears in one of three places:
 
-- **When you deploy or edit a bridge** in the Management Console, the dialog shows **Bridge deploy failed** or **Bridge update failed**. The message starts with "Failed to deploy Bridge:" or "Failed to update bridge:". While a bridge's topic patterns break the rules, every edit fails, even one that changes only the port. To fix the topic patterns, follow the rules in [Topic validation](write-flow.md#topic-validation).
+- **When you deploy or edit a bridge** in the Management Console, the dialog shows **Bridge deploy failed** or **Bridge update failed**. The message starts with "Failed to deploy Bridge:" or "Failed to update bridge:". While a bridge's topic patterns break the rules, every edit that includes the write flow fails. The Management Console includes the write flow in every edit, so even an edit that changes only the port fails. To fix the topic patterns, follow the rules in [Topic validation](write-flow.md#topic-validation).
 - **After an upgrade to umh-core 0.45.0**, a write flow that ran before can stop. UMH Core checks the topic patterns of every write flow when it starts. A write flow whose topic patterns break the rules does not start. The bridge shows as degraded, and its status starts with "flow degraded:". The bridge's connection and read flow keep running.
 - **When you change the instance location**, a bridge's topic patterns can end up outside the bridge's new location. UMH Core then rejects the change. The message starts with "Failed to update instance location: the new location moves the write flow topics of these bridges outside their location". [Move a bridge to another location](#move-a-bridge-to-another-location) shows how to avoid it.
 
@@ -69,4 +69,4 @@ Add `-e BYPASS_WRITE_FLOW_VALIDATION=true` to the `docker run` command and recre
 
 Each topic pattern must still start with `^umh\.v1\.` and name one data contract, written out in full and followed by `\.`, such as `\._mes_order\.`. A wildcard in place of the contract stays rejected.
 
-A bridge whose topic patterns need the setting shows as degraded, with a status that starts with "BYPASS_WRITE_FLOW_VALIDATION is set". Save it with **Save Anyway**, because a normal **Save & Deploy** waits for a healthy bridge and rolls the change back.
+A bridge whose topic patterns need the setting shows as degraded, with a status that starts with "flow degraded: BYPASS_WRITE_FLOW_VALIDATION is set". Save it with **Save Anyway**, because a normal **Save & Deploy** waits for a healthy bridge and rolls the change back.

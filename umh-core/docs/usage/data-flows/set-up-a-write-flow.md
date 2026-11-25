@@ -61,11 +61,15 @@ msg.payload = {
 return msg;
 ```
 
-This example writes only the data of `line-1` directly below the bridge location, and drops the rest. UMH Core replaces `{{ .location_path }}` with the bridge location, so `prefix` is the start of every topic the write flow subscribes to. The example compares the first level after `prefix`:
+This example writes only the data of `line-1` directly below the bridge location, and drops the rest. UMH Core replaces `{{ .location_path }}` with the bridge location, so `prefix` is the start of every topic at the bridge location. The example drops topics that do not start with `prefix`, then compares the first level after it:
 
 ```javascript
 const prefix = "umh.v1.{{ .location_path }}.";
-const firstLevel = msg.meta.umh_topic.slice(prefix.length).split(".")[0];
+const topic = msg.meta.umh_topic;
+if (!topic.startsWith(prefix)) {
+  return null;
+}
+const firstLevel = topic.slice(prefix.length).split(".")[0];
 if (firstLevel !== "line-1") {
   return null;
 }

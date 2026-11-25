@@ -179,7 +179,7 @@ The table lists the keys that control the write flow:
 
 | Key | Default | Description |
 |---|---|---|
-| `source.topics` | none, required | The topic patterns, one per line. A line may start with `- `. Template variables such as `{{ .location_path }}` are inserted as literal text, so a variable cannot add pattern syntax to a topic pattern. |
+| `source.topics` | none | The topic patterns, one per line. Without topic patterns, the write flow subscribes to no topics. The Management Console rejects a write flow that has a destination and no topic patterns. A line may start with `- `. Template variables such as `{{ .location_path }}` are inserted as literal text, so a variable cannot add pattern syntax to a topic pattern. |
 | `processing.type` | `nodered_js` | The processor that runs `processing.code`. `nodered_js` is the only supported processor. |
 | `processing.code` | `return msg;` | The JavaScript that runs on every message. |
 | `destination.protocol` | none | The output, such as `http_client` or `historian`. A write flow without it does not start. |
