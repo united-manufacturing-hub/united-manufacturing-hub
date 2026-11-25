@@ -141,13 +141,11 @@ variables:
 
 The Management Console shows each bridge's message counts. Open the bridge and select **Metrics** (see [View Metrics](#view-metrics)). The view shows messages received and sent, errors, connection status and latency for the bridge's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry per-bridge message counts. It carries the bridge's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs bridges and what the labels and the state values mean.
 
-Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels. The labels of the connection are in [Connection Probe](connection-probe.md#metrics), and the labels of the read flow are in [Read Flow](read-flow.md#metrics).
+Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels. The labels of the connection are in [Connection Probe](connection-probe.md#metrics), the labels of the read flow are in [Read Flow](read-flow.md#metrics), and the labels of the write flow are in [Write Flow](write-flow.md#metrics).
 
 | Part of the bridge | `component` | `instance` |
 |---|---|---|
 | The bridge | `protocol_converter_instance` | `mixing-station` |
-| Its write flow | `dataflow_component_instance` | `write-protocolconverter-mixing-station` |
-| The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
 
 To alert when a bridge has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
 

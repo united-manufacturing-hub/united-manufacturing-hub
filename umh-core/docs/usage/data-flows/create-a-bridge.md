@@ -55,7 +55,7 @@ The protocol itself needs no selection here. It comes from the template you pick
 
 ## Step 5: Set Up the Read Flow
 
-Follow [Set up a read flow](set-up-a-read-flow.md), then come back for Step 6.
+Follow [Set up a read flow](set-up-a-read-flow.md), then come back for Step 6. To also write to the external system, follow Steps 3 to 5 of [Set up a write flow](set-up-a-write-flow.md).
 
 ## Step 6: Deploy
 

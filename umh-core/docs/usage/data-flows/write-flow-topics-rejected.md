@@ -15,7 +15,7 @@ The message appears in one of three places:
 Every message has the same shape. It lists one problem per topic pattern and ends with a topic pattern that would work:
 
 ```text
-the write flow topics need changes: topic "^umh\.v1\.acme\.cologne\.assembly\._pump_v1\." can match topics outside this bridge's location acme.cologne.packaging; start it with ^umh\.v1\.acme\.cologne\.packaging\.. Example of a valid topic: ^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.
+the write flow topics need changes: topic "^umh\.v1\.acme\.cologne\.assembly\._pump_v1\." can match topics outside this bridge location acme.cologne.packaging; start it with ^umh\.v1\.acme\.cologne\.packaging\.. Example of a valid topic: ^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.
 ```
 
 ## Write flow rejection messages explained
@@ -23,8 +23,8 @@ the write flow topics need changes: topic "^umh\.v1\.acme\.cologne\.assembly\._p
 Each problem quotes the topic pattern as written. Some problems end with `available:` and the data contracts on this instance. This list gives the meaning of each problem and the fix. For how a UNS topic is built, see [Topic Convention](../unified-namespace/topic-convention.md).
 
 - **must start with ^, in front of any alternatives like ^(?:a|b)**: the topic pattern has no `^` at the start. Add it. With alternatives, write `^(?:a|b)`, not `^a|^b`.
-- **can match topics outside this bridge's location**: the topic pattern can match topics at another location. The message names the start the topic pattern needs. Two causes are common:
-  - The topic pattern names a different location. Change the bridge's location on the **General** tab, as described in [Move a bridge to another location](#move-a-bridge-to-another-location), or publish the data at the bridge's location with a [stream processor](stream-processor.md).
+- **can match topics outside this bridge location**: the topic pattern can match topics at another location. The message names the start the topic pattern needs. Two causes are common:
+  - The topic pattern names a different location. Change the bridge location on the **General** tab, as described in [Move a bridge to another location](#move-a-bridge-to-another-location), or publish the data at the bridge location with a [stream processor](stream-processor.md).
   - The topic pattern has a plain separator dot, such as `umh.v1.` instead of `umh\.v1\.`. A plain dot matches any character. Write every separator dot as `\.`. Leave `.*` as it is, because `\.*` matches repeated dots instead.
 - **must name a data contract beneath the location, followed by \.**: the topic pattern has no data contract. Add a contract from the `available:` list, for example `\._pump_v1\.`.
 - **names a data contract that is not declared in dataContracts:**: the contract or its version does not exist on this instance. Create the data model as described in [Data Contracts](../data-modeling/data-contracts.md), or pick a contract from the `available:` list.
@@ -52,10 +52,10 @@ To move a bridge, for example from `acme.cologne.packaging` to `acme.cologne.ass
 
 1. Open the bridge, select **Edit Config** and the **Write Flow** tab.
 2. In **UMH Topics**, switch to **Code** mode and replace a written-out location with `{{ .location_path }}`. For example, change `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` to `^umh\.v1\.{{ .location_path }}\._pump_v1\.`. Skip this step if every topic pattern already starts with `^umh\.v1\.{{ .location_path }}\.`.
-3. On the **General** tab, change the bridge's location.
+3. On the **General** tab, change the bridge location.
 4. Select **Save & Deploy**. UMH Core checks the topic patterns against the new location, and the write flow subscribes to the topics at `acme.cologne.assembly`.
 
-The instance location is the first part of every bridge's location, so changing it moves every bridge. If UMH Core rejects the change, do step 2 for each bridge the message names and select **Save & Deploy**. Then change the instance location again.
+The instance location is the first part of every bridge location, so changing it moves every bridge. If UMH Core rejects the change, do step 2 for each bridge the message names and select **Save & Deploy**. Then change the instance location again.
 
 ## Emergency setting: Bypass write flow validation
 
@@ -65,7 +65,7 @@ The instance location is the first part of every bridge's location, so changing 
 **The setting applies to every bridge on the instance.** With it on, any bridge can subscribe to topics at any location, and to data contracts that do not exist on the instance or have no version.
 {% endhint %}
 
-Add `-e BYPASS_WRITE_FLOW_VALIDATION=true` to the `docker run` command and recreate the container, as described in [Updating](../../production/deployment/docker/updating.md). `true`, `1`, `yes`, `y` and `on` turn the setting on, in any case. Unset or any other value leaves it off, which is the default. UMH Core reads the value once at startup, and `docker restart` keeps the old value. Subscribing to topics outside the bridge's location needs umh-core 0.45.2 or later.
+Add `-e BYPASS_WRITE_FLOW_VALIDATION=true` to the `docker run` command and recreate the container, as described in [Updating](../../production/deployment/docker/updating.md). `true`, `1`, `yes`, `y` and `on` turn the setting on, in any case. Unset or any other value leaves it off, which is the default. UMH Core reads the value once at startup, and `docker restart` keeps the old value. Subscribing to topics outside the bridge location needs umh-core 0.45.2 or later.
 
 Each topic pattern must still start with `^umh\.v1\.` and name one data contract, written out in full and followed by `\.`, such as `\._mes_order\.`. A wildcard in place of the contract stays rejected.
 
