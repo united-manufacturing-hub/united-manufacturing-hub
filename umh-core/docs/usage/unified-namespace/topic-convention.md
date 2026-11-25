@@ -33,19 +33,19 @@ flowchart LR
 
 | Part | Example | Rule |
 |---|---|---|
-| Prefix | `umh.v1` | Always `umh.v1`. |
-| Location path | `acme.cologne.packaging.line_1` | One or more levels. The first level is required. |
-| Data contract | `_pump_v1` | The first level that starts with `_`. |
-| Virtual path | `motor` | Optional. Any number of levels between the data contract and the name. |
-| Name | `current` | The last level. Required. |
+| Prefix | `umh.v1` | Required. Always `umh.v1`. |
+| Location path | `acme.cologne.packaging.line_1` | Required. One or more levels, starting at level 0. |
+| Data contract | `_pump_v1` | Required. One segment: the first one that starts with `_`. |
+| Virtual path | `motor` | Optional. Any number of segments between the data contract and the name. |
+| Name | `current` | Required. One segment, at the end of the topic. |
 
-Each part is one or more levels, separated by dots. A level is never empty, so a topic has no `..`.
+A segment is one value between dots. A level is a segment of the location path. A segment is never empty, so a topic has no `..`.
 
 ## Location path
 
 The location path says where the data comes from. It has one or more levels, numbered from level 0. Only level 0 is required.
 
-You decide what each level stands for. ISA-95, KKS or any other naming standard works. With ISA-95, the levels are enterprise, site, area, line and machine, as in the topic above. A level of the location path does not start with `_`, because the first level that starts with `_` is the data contract.
+You decide what each level stands for. ISA-95, KKS or any other naming standard works. With ISA-95, the levels are enterprise, site, area, line and machine, as in the topic above. A level of the location path does not start with `_`, because the first segment that starts with `_` is the data contract.
 
 The topics of a bridge start with its **bridge location**: the instance location plus the bridge's levels. The bridge's levels extend the instance location and never overwrite its levels. In a bridge, `{{ .location_path }}` holds the bridge location in dotted form, such as `acme.cologne.packaging`. [Bridges](../data-flows/bridges.md#configuration) explains where the levels are set.
 
@@ -66,22 +66,22 @@ dataContracts:
       version: v1
 ```
 
-Every message whose topic carries `_pump_v1` must match version `v1` of the data model `pump`. [Data Contracts](../data-modeling/data-contracts.md) explains how the contract is enforced.
+[Data Contracts](../data-modeling/data-contracts.md) explains how the contract is enforced.
 
 ## Virtual path and name
 
-Everything after the data contract is defined by the data model, or by the bridge for `_raw`. The name is the last level. The levels between the data contract and the name are the virtual path, which groups related names like folders.
+Everything after the data contract is defined by the data model. For `_raw` and `_historian`, which have no data model, the bridge or flow that publishes the message defines it. The name is the segment at the end of the topic. The segments between the data contract and the name are the virtual path, which groups related names like folders.
 
 The name works for both kinds of data:
 
 - **Time-series data**: the name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the name.
-- **Relational data**: the name is an action whose payload is a whole record. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the name.
+- **Relational data**: the name is a whole record, such as `order`, or an action on it, such as `create`. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the name.
 
 ## Characters
 
-A level may contain letters, digits, `_` and `-`. Any other character, a space included, is rejected.
+A segment may contain letters, digits, `_` and `-`. Any other character, a space included, is rejected.
 
-Write levels in lowercase, with `_` between words, such as `line_1` and `inlet_temperature`. In `_raw`, a level taken from a device address, such as the S7 address `DB1.DW20`, keeps its original spelling.
+Write segments in lowercase, with `_` between words, such as `line_1` and `inlet_temperature`. In `_raw`, segments taken from a device address keep the spelling of the address. The S7 address `DB1.DW20` becomes the virtual path `DB1` and the name `DW20`.
 
 ## Topic patterns
 
@@ -94,6 +94,7 @@ A topic pattern matches a topic when it matches any part of it. These parts of t
 | `^` | The start of the topic. Without `^` at the start, the pattern also matches topics that only contain it. |
 | `\.` | A literal dot. A plain `.` matches any character, so `umh.v1.acme` also matches `umhxv1xacme`. Write every dot as `\.`. |
 | `(?:[^._][^.]*\.)*` | Any number of location levels, including none. `[^._]` keeps the data contract out of the match. |
+| `(?:[^.]+\.)*` | Any number of virtual path segments, including none. |
 | `_pump_v(?:1\|2)` | Versions 1 and 2 of the data model `pump`, each version listed by its number. |
 | `$` | The end of the topic. Use it to match one name only. |
 
@@ -103,7 +104,7 @@ These patterns match topics at the location path `acme.cologne.packaging`:
 |---|---|
 | All `_pump_v1` topics at `acme.cologne.packaging` itself | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` |
 | All `_pump_v1` topics at `acme.cologne.packaging` and every level below it | `^umh\.v1\.acme\.cologne\.packaging\.(?:[^._][^.]*\.)*_pump_v1\.` |
-| Only the name `pressure` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.pressure$` |
+| Only the name `pressure`, with or without a virtual path | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.(?:[^.]+\.)*pressure$` |
 | Versions 1 and 2 of `pump` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v(?:1\|2)\.` |
 
 ## Next Steps
