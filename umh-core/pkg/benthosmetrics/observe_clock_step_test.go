@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// HasErrorNotClearedInTime across a wall-clock step and the store's JSON
+// The time since the last error across a wall-clock step and the store's JSON
 // round-trip.
 
 package benthosmetrics
@@ -40,10 +40,10 @@ func wallStepped(t time.Time, elapsed, step time.Duration) time.Time {
 	return s
 }
 
-var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
+var _ = Describe("A stored failure after a wall-clock step", func() {
 	// An error fires, then NTP steps the wall clock forward 15 minutes while
-	// only 2 minutes pass. The failure is still open, and once stored it must
-	// not read as stuck past its window.
+	// only 2 minutes pass. The failure is still open, and once stored its last
+	// error must still read as 2 minutes old.
 	It("measures real elapsed time, not wall-clock time", func() {
 		t0 := time.Now()
 		Expect(wallStepped(t0, 2*time.Minute, 15*time.Minute).Sub(t0)).To(Equal(2*time.Minute),
@@ -63,11 +63,12 @@ var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
 		var stored FailureReport
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 
-		Expect(stored.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
+		Expect(stored.ObservedAt.Sub(stored.OutputErrors.LastErrorAt)).To(Equal(2*time.Minute),
+			"stored failures after a 15m forward wall-clock step")
 	})
 })
 
-var _ = Describe("HasErrorNotClearedInTime after a sparse error and a wall-clock step", func() {
+var _ = Describe("A stored failure after a sparse error and a wall-clock step", func() {
 	// The reading before the error is 9m59s old, so 5s after the error that
 	// reading has left the window, and only the error's own scrape keeps the
 	// failure open. NTP steps the wall clock forward 15 minutes in those 5s.
@@ -88,6 +89,7 @@ var _ = Describe("HasErrorNotClearedInTime after a sparse error and a wall-clock
 		var stored FailureReport
 		Expect(json.Unmarshal(raw, &stored)).To(Succeed())
 
-		Expect(stored.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(), "stored failures after a 15m forward wall-clock step")
+		Expect(stored.ObservedAt.Sub(stored.OutputErrors.LastErrorAt)).To(Equal(5*time.Second),
+			"stored failures after a 15m forward wall-clock step")
 	})
 })

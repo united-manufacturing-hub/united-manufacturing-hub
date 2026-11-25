@@ -35,7 +35,7 @@ type errorCounter struct {
 	// read sums the counter off one scrape's Metrics.
 	read func(Metrics) int64
 	// field points at this counter's field in a report: judge sets it,
-	// ErrorFree and HasErrorNotClearedInTime read it.
+	// ErrorFree reads it.
 	field func(*FailureReport) **RecentErrors
 }
 

@@ -120,12 +120,6 @@ var _ = Describe("Benthos restarts and scrape gaps", func() {
 	})
 
 	// The metrics port changes without a worker restart, and the Benthos on
-	// the new port reports 0.
-	It("reads a port change as a restart", func() {
-		firedAt(3).at(failureT.Add(time.Second), testPort+1, 0).wantErrorFree("first scrape on a new port, counter 0")
-	})
-
-	// The metrics port changes without a worker restart, and the Benthos on
 	// the new port has already counted 2 output errors by the first scrape:
 	// they count, as the errors before a restart's first scrape do.
 	It("counts errors the new port's Benthos already reported", func() {

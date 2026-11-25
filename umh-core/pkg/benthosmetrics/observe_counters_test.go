@@ -50,13 +50,6 @@ func failureScrape(v map[string]int64) Metrics {
 	}
 }
 
-// errorLabels repeats each counter's label so the specs check the wording, not
-// copy it from errorCounters. The first spec keeps the two lists in step.
-var errorLabels = map[signal]string{
-	"output_error":    "output error",
-	"processor_error": "processor error",
-}
-
 // verdictAfterRise scrapes before at T-1s, then after at T, and returns the
 // failures at T.
 func verdictAfterRise(before, after map[string]int64) FailureReport {
@@ -68,63 +61,16 @@ func verdictAfterRise(before, after map[string]int64) FailureReport {
 }
 
 var _ = Describe("The error counters", func() {
-	// errorLabels names exactly the counters in errorCounters, so the loops
-	// below cover every counter.
-	It("covers every counter with a label", func() {
-		Expect(errorLabels).To(HaveLen(len(errorCounters)))
-
-		for _, c := range errorCounters {
-			Expect(errorLabels[c.name]).To(Equal(c.label),
-				"counter %q", c.name)
-		}
-	})
-
-	// Each counter in errorLabels, raised alone by 1, makes the flow not
-	// error-free with its own label.
+	// Each counter, raised alone by 1, makes the flow not error-free and
+	// fills only its own field. failures_test.go checks the wording.
 	It("degrades on every error counter", func() {
-		for name, label := range errorLabels {
-			f := verdictAfterRise(nil, map[string]int64{string(name): 1})
-			ok, reason := f.ErrorFree()
-			Expect(ok).To(BeFalse(), "%s 0 -> 1", name)
-			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 1 %s in the last 10m, just now", label)))
-			Expect(failuresIn(f)).To(Equal(1), "%s raised alone", name)
+		for _, c := range errorCounters {
+			f := verdictAfterRise(nil, map[string]int64{string(c.name): 1})
+			ok, _ := f.ErrorFree()
+			Expect(ok).To(BeFalse(), "%s 0 -> 1", c.name)
+			Expect(*c.field(&f)).NotTo(BeNil(), "%s raised alone", c.name)
+			Expect(failuresIn(f)).To(Equal(1), "%s raised alone", c.name)
 		}
-	})
-
-	// One processor error is named before two inputs that are not connected,
-	// although 2 is larger than 1, and both failures are present.
-	It("names the error before more inputs down", func() {
-		inputs := func(failed int64) map[string]conn {
-			return map[string]conn{"root.input.broker.0": {failed: failed}, "root.input.broker.1": {failed: failed}}
-		}
-
-		tr := NewTracker(func() time.Time { return failureT })
-		before := connScrape(inputs(0), nil)
-		before.Process = ProcessMetrics{Processors: map[string]ProcessorMetrics{
-			"root.pipeline.processors.0": {},
-		}}
-		tr.observe(testPort, before, failureT.Add(-time.Second))
-
-		after := connScrape(inputs(1), nil)
-		after.Process = ProcessMetrics{Processors: map[string]ProcessorMetrics{
-			"root.pipeline.processors.0": {Error: 1},
-		}}
-		f := *tr.observe(testPort, after, failureT).Failures
-
-		Expect(failuresIn(f)).To(Equal(2))
-		Expect(f.InputsNotConnected.Count).To(Equal(int64(2)), "two inputs are down")
-		ok, reason := f.ErrorFree()
-		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 1 processor error in the last 10m, just now"))
-	})
-
-	// Of two error counters, the one with the larger current increase is
-	// named first.
-	It("names the larger increase first", func() {
-		f := verdictAfterRise(nil, map[string]int64{"output_error": 1, "processor_error": 3})
-		ok, reason := f.ErrorFree()
-		Expect(ok).To(BeFalse())
-		Expect(reason).To(Equal("benthos reported 3 processor errors in the last 10m, last one just now"))
 	})
 
 	// A Benthos with no input, output or processor paths reports every
@@ -141,7 +87,8 @@ var _ = Describe("The error counters", func() {
 	// For each counter, fire it, then drop only that counter. The drop is a
 	// restart, so the next verdict is error-free.
 	It("reads a drop in any error counter as a restart", func() {
-		for name := range errorLabels {
+		for _, c := range errorCounters {
+			name := c.name
 			tr := NewTracker(func() time.Time { return failureT })
 			f := *tr.observe(testPort, failureScrape(map[string]int64{string(name): 3}), failureT.Add(-time.Second)).Failures
 			ok, _ := f.ErrorFree()
@@ -158,7 +105,7 @@ var _ = Describe("The error counters", func() {
 	})
 
 	// Each error counter, raised in a real /metrics body between two scrapes,
-	// reaches the verdict with its label. This covers the parser's name for
+	// reaches its own field in the report. This covers the parser's name for
 	// each counter.
 	It("judges every error counter from the wire", func() {
 		lines := map[signal]string{
@@ -166,7 +113,9 @@ var _ = Describe("The error counters", func() {
 			signalProcessorError: `processor_error{label="",path="root.pipeline.processors.0"} %d`,
 		}
 
-		for name, label := range errorLabels {
+		for _, c := range errorCounters {
+			name := c.name
+
 			var value int64
 
 			srv := benthosmetricstest.NewServer()
@@ -192,9 +141,12 @@ var _ = Describe("The error counters", func() {
 			Expect(err).NotTo(HaveOccurred(), "second Scrape")
 
 			Expect(sample.Failures).NotTo(BeNil(), "%s on the wire: the sample carries no Failures", name)
-			ok, reason := sample.Failures.ErrorFree()
+			ok, _ := sample.Failures.ErrorFree()
 			Expect(ok).To(BeFalse(), "%s 0 -> 2 on the wire", name)
-			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 2 %ss in the last 10m, last one just now", label)))
+
+			errs := *c.field(sample.Failures)
+			Expect(errs).NotTo(BeNil(), "%s on the wire", name)
+			Expect(errs.Count).To(Equal(int64(2)), "%s 0 -> 2 on the wire", name)
 		}
 	})
 

@@ -85,20 +85,6 @@ func (f *FailureReport) ErrorFree() (ok bool, reason string) {
 	return true, ""
 }
 
-// HasErrorNotClearedInTime reports whether f, as of its own ObservedAt,
-// still holds errors more than ErrorWindow plus margin after their own
-// LastErrorAt: errors that should have cleared by then.
-func (f *FailureReport) HasErrorNotClearedInTime(margin time.Duration) bool {
-	for _, c := range errorCounters {
-		errs := *c.field(f)
-		if errs != nil && f.ObservedAt.Sub(errs.LastErrorAt) > ErrorWindow+margin {
-			return true
-		}
-	}
-
-	return false
-}
-
 // mostErrors returns the error counter with the most errors in f and those
 // errors, the first in errorCounters on a tie. errs is nil when f holds no
 // errors.

@@ -214,8 +214,8 @@ func firstNotConnectedSince(previous map[signal]time.Time, counts map[signal]int
 
 // redate returns t re-dated from at by the monotonic time elapsed between
 // them, so the result's wall clock matches at's even after a wall-clock step.
-// HasErrorNotClearedInTime on a FailureReport that went through JSON, which
-// drops monotonic readings, then still measures real time.
+// ErrorFree on a FailureReport that went through JSON, which drops monotonic
+// readings, then still measures real time since the last error.
 func redate(at, t time.Time) time.Time {
 	return at.Add(-at.Sub(t))
 }
