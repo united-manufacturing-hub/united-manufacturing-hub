@@ -15,7 +15,7 @@ The Topic Browser can only show values that reach the Unified Namespace. How oft
 
 A source can publish less often than you expect for one of these reasons:
 
-- **The bridge drops unchanged values.** UMH Core adds a downsampler to the read flow of every bridge that produces time-series data, and it drops a value that repeats the previous one exactly. A value that holds still sends nothing after its first reading, so its age keeps growing while the bridge reads its device on schedule. You see this when the **Headers** in the **Details** tab include `downsampled_by`, or when the **Metrics** of the bridge show the count of messages sent rising more slowly than the count received. See [Keep values the downsampler drops](#keep-values-the-downsampler-drops).
+- **Downsampling can suppress unchanged values.** A tag’s age can increase even while the bridge continues reading its device. See [Downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) for details.
 - **The bridge reads only on change.** An OPC UA bridge with `subscribeEnabled: true` in its input, for example, gets a value from the server only when the value changes. To read at fixed times instead, set `subscribeEnabled: false` in the OPC UA input of the bridge. The bridge then reads every `pollRate` milliseconds, 1,000 by default, and the downsampler still drops unchanged values.
 - **A stream processor publishes when its inputs arrive.** It publishes each time one of the topics it reads sends a value, once every one of them has sent at least one. It can be no more regular than those topics, so check them first.
 
