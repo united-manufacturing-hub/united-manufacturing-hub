@@ -79,4 +79,4 @@ If the file is still missing, run these checks on the machine, outside the conta
    three checks above to us on [Discord](https://discord.com/invite/F9mqkZnm9d) or through your usual UMH
    contact.
 
-With a CPU limit, the `Pressure` line keeps reading `not measured`.
+A CPU limit does not make pressure readable, so the `Pressure` line keeps reading `not measured`.

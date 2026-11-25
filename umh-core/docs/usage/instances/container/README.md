@@ -141,7 +141,7 @@ The container reports these series on port 8080. [Read the metrics](../agent/met
 
 #### Container gauges
 
-These gauges carry the label `instance`. They report the figures on the Container card.
+These gauges carry the label `instance`. They report the figures on the Container card, except the CPU gauges: these always report the container's own usage. Without a CPU limit, the CPU row shows the whole machine instead, which `umh_fsmv2_worker_cpu_avg_host_busy_cores` reports.
 
 | Name | Type | Reports |
 |---|---|---|
@@ -172,8 +172,8 @@ The CPU health check reports the readings behind the [CPU status](#cpu-status). 
 | `umh_fsmv2_worker_cpu_reserve_cores` | gauge | The cores held back from the capacity as a reserve. |
 | `umh_fsmv2_worker_cpu_host_cpus` | gauge | The core count of the machine. It is higher than the container's when the container is pinned to some cores. |
 | `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The time of the last successful measurement, in Unix seconds. |
-| `umh_fsmv2_worker_cpu_usage_ring_active` | gauge | 1 once `cpu_avg_usage_cores` covers a full 60-second window, otherwise 0. |
-| `umh_fsmv2_worker_cpu_host_busy_ring_active` | gauge | 1 once `cpu_avg_host_busy_cores` covers a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_cpu_usage_ring_active` | gauge | 1 once `cpu_avg_usage_cores` has at least two samples in its 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_cpu_host_busy_ring_active` | gauge | 1 once `cpu_avg_host_busy_cores` has at least two samples in its 60-second window, otherwise 0. |
 | `umh_fsmv2_worker_cpu_throttle_signal_ready` | gauge | 1 while `cpu_throttle_ratio` has a reading. It stays 0 on a machine that reports no throttling, for example without a CPU limit. |
 | `umh_fsmv2_worker_cpu_pressure_signal_ready` | gauge | 1 while `cpu_pressure_avg60_ratio` has a reading. It stays 0 when the container cannot read `cpu.pressure`. |
 | `umh_fsmv2_worker_cpu_host_headroom_available` | gauge | 1 when machine headroom can be measured. It is 0 when the container is pinned to some cores or the machine's core count cannot be read. |
