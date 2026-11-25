@@ -8,7 +8,7 @@ While the container is degraded, new bridges wait to start. If a bridge must sta
 
 Raise the memory limit of the container, or remove bridges or flows. The [Sizing Guide](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
 
-If the [memory monitor preview](how-memory-health-is-judged.md) names `host-memory-full` as the cause, the machine is out of memory. A higher container limit does not help. Free memory on the machine or add memory to it.
+If the [memory monitor preview](memory-health.md) names `host-memory-full` as the cause, the machine is out of memory. A higher container limit does not help. Free memory on the machine or add memory to it.
 
 ## Disk
 
@@ -16,7 +16,7 @@ Free space on the `/data` volume, or shorten how long Redpanda keeps data. See [
 
 ## CPU
 
-[CPU status](README.md#cpu-status) explains each status. [How CPU Health Is Judged](how-cpu-health-is-judged.md) explains the signals behind them.
+[CPU status](README.md#cpu-status) explains each status. [CPU Health](cpu-health.md) explains the signals behind them.
 
 | Status | What to do |
 |---|---|

@@ -74,7 +74,7 @@ To use less disk:
 
 ## Headroom and resizing
 
-Size the machine so that, under normal load, memory stays below 70% and disk below 75%, as shown on the [Container card](../usage/instances/container/README.md#the-container-card), and [CPU health](../usage/instances/container/how-cpu-health-is-judged.md) stays healthy.
+Size the machine so that, under normal load, memory stays below 70% and disk below 75%, as shown on the [Container card](../usage/instances/container/README.md#the-container-card), and [CPU health](../usage/instances/container/cpu-health.md) stays healthy.
 
 Grow the machine when the Container card shows CPU, memory or disk as degraded, or when new bridges wait at the [bridge limit](../usage/data-flows/bridges-do-not-start.md#bridge-limit). For CPU, [What to do for each CPU status](../usage/instances/container/container-shows-degraded.md#cpu) lists the steps.
 

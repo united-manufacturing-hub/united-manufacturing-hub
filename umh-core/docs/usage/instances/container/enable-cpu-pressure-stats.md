@@ -2,7 +2,7 @@
 
 {% hint style="info" %}
 UMH Core reads CPU pressure as part of the CPU health check. See
-[How CPU Health Is Judged](how-cpu-health-is-judged.md).
+[CPU Health](cpu-health.md).
 {% endhint %}
 
 Follow this page when the Technical Details `Pressure` line reads `Pressure not measured (this

@@ -19,7 +19,7 @@ The CPU, Memory and Disk rows turn red when that resource is degraded. The **S6 
 
 ### The CPU row
 
-From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. [How CPU Health Is Judged: With and without a CPU limit](how-cpu-health-is-judged.md#with-and-without-a-cpu-limit) explains the difference. The info button next to it shows the readings of the container and the machine, which [CPU thresholds](#cpu-thresholds) describes. The row turns red while the [CPU status](#cpu-status) is degraded, and reads `N/A` when umh-core cannot measure the CPU.
+From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. [CPU Health: With and without a CPU limit](cpu-health.md#with-and-without-a-cpu-limit) explains the difference. The info button next to it shows the readings of the container and the machine, which [CPU thresholds](#cpu-thresholds) describes. The row turns red while the [CPU status](#cpu-status) is degraded, and reads `N/A` when umh-core cannot measure the CPU.
 
 ![The CPU info button of the Container card on an instance without a CPU limit](../images/container-cpu-info.png)
 
@@ -77,7 +77,7 @@ A signal that is already past its threshold shows what would clear it instead, f
 
 ### Memory with the memory monitor preview
 
-With the [memory monitor preview](how-memory-health-is-judged.md) on, memory degrades for one of four causes. The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`. [How Memory Health Is Judged](how-memory-health-is-judged.md) explains the causes, and [Memory monitor preview thresholds](#memory-monitor-preview-thresholds) gives their values.
+With the [memory monitor preview](memory-health.md) on, memory degrades for one of four causes. The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`. [Memory Health](memory-health.md) explains the causes, and [Memory monitor preview thresholds](#memory-monitor-preview-thresholds) gives their values.
 
 ## Container thresholds
 
@@ -92,7 +92,7 @@ Memory and disk recover at the same value they degrade at. A warning does not ch
 
 ### CPU thresholds
 
-Each CPU signal degrades at one value and recovers at another. The two are held apart so the status does not flicker. Throttling, pressure, steal and usage are worse the higher they read, headroom the lower. All readings are 60-second figures. A reading must exceed a threshold to count. Where the table says "at", reaching it is enough. [How CPU Health Is Judged](how-cpu-health-is-judged.md) explains why the signals are chosen.
+Each CPU signal degrades at one value and recovers at another. The two are held apart so the status does not flicker. Throttling, pressure, steal and usage are worse the higher they read, headroom the lower. All readings are 60-second figures. A reading must exceed a threshold to count. Where the table says "at", reaching it is enough. [CPU Health](cpu-health.md) explains how the signals combine into the CPU status.
 
 | Signal | Measures | Degrades | Recovers | Measured only when |
 |---|---|---|---|---|
@@ -107,7 +107,7 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 
 ### Memory monitor preview thresholds
 
-With the [memory monitor preview](how-memory-health-is-judged.md) on, each cause degrades at one value and recovers at a lower one.
+With the [memory monitor preview](memory-health.md) on, each cause degrades at one value and recovers at a lower one.
 
 | Cause | Degraded from | Healthy again below |
 |---|---|---|
@@ -130,7 +130,7 @@ The environment variable `USE_FSMV2_MEMORY_MONITOR` changes how umh-core judges 
 
 | Variable | Default | Effect |
 |---|---|---|
-| `USE_FSMV2_MEMORY_MONITOR` | `false` | `true` turns on the memory monitor preview, which [How Memory Health Is Judged](how-memory-health-is-judged.md) explains. |
+| `USE_FSMV2_MEMORY_MONITOR` | `false` | `true` turns on the memory monitor preview, which [Memory Health](memory-health.md) explains. |
 | `USE_FSMV2_CPU` | none | Ignored from v0.45.4. The CPU status always comes from the CPU health check. On v0.44.46 to v0.45.3, `USE_FSMV2_CPU=false` turns the check off and applies the 70% CPU usage rule instead. Remove the variable from your `docker run` command. |
 
 The CPU health check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
