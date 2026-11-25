@@ -83,7 +83,7 @@ With the [memory monitor preview](how-memory-health-is-judged.md) on, memory deg
 
 ### Memory and disk
 
-| Resource | Degraded from | Active again below | Warning from |
+| Resource | Degraded above | Active again at or below | Warning from |
 |---|---|---|---|
 | Memory | 80% of the total | 80% | 70% |
 | Disk | 85% of the `/data` volume | 85% | 75% |
@@ -137,7 +137,72 @@ The CPU health check also runs on an instance started without `AUTH_TOKEN` and `
 
 ### Metrics
 
-The container reports its CPU, memory and disk on port 8080 as `umh_container_*` gauges. `umh_container_health_status` holds the health per resource: 0 = Neutral, 1 = Active, 2 = Degraded, with the label `component` set to `overall`, `cpu`, `memory` or `disk`. The CPU health check reports each signal in [CPU thresholds](#cpu-thresholds) as a `umh_fsmv2_worker_cpu_*` gauge, and the memory monitor preview reports its readings as `umh_fsmv2_worker_memory_*` gauges. Next to these gauges, flag gauges read 0 while a reading is not worth acting on yet, for example while its 60-second window fills. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint and the labels.
+The container reports these series on port 8080. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint and the labels.
+
+#### Container gauges
+
+These gauges carry the label `instance`. They report the figures on the Container card.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_container_cpu_usage_mcores` | gauge | CPU usage in millicores (1000 = 1 core), as a 60-second mean. |
+| `umh_container_cpu_core_count` | gauge | CPU cores available to the container. |
+| `umh_container_cpu_load_percent` | gauge | CPU usage as a percentage of the container's cores, as a 60-second mean. |
+| `umh_container_memory_used_bytes` | gauge | Memory in use, in bytes. |
+| `umh_container_memory_total_bytes` | gauge | The memory total the usage is measured against, in bytes. |
+| `umh_container_memory_usage_percent` | gauge | Memory in use as a percentage of the total. |
+| `umh_container_disk_used_bytes` | gauge | Used space of the `/data` volume, in bytes. |
+| `umh_container_disk_total_bytes` | gauge | Size of the `/data` volume, in bytes. |
+| `umh_container_disk_usage_percent` | gauge | Used space of the `/data` volume as a percentage. |
+| `umh_container_health_status` | gauge | The health per resource: 0 = Neutral, 1 = Active, 2 = Degraded. The label `component` is `overall`, `cpu`, `memory` or `disk`. |
+
+#### CPU health gauges
+
+The CPU health check reports the readings behind the [CPU status](#cpu-status). These are FSMv2 component series whose `hierarchy_path` ends in `(cpu)`, see [FSMv2 metrics](../agent/metrics.md#fsmv2-metrics). Each gauge keeps its last value until the next successful measurement.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_cpu_avg_usage_cores` | gauge | The container's own CPU usage, in cores, as a 60-second mean. |
+| `umh_fsmv2_worker_cpu_avg_usage_fraction` | gauge | The container's own CPU usage as a fraction (0 to 1) of the cores it may run on. |
+| `umh_fsmv2_worker_cpu_throttle_ratio` | gauge | Throttling: the fraction (0 to 1) of scheduling periods in the last 60 seconds in which the kernel paused the container. |
+| `umh_fsmv2_worker_cpu_pressure_avg60_ratio` | gauge | Pressure: the `some avg60` value of the container's `cpu.pressure`, as a fraction (0 to 1). |
+| `umh_fsmv2_worker_cpu_avg_host_busy_cores` | gauge | The busy cores of the whole machine, as a 60-second mean. |
+| `umh_fsmv2_worker_cpu_host_headroom_cores` | gauge | Machine headroom: the cores free on the machine after the reserve. It is negative when the machine is full. |
+| `umh_fsmv2_worker_cpu_capacity_cores` | gauge | The cores the CPU status is judged against: the CPU limit when one is set, otherwise the core count. |
+| `umh_fsmv2_worker_cpu_reserve_cores` | gauge | The cores held back from the capacity as a reserve. |
+| `umh_fsmv2_worker_cpu_host_cpus` | gauge | The core count of the machine. It is higher than the container's when the container is pinned to some cores. |
+| `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The time of the last successful measurement, in Unix seconds. |
+| `umh_fsmv2_worker_cpu_usage_ring_active` | gauge | 1 once `cpu_avg_usage_cores` covers a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_cpu_host_busy_ring_active` | gauge | 1 once `cpu_avg_host_busy_cores` covers a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_cpu_throttle_signal_ready` | gauge | 1 while `cpu_throttle_ratio` has a reading. It stays 0 on a machine that reports no throttling, for example without a CPU limit. |
+| `umh_fsmv2_worker_cpu_pressure_signal_ready` | gauge | 1 while `cpu_pressure_avg60_ratio` has a reading. It stays 0 when the container cannot read `cpu.pressure`. |
+| `umh_fsmv2_worker_cpu_host_headroom_available` | gauge | 1 when machine headroom can be measured. It is 0 when the container is pinned to some cores or the machine's core count cannot be read. |
+| `umh_fsmv2_worker_cpu_host_busy_cores_available` | gauge | 1 when the last measurement could read the machine's busy cores. |
+
+A gauge whose flag reads 0 is not worth acting on. `cpu_host_headroom_cores` is worth acting on only while `cpu_host_headroom_available`, `cpu_host_busy_cores_available` and `cpu_host_busy_ring_active` all read 1. Steal has no gauge. The badge reason shows it.
+
+#### Memory monitor preview gauges
+
+With the [memory monitor preview](#memory-with-the-memory-monitor-preview) on, the memory monitor reports these series, with a `hierarchy_path` that ends in `(memory)`. Without the preview, they do not exist. Each gauge keeps its last value until the next successful measurement.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_memory_avg_used_bytes` | gauge | Memory in use, in bytes, as a 60-second mean. |
+| `umh_fsmv2_worker_memory_total_bytes` | gauge | The memory total the usage is judged against, in bytes. |
+| `umh_fsmv2_worker_memory_avg_used_fraction` | gauge | Memory in use as a fraction (0 to 1) of the total, as a 60-second mean. |
+| `umh_fsmv2_worker_memory_avg_host_used_bytes` | gauge | The memory in use on the whole machine, in bytes, as a 60-second mean. |
+| `umh_fsmv2_worker_memory_host_total_bytes` | gauge | The memory of the machine, in bytes. |
+| `umh_fsmv2_worker_memory_pressure_avg60_ratio` | gauge | The `some avg60` value of the container's `memory.pressure`, as a fraction (0 to 1). |
+| `umh_fsmv2_worker_memory_oom_kills_last_hour` | gauge | Processes in the container that the kernel stopped in the last hour because memory ran out. |
+| `umh_fsmv2_worker_memory_last_sample_unix` | gauge | The time of the last successful measurement, in Unix seconds. |
+| `umh_fsmv2_worker_memory_used_ring_active` | gauge | 1 once `memory_avg_used_bytes` and `memory_avg_used_fraction` cover a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_memory_host_ring_active` | gauge | 1 once `memory_avg_host_used_bytes` covers a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_memory_pressure_signal_ready` | gauge | 1 while `memory_pressure_avg60_ratio` has a reading. It stays 0 on cgroup v1 or without pressure stall information. |
+| `umh_fsmv2_worker_memory_oom_signal_ready` | gauge | 1 while `memory_oom_kills_last_hour` has a reading. |
+| `umh_fsmv2_worker_memory_used_from_cgroup` | gauge | 1 when `memory_avg_used_bytes` is the container's own usage. |
+| `umh_fsmv2_worker_memory_total_is_cgroup_limit` | gauge | 1 when `memory_total_bytes` is the container's memory limit. |
+
+#### Alert queries
 
 To alert when the container degrades:
 
@@ -145,12 +210,18 @@ To alert when the container degrades:
 umh_container_health_status{component="overall"} == 2
 ```
 
-When UMH Core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. Before the first successful measurement, `umh_fsmv2_worker_cpu_last_sample_unix` does not exist. To alert when the CPU health check has not measured for a minute, including when it never measured, use a `for:` duration of a few minutes so that the first seconds after a start do not fire:
+When UMH Core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. Before the first successful measurement, `umh_fsmv2_worker_cpu_last_sample_unix` does not exist. To alert when an instance's CPU health check has not measured for a minute, including when it never measured, compare it with the `up` series of the scrape job. Replace `umh-core` with the name of your scrape job, and use a `for:` duration of a few minutes so that the first seconds after a start do not fire:
 
 ```promql
-time() - umh_fsmv2_worker_cpu_last_sample_unix > 60
+time() - umh_fsmv2_worker_cpu_last_sample_unix{job="umh-core"} > 60
 or
-absent(umh_fsmv2_worker_cpu_last_sample_unix)
+(
+  up{job="umh-core"} == 1
+  unless on (job, instance)
+  umh_fsmv2_worker_cpu_last_sample_unix{job="umh-core"}
+)
 ```
 
-The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go) for the `umh_container_*` gauges, and in [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go) for the CPU and memory gauges.
+The second part fires for each reachable instance without the gauge. An instance that cannot be scraped needs its own alert on `up == 0`.
+
+The `umh_container_*` gauges are defined in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go), and the CPU and memory gauges in [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go).
