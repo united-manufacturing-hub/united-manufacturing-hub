@@ -35,6 +35,8 @@ The main view shows all bridges with connection status and throughput:
 - **Yellow dot**: Starting or warning state
 - **Grey dot**: Intermediate states (starting, stopping, or stuck in starting state)
 
+A bridge whose connection is up but that has neither a read flow nor a write flow waits in the state `starting_failed_dfc_missing`. Its status starts with "No DFC added yet", where DFC means flow. The bridge starts once you add a flow.
+
 ### Context Menu
 
 Right-click any bridge for quick actions:

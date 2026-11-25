@@ -11,35 +11,32 @@ The bridge's overview page shows the read flow as its own card, next to the conn
 | State | Meaning |
 |---|---|
 | `active` | The read flow reads messages from the external system. |
-| `idle` | The read flow runs, but read no messages at the last check. |
+| `idle` | The read flow runs, but has read no messages recently. |
 | `degraded` | The read flow runs, but has hit errors. The log shows them. |
-| `starting` | The read flow is starting. |
-| `starting_failed` | The read flow did not start within 15 seconds. It stays in this state until you change its configuration. The log shows why. |
+| `starting` | The read flow is starting. If it stays in this state, the log shows why. |
 | `stopping` | The read flow is stopping. |
-| `stopped` | The read flow is stopped in its configuration, with `readDFCDesiredState: stopped`, or the bridge is stopped. |
-
-If the connection is up but the bridge has neither a read flow nor a write flow, the bridge waits in the state `starting_failed_dfc_missing`. Its status starts with "No DFC added yet". It starts once you add a flow.
+| `stopped` | The read flow is stopped with `readDFCDesiredState: stopped`, the bridge is stopped, or the bridge waits for its connection or for Redpanda. |
 
 ## How the read flow works
 
-The read flow runs one Benthos pipeline. Its input reads from the external system, its processors build the UNS topic of each message, and its output publishes the message to the UNS. You set the input and the processors. umh-core sets the output.
+The read flow runs one [Benthos](https://docs.umh.app/benthos-umh) pipeline, a process that reads, changes and writes messages. Its input reads from the external system, its processors build the UNS topic of each message, and its output publishes the message to the UNS. You set the input and the processors. umh-core sets the output.
 
 ### The read flow starts only once the connection is up
 
-umh-core starts the read flow once the [connection](connection-probe.md) is `up` and Redpanda is healthy. A running read flow that is still connected to the external system keeps running when the connection goes down. Errors it hits show up as `degraded` on the read flow. Once the read flow has lost its own connection too, the bridge moves to `degraded_connection` until the connection is `up` again. `readDFCDesiredState` in `config.yaml` does not change. [How the connection affects the bridge](connection-probe.md#how-the-connection-affects-the-bridge) describes the bridge states.
+umh-core starts the read flow once the [connection](connection-probe.md) is `up` and Redpanda is healthy. When the connection goes down, the read flow keeps running only while it still reads from the external system. Then umh-core stops it until the connection is `up` again. [How the connection affects the bridge](connection-probe.md#how-the-connection-affects-the-bridge) describes the bridge states.
 
 ### Every message needs a UNS topic
 
-Each message the read flow publishes goes to one UNS topic. The topic is built from the bridge location, the data contract, an optional virtual path and the tag name, as described in [Topic Convention](../unified-namespace/topic-convention.md). The bridge templates set these parts with a [`tag_processor`](https://docs.umh.app/benthos-umh/processing/tag-processor):
+Each message the read flow publishes goes to one UNS topic. The topic is built from the bridge location, the data contract, an optional virtual path and the tag name, as described in [Topic Convention](../unified-namespace/topic-convention.md). The Management Console's protocol templates set these parts with a [`tag_processor`](https://docs.umh.app/benthos-umh/processing/tag-processor):
 
 - `msg.meta.location_path`: the bridge location. umh-core replaces `{{ .location_path }}` with it.
 - `msg.meta.data_contract`: the data contract, such as `_raw`, `_historian` or a contract of your own.
 - `msg.meta.virtual_path`: optional levels between the data contract and the tag name.
 - `msg.meta.tag_name`: the name of the value, such as the PLC address.
 
-The `uns` output checks each message against the data model of its data contract and does not publish a message that breaks it. It checks only data contracts that exist on the instance. The Management Console creates a data contract, such as `_pump_v1`, when you create a data model. In `config.yaml`, a data contract is an entry in `dataContracts:`. [Data Contracts](../data-modeling/data-contracts.md) explains the check. `_raw` and `_historian` are built in and have no data model.
-
 In the Management Console, each row of the address table sets these parts for one protocol address, such as `DB1.DW20`.
+
+The `uns` output checks each message against the data model of its data contract and does not publish a message that breaks it. The read flow's log shows the error, and **Metrics** counts it as an output error. The output checks only data contracts that exist on the instance. The Management Console creates a data contract, such as `_pump_v1`, when you create a data model. In `config.yaml`, a data contract is an entry in `dataContracts:`. [Data Contracts](../data-modeling/data-contracts.md) explains the check. `_raw` and `_historian` are built in and have no data model.
 
 ### umh-core sets the output
 
@@ -95,9 +92,9 @@ protocolConverter:
 
 | Key | Default | Description |
 |---|---|---|
-| `dataflowcomponent_read.benthos.input` | none | The Benthos input that reads from the external system, such as `s7comm` or `opcua`. The [Benthos-UMH input documentation](https://docs.umh.app/benthos-umh/input) lists the inputs. Without an input, the read flow does not start. |
+| `dataflowcomponent_read.benthos.input` | none, required | The Benthos input that reads from the external system, such as `s7comm` or `opcua`. The [Benthos-UMH input documentation](https://docs.umh.app/benthos-umh/input) lists the inputs. Without an input, the read flow does not start. |
 | `dataflowcomponent_read.benthos.pipeline` | none | The processors that run on every message, usually one `tag_processor`. |
-| `dataflowcomponent_read.benthos.buffer`, `cache_resources`, `rate_limit_resources` | none | Advanced Benthos settings. See the [Benthos-UMH documentation](https://docs.umh.app/benthos-umh). |
+| `dataflowcomponent_read.benthos.buffer`, `cache_resources`, `rate_limit_resources` | none | Benthos settings for buffering, caching and rate limits. See the [Benthos-UMH documentation](https://docs.umh.app/benthos-umh). |
 | `dataflowcomponent_read.benthos.output` | the `uns` output | Ignored. umh-core always sets the `uns` output. |
 | `readDFCDesiredState` | the bridge's `desiredState` | `active` or `stopped`. It sits in `protocolConverterServiceConfig`, next to `location`. `stopped` stops only the read flow, and the write flow keeps running. A bridge with `desiredState: stopped` always stops its read flow. |
 
@@ -105,7 +102,7 @@ Changes to these keys take effect without a restart of the container.
 
 ### Metrics
 
-The **Metrics** action on the **Read Flow** card shows the message counts of the read flow. They are messages received and sent, errors and latency, for its input, processors and output. umh-core's Prometheus endpoint on port 8080 does not carry these counts. It carries the state and the errors of the read flow.
+The **Metrics** action on the **Read Flow** card shows the message counts of the read flow. They are messages received and sent, errors and latency, for its input, processors and output. umh-core's Prometheus endpoint on port 8080 does not carry these counts. It carries the state and the errors of the read flow. [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains the state values and the label names in Prometheus.
 
 On the Prometheus endpoint, the read flow of a bridge named `mixing-station` reports as `component="dataflow_component_instance"`, `exported_instance="read-protocolconverter-mixing-station"`. Its Benthos process reports as `component="benthos_instance"`, `exported_instance="dataflow-read-protocolconverter-mixing-station"`. This rule fires when a read flow is not active (3), idle (4) or stopped (0). Use it with `for: 5m`:
 
@@ -113,6 +110,6 @@ On the Prometheus endpoint, the read flow of a bridge named `mixing-station` rep
 umh_core_service_current_state{component="dataflow_component_instance", exported_instance=~"read-protocolconverter-.*"} != 3 != 4 != 0
 ```
 
-A read flow that has not started because its connection is not up reads 0, so this rule does not fire for it. To alert on an unreachable external system, use the bridge rule in the [Bridges metrics section](bridges.md#metrics). After you delete a bridge, the last state series of its read flow stays at -1 until the container restarts. The rule keeps firing for it. Exclude the deleted name with `exported_instance!="read-protocolconverter-<deleted bridge>"`, or restart the container.
+A read flow that has not started because its connection is not up reads 0, so this rule does not fire for it. To alert on an unreachable external system, use the bridge rule in the [Bridges metrics section](bridges.md#metrics).
 
-[Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains the state values and the label names in Prometheus. The [Bridges metrics section](bridges.md#metrics) lists the labels of every part of a bridge. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
+The [Bridges metrics section](bridges.md#metrics) lists the labels of every part of a bridge. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
