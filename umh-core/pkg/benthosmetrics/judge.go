@@ -17,84 +17,87 @@
 package benthosmetrics
 
 import (
-	"fmt"
 	"time"
 )
 
-// Signal names one thing that can fail: an error counter the failure window
-// judges, or a connection check. The constants below are the only signals
-// this package reports. Their strings reach the FSMv2 store as JSON and are
-// matched by name, so they are fixed.
-type Signal string
+// signal names one thing that can fail: an error counter the failure window
+// judges, or a connection check. It keys the failureTracker's state and names
+// the error engine's signals; the FailureReport has a field for each instead.
+type signal string
 
 // errorCounter is one cumulative Benthos error counter the failure window
 // judges.
 type errorCounter struct {
-	// name identifies the counter everywhere, including FailureEntry.Signal.
-	name Signal
-	// label is the wording the entry's reason shows for a count of 1.
+	// name keys the counter in the failureTracker and the error engine.
+	name signal
+	// label is the wording the reason shows for a count of 1.
 	label string
 	// read sums the counter off one scrape's Metrics.
 	read func(Metrics) int64
+	// field points at this counter's field in a report: judge sets it,
+	// ErrorFree and HasErrorNotClearedInTime read it.
+	field func(*FailureReport) **RecentErrors
 }
 
 // The signals of the two error counters. They spell the same as the Benthos
 // series they sum, but nothing reads them as series names: read sums the
 // parsed fields.
 const (
-	SignalOutputError    Signal = "output_error"
-	SignalProcessorError Signal = "processor_error"
+	signalOutputError    signal = "output_error"
+	signalProcessorError signal = "processor_error"
 )
 
 // errorCounters lists the counters the error signals are built from.
 var errorCounters = []errorCounter{
 	{
-		name:  SignalOutputError,
+		name:  signalOutputError,
 		label: "output error",
 		read:  Metrics.outputErrorTotal,
+		field: func(r *FailureReport) **RecentErrors { return &r.OutputErrors },
 	},
 	{
-		name:  SignalProcessorError,
+		name:  signalProcessorError,
 		label: "processor error",
 		read:  Metrics.processorErrorTotal,
+		field: func(r *FailureReport) **RecentErrors { return &r.ProcessorErrors },
 	},
-}
-
-// errorCounterOf returns the error counter named name. Every fired error
-// signal is built from an errorCounters entry, so no entry is a bug here.
-func errorCounterOf(name Signal) errorCounter {
-	for _, c := range errorCounters {
-		if c.name == name {
-			return c
-		}
-	}
-
-	panic(fmt.Sprintf("benthosmetrics: no error counter named %q", name))
 }
 
 // connectionCheck counts, for the inputs or for the outputs of one Benthos
 // instance, how many are not connected.
 type connectionCheck struct {
-	// name is the check's name in the observation's connections and in the
-	// failure entry's Signal.
-	name Signal
-	// label is the wording the entry's reason shows for one input or output.
+	// name keys the check in the failureTracker.
+	name signal
+	// label is the wording the reason shows for one input or output.
 	label string
 	// notConnected counts the inputs or outputs that are not connected.
 	notConnected func(Metrics) int64
+	// field points at this check's field in a report: judge sets it,
+	// ErrorFree reads it.
+	field func(*FailureReport) **NotConnected
 }
 
 // The signals of the two connection checks. These are our own names for the
 // derived not-connected counts; they are not Benthos series names.
 const (
-	SignalInputConnection  Signal = "input_connection"
-	SignalOutputConnection Signal = "output_connection"
+	signalInputConnection  signal = "input_connection"
+	signalOutputConnection signal = "output_connection"
 )
 
 // connectionChecks has one check for the inputs and one for the outputs.
 var connectionChecks = []connectionCheck{
-	{name: SignalInputConnection, label: "input", notConnected: inputsNotConnected},
-	{name: SignalOutputConnection, label: "output", notConnected: outputsNotConnected},
+	{
+		name:         signalInputConnection,
+		label:        "input",
+		notConnected: inputsNotConnected,
+		field:        func(r *FailureReport) **NotConnected { return &r.InputsNotConnected },
+	},
+	{
+		name:         signalOutputConnection,
+		label:        "output",
+		notConnected: outputsNotConnected,
+		field:        func(r *FailureReport) **NotConnected { return &r.OutputsNotConnected },
+	},
 }
 
 // inputsNotConnected counts the inputs of m that are not connected.
@@ -125,8 +128,8 @@ func outputsNotConnected(m Metrics) int64 {
 
 // readConnections returns, for each connection check, how many inputs or
 // outputs of m are not connected, keyed by the check's name.
-func readConnections(m Metrics) map[Signal]int64 {
-	out := make(map[Signal]int64, len(connectionChecks))
+func readConnections(m Metrics) map[signal]int64 {
+	out := make(map[signal]int64, len(connectionChecks))
 	for _, c := range connectionChecks {
 		out[c.name] = c.notConnected(m)
 	}
@@ -136,8 +139,8 @@ func readConnections(m Metrics) map[Signal]int64 {
 
 // readErrors returns each error counter's sum over m, keyed by the counter's
 // name.
-func readErrors(m Metrics) map[Signal]int64 {
-	out := make(map[Signal]int64, len(errorCounters))
+func readErrors(m Metrics) map[signal]int64 {
+	out := make(map[signal]int64, len(errorCounters))
 	for _, c := range errorCounters {
 		out[c.name] = c.read(m)
 	}

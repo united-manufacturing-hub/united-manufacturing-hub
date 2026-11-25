@@ -29,7 +29,7 @@ import (
 // one minute.
 const throughputWindow = 60 * time.Second
 
-// ErrorWindow is how long an error entry stays after the last new error: the
+// ErrorWindow is how long errors keep counting after the last new one: the
 // same 10 minutes the log check reads (constants.BenthosLogWindow).
 const ErrorWindow = constants.BenthosLogWindow
 
@@ -50,7 +50,7 @@ type readings struct {
 // errorCounters entry rose since the previous scrape, keyed by the counter's
 // name.
 type errorReadings struct {
-	increases map[Signal]diagnosis.Reading
+	increases map[signal]diagnosis.Reading
 }
 
 // table declares what the engine measures: the input and output messages per
@@ -101,7 +101,7 @@ func errorTable() diagnosis.Table[errorReadings] {
 					Fire:  diagnosis.Mark{At: 0.5},
 					Clear: diagnosis.Mark{At: 0, Inclusive: true},
 					// NewEngine requires a Worst; nothing reads the severity
-					// it scales, failureTracker.judge orders entries by Count.
+					// it scales, ErrorFree names the counter with the larger Count.
 					Worst:    100,
 					Polarity: diagnosis.HigherIsWorse,
 				},
@@ -137,8 +137,8 @@ func newSum() diagnosis.Reduction {
 
 // errorReadingsOf turns one scrape's error counter increases into the
 // readings the error engine reads.
-func errorReadingsOf(increases map[Signal]int64) errorReadings {
-	s := errorReadings{increases: make(map[Signal]diagnosis.Reading, len(increases))}
+func errorReadingsOf(increases map[signal]int64) errorReadings {
+	s := errorReadings{increases: make(map[signal]diagnosis.Reading, len(increases))}
 	for name, v := range increases {
 		s.increases[name] = diagnosis.Known(float64(v))
 	}

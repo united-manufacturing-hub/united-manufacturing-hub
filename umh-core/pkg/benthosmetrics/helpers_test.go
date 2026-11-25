@@ -47,3 +47,23 @@ func perSecond(r diagnosis.Reading) float64 {
 
 // unmeasured is the throughput of a window that cannot answer yet.
 var unmeasured = diagnosis.Unknown()
+
+// failuresIn returns how many of f's fields hold a failure. It lists the
+// fields itself rather than reading errorCounters and connectionChecks, so a
+// field missing from those tables still counts.
+func failuresIn(f FailureReport) int {
+	n := 0
+
+	for _, set := range []bool{
+		f.OutputErrors != nil,
+		f.ProcessorErrors != nil,
+		f.InputsNotConnected != nil,
+		f.OutputsNotConnected != nil,
+	} {
+		if set {
+			n++
+		}
+	}
+
+	return n
+}

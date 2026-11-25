@@ -129,8 +129,8 @@ var _ = Describe("A dropped counter", func() {
 		}
 
 		scrape(100, 0, t0)
-		Expect(scrape(110, 3, t0.Add(time.Second)).Failures.Entries).To(HaveLen(1),
-			"the output errors open an entry")
+		Expect(failuresIn(*scrape(110, 3, t0.Add(time.Second)).Failures)).To(Equal(1),
+			"the output errors open a failure")
 
 		got := scrape(5, 0, t0.Add(2*time.Second))
 		ok, reason := got.Failures.ErrorFree()

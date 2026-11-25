@@ -42,7 +42,7 @@ func wallStepped(t time.Time, elapsed, step time.Duration) time.Time {
 
 var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
 	// An error fires, then NTP steps the wall clock forward 15 minutes while
-	// only 2 minutes pass. The entry is still open, and once stored it must
+	// only 2 minutes pass. The failure is still open, and once stored it must
 	// not read as stuck past its window.
 	It("measures real elapsed time, not wall-clock time", func() {
 		t0 := time.Now()
@@ -55,7 +55,7 @@ var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
 		f := *tr.observe(testPort, outputErrors(2), wallStepped(t0, 2*time.Minute, 15*time.Minute)).Failures
 
 		ok, _ := f.ErrorFree()
-		Expect(ok).To(BeFalse(), "2 real minutes after the error, the entry is open")
+		Expect(ok).To(BeFalse(), "2 real minutes after the error, the failure is open")
 
 		raw, err := json.Marshal(f)
 		Expect(err).NotTo(HaveOccurred())
@@ -70,8 +70,8 @@ var _ = Describe("HasErrorNotClearedInTime after a wall-clock step", func() {
 var _ = Describe("HasErrorNotClearedInTime after a sparse error and a wall-clock step", func() {
 	// The reading before the error is 9m59s old, so 5s after the error that
 	// reading has left the window, and only the error's own scrape keeps the
-	// entry open. NTP steps the wall clock forward 15 minutes in those 5s.
-	It("re-dates the entry's LastErrorAt", func() {
+	// failure open. NTP steps the wall clock forward 15 minutes in those 5s.
+	It("re-dates the failure's LastErrorAt", func() {
 		t0 := time.Now()
 
 		tr := NewTracker(time.Now)
@@ -80,7 +80,7 @@ var _ = Describe("HasErrorNotClearedInTime after a sparse error and a wall-clock
 		f := *tr.observe(testPort, outputErrors(2), wallStepped(t0, 5*time.Second, 15*time.Minute)).Failures
 
 		ok, _ := f.ErrorFree()
-		Expect(ok).To(BeFalse(), "5 real seconds after the error, the entry is open")
+		Expect(ok).To(BeFalse(), "5 real seconds after the error, the failure is open")
 
 		raw, err := json.Marshal(f)
 		Expect(err).NotTo(HaveOccurred())

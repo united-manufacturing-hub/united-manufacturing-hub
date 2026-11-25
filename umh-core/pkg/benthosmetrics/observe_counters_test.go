@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Every error counter the window judges, and what its entry says.
+// Every error counter the window judges, and what it reports.
 
 package benthosmetrics
 
@@ -52,7 +52,7 @@ func failureScrape(v map[string]int64) Metrics {
 
 // errorLabels repeats each counter's label so the specs check the wording, not
 // copy it from errorCounters. The first spec keeps the two lists in step.
-var errorLabels = map[Signal]string{
+var errorLabels = map[signal]string{
 	"output_error":    "output error",
 	"processor_error": "processor error",
 }
@@ -65,20 +65,6 @@ func verdictAfterRise(before, after map[string]int64) FailureReport {
 	f := *tr.observe(testPort, failureScrape(after), failureT).Failures
 
 	return f
-}
-
-// entryOf returns the entry with the given signal out of f, failing the spec
-// when there is none.
-func entryOf(f FailureReport, signal Signal) FailureEntry {
-	for _, e := range f.Entries {
-		if e.Signal == signal {
-			return e
-		}
-	}
-
-	Fail(fmt.Sprintf("no %s entry in %+v", signal, f.Entries))
-
-	return FailureEntry{}
 }
 
 var _ = Describe("The error counters", func() {
@@ -101,12 +87,12 @@ var _ = Describe("The error counters", func() {
 			ok, reason := f.ErrorFree()
 			Expect(ok).To(BeFalse(), "%s 0 -> 1", name)
 			Expect(reason).To(Equal(fmt.Sprintf("benthos reported 1 %s in the last 10m, just now", label)))
-			Expect(f.Entries).To(HaveLen(1), "%s raised alone", name)
+			Expect(failuresIn(f)).To(Equal(1), "%s raised alone", name)
 		}
 	})
 
 	// One processor error is named before two inputs that are not connected,
-	// although 2 is larger than 1, and both entries are present.
+	// although 2 is larger than 1, and both failures are present.
 	It("names the error before more inputs down", func() {
 		inputs := func(failed int64) map[string]conn {
 			return map[string]conn{"root.input.broker.0": {failed: failed}, "root.input.broker.1": {failed: failed}}
@@ -125,8 +111,8 @@ var _ = Describe("The error counters", func() {
 		}}
 		f := *tr.observe(testPort, after, failureT).Failures
 
-		Expect(f.Entries).To(HaveLen(2))
-		Expect(f.Entries[1].Count).To(Equal(int64(2)), "the connection entry holds two inputs down")
+		Expect(failuresIn(f)).To(Equal(2))
+		Expect(f.InputsNotConnected.Count).To(Equal(int64(2)), "two inputs are down")
 		ok, reason := f.ErrorFree()
 		Expect(ok).To(BeFalse())
 		Expect(reason).To(Equal("benthos reported 1 processor error in the last 10m, just now"))
@@ -175,9 +161,9 @@ var _ = Describe("The error counters", func() {
 	// reaches the verdict with its label. This covers the parser's name for
 	// each counter.
 	It("judges every error counter from the wire", func() {
-		lines := map[Signal]string{
-			SignalOutputError:    `output_error{label="",path="root.output"} %d`,
-			SignalProcessorError: `processor_error{label="",path="root.pipeline.processors.0"} %d`,
+		lines := map[signal]string{
+			signalOutputError:    `output_error{label="",path="root.output"} %d`,
+			signalProcessorError: `processor_error{label="",path="root.pipeline.processors.0"} %d`,
 		}
 
 		for name, label := range errorLabels {
@@ -212,9 +198,8 @@ var _ = Describe("The error counters", func() {
 		}
 	})
 
-	// Each error entry carries the scrape its counter last rose in
-	// LastErrorAt; a connection entry's is zero.
-	It("sets each error entry's LastErrorAt to its counter's last rise", func() {
+	// Each counter's errors carry the scrape it last rose in LastErrorAt.
+	It("sets each counter's LastErrorAt to its counter's last rise", func() {
 		tr := NewTracker(func() time.Time { return failureT })
 		scrape := func(at time.Time, m Metrics) FailureReport {
 			f := *tr.observe(testPort, m, at).Failures
@@ -229,9 +214,9 @@ var _ = Describe("The error counters", func() {
 			"processor_error": 2,
 		}))
 
-		Expect(entryOf(second, "output_error").LastErrorAt).To(Equal(failureT),
+		Expect(second.OutputErrors.LastErrorAt).To(Equal(failureT),
 			"output_error rose at T")
-		Expect(entryOf(second, "processor_error").LastErrorAt).To(Equal(failureT.Add(30*time.Second)),
+		Expect(second.ProcessorErrors.LastErrorAt).To(Equal(failureT.Add(30*time.Second)),
 			"processor_error rose at T+30s")
 
 		// output_error rises again while both signals are fired.
@@ -239,17 +224,17 @@ var _ = Describe("The error counters", func() {
 			"output_error":    2,
 			"processor_error": 2,
 		}))
-		Expect(entryOf(third, "output_error").LastErrorAt).To(Equal(failureT.Add(time.Minute)),
+		Expect(third.OutputErrors.LastErrorAt).To(Equal(failureT.Add(time.Minute)),
 			"output_error rose again at T+1m")
-		Expect(entryOf(third, "processor_error").LastErrorAt).To(Equal(failureT.Add(30*time.Second)),
+		Expect(third.ProcessorErrors.LastErrorAt).To(Equal(failureT.Add(30*time.Second)),
 			"processor_error did not rise again")
 
-		// A scrape with no rise keeps each entry's last rise.
+		// A scrape with no rise keeps each counter's last rise.
 		fourth := scrape(failureT.Add(2*time.Minute), failureScrape(map[string]int64{
 			"output_error":    2,
 			"processor_error": 2,
 		}))
-		Expect(entryOf(fourth, "output_error").LastErrorAt).To(Equal(failureT.Add(time.Minute)))
-		Expect(entryOf(fourth, "processor_error").LastErrorAt).To(Equal(failureT.Add(30 * time.Second)))
+		Expect(fourth.OutputErrors.LastErrorAt).To(Equal(failureT.Add(time.Minute)))
+		Expect(fourth.ProcessorErrors.LastErrorAt).To(Equal(failureT.Add(30 * time.Second)))
 	})
 })

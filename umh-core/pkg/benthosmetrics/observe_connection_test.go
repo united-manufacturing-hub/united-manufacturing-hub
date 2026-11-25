@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// When an input or output counts as not connected, and when that entry
+// When an input or output counts as not connected, and when that failure
 // clears.
 
 package benthosmetrics
@@ -230,13 +230,13 @@ var _ = Describe("The connection checks", func() {
 		}
 
 		f := obs(connScrape(in(conn{up: 2, lost: 2}), nil))
-		Expect(f.Entries).To(HaveLen(1))
-		Expect(f.Entries[0].Count).To(Equal(int64(1)))
+		Expect(failuresIn(f)).To(Equal(1))
+		Expect(f.InputsNotConnected.Count).To(Equal(int64(1)))
 		ok, reason := f.ErrorFree()
 		Expect(ok).To(BeFalse(), "the input dropped again 4 s after the reconnect")
 		Expect(reason).To(Equal("benthos reports 1 input not connected"))
 
-		// The second outage's entry starts at the second drop, not the first.
+		// The second outage's failure starts at the second drop, not the first.
 		for range 20 {
 			obs(connScrape(in(conn{up: 3, lost: 2}), nil))
 		}
@@ -244,11 +244,11 @@ var _ = Describe("The connection checks", func() {
 		second := obs(connScrape(in(conn{up: 3, lost: 3}), nil))
 		secondDrop := at
 
-		Expect(second.Entries).To(HaveLen(1))
-		Expect(second.Entries[0].Since).To(Equal(secondDrop),
+		Expect(failuresIn(second)).To(Equal(1))
+		Expect(second.InputsNotConnected.Since).To(Equal(secondDrop),
 			"the second outage is reported from its own start")
 
-		// A Benthos restart while the input is down starts the entry over: the
+		// A Benthos restart while the input is down starts the failure over: the
 		// scrapes before the restart came from another process. The restarted
 		// scrape's received counter sits below the old one's.
 		restarted := func(c conn, received int64) Metrics {
@@ -279,9 +279,9 @@ var _ = Describe("The connection checks", func() {
 
 		restartAt := at2
 		downSince := after(restarted(conn{failed: 2}, 2))
-		Expect(downSince.Entries).To(HaveLen(1), "still down after the restart")
-		Expect(downSince.Entries[0].Since).To(Equal(restartAt),
-			"the entry starts at the first scrape after the restart")
+		Expect(failuresIn(downSince)).To(Equal(1), "still down after the restart")
+		Expect(downSince.InputsNotConnected.Since).To(Equal(restartAt),
+			"the failure starts at the first scrape after the restart")
 	})
 
 	// An input still making its first connect, with no failed attempt yet, is

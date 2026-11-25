@@ -34,8 +34,8 @@ var _ = Describe("The failure state's lifecycle", func() {
 		s.wantErrorFree("first scrape, counter 7")
 
 		s.at(failureT.Add(time.Second), testPort, 9).wantFailure("counter 7 -> 9", 2, "just now")
-		Expect(s.failures.Entries[0].Since).To(Equal(failureT.Add(time.Second)))
-		Expect(s.failures.Entries[0].LastErrorAt).To(Equal(failureT.Add(time.Second)))
+		Expect(s.failures.OutputErrors.Since).To(Equal(failureT.Add(time.Second)))
+		Expect(s.failures.OutputErrors.LastErrorAt).To(Equal(failureT.Add(time.Second)))
 		Expect(s.failures.ObservedAt).To(Equal(failureT.Add(time.Second)))
 	})
 
@@ -47,38 +47,38 @@ var _ = Describe("The failure state's lifecycle", func() {
 
 		s := firedAt(5).at(gapEnd, testPort, 8)
 		s.wantFailure("first scrape after a 15m outage, counter 5 -> 8", 3, "just now")
-		Expect(s.failures.Entries[0].Since).To(Equal(gapEnd))
+		Expect(s.failures.OutputErrors.Since).To(Equal(gapEnd))
 
 		s.at(gapEnd.Add(time.Second), testPort, 9).wantFailure("next scrape, counter 8 -> 9", 4, "just now")
-		Expect(s.failures.Entries[0].Since).To(Equal(gapEnd), "the entry stays open from the gap's end")
+		Expect(s.failures.OutputErrors.Since).To(Equal(gapEnd), "the failure stays open from the gap's end")
 	})
 
-	// A port change starts a not-connected entry over at the first scrape on
+	// A port change starts a not-connected failure over at the first scrape on
 	// the new port.
-	It("restarts a not-connected entry on a port change", func() {
+	It("restarts a not-connected failure on a port change", func() {
 		tr := NewTracker(func() time.Time { return failureT })
 		_ = tr.observe(testPort, inputDown, failureT)
 
 		f := *tr.observe(testPort+1, inputDown, failureT.Add(time.Second)).Failures
-		Expect(f.Entries).To(HaveLen(1))
-		Expect(f.Entries[0].Since).To(Equal(failureT.Add(time.Second)))
+		Expect(failuresIn(f)).To(Equal(1))
+		Expect(f.InputsNotConnected.Since).To(Equal(failureT.Add(time.Second)))
 	})
 
-	// A gap longer than ErrorWindow starts a not-connected entry over at the
+	// A gap longer than ErrorWindow starts a not-connected failure over at the
 	// first scrape after the gap; a shorter gap keeps its start.
-	It("restarts a not-connected entry after a gap longer than ErrorWindow", func() {
+	It("restarts a not-connected failure after a gap longer than ErrorWindow", func() {
 		tr := NewTracker(func() time.Time { return failureT })
 		_ = tr.observe(testPort, inputDown, failureT)
 
 		short := failureT.Add(ErrorWindow - time.Second)
 		f := *tr.observe(testPort, inputDown, short).Failures
-		Expect(f.Entries).To(HaveLen(1))
-		Expect(f.Entries[0].Since).To(Equal(failureT), "a gap shorter than ErrorWindow keeps the start")
+		Expect(failuresIn(f)).To(Equal(1))
+		Expect(f.InputsNotConnected.Since).To(Equal(failureT), "a gap shorter than ErrorWindow keeps the start")
 
 		long := short.Add(ErrorWindow + time.Second)
 		f = *tr.observe(testPort, inputDown, long).Failures
-		Expect(f.Entries).To(HaveLen(1))
-		Expect(f.Entries[0].Since).To(Equal(long), "a gap longer than ErrorWindow starts over")
+		Expect(failuresIn(f)).To(Equal(1))
+		Expect(f.InputsNotConnected.Since).To(Equal(long), "a gap longer than ErrorWindow starts over")
 	})
 
 	// A gap of exactly ErrorWindow is not a long gap: the errors before it

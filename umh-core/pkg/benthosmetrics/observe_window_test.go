@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// How long a fired error signal stays, and what its entry reports.
+// How long a fired error signal stays, and what it reports.
 
 package benthosmetrics
 
@@ -83,14 +83,11 @@ var _ = Describe("The error window", func() {
 		Expect(reason).To(Equal("benthos reported 1 output error in the last 10m, 1s ago"),
 			"the error rose at T and this scrape is at T+1s")
 
-		Expect(tl.failures.Entries).To(HaveLen(1))
-		e := tl.failures.Entries[0]
-		Expect(e.Signal).To(Equal(SignalOutputError))
-		Expect(e.Label).To(Equal("output error"))
+		Expect(failuresIn(tl.failures)).To(Equal(1))
+		e := tl.failures.OutputErrors
 		Expect(e.Count).To(Equal(int64(1)))
 		Expect(e.Since).To(Equal(failureT))
-		Expect(e.LastErrorAt).To(Equal(failureT), "the entry's counter rose at T")
-		Expect(e.Connection).To(BeFalse(), "an error entry is not a connection entry")
+		Expect(e.LastErrorAt).To(Equal(failureT), "the counter rose at T")
 		Expect(tl.failures.ObservedAt).To(Equal(failureT.Add(time.Second)))
 
 		// With a span of 9m59s the T-1s scrape would already be out of the
@@ -104,7 +101,7 @@ var _ = Describe("The error window", func() {
 		Expect(ok).To(BeTrue(), "no rise in the last 10 minutes")
 	})
 
-	// A second error at T+5m holds the entry until 10 minutes after that
+	// A second error at T+5m holds the failure until 10 minutes after that
 	// second error.
 	It("restarts the window on a second output error", func() {
 		tl := newErrorTimeline(failureT.Add(-time.Second), func(at time.Time) int64 {
@@ -210,17 +207,17 @@ var _ = Describe("The error window", func() {
 			diagnosis.CaseBelowFloor:    diagnosis.AllAbsent,
 		}
 
-		want := map[Signal]map[diagnosis.Case]diagnosis.Availability{}
+		want := map[signal]map[diagnosis.Case]diagnosis.Availability{}
 		for _, c := range errorCounters {
 			want[c.name] = errorWant
 		}
 
 		outcomes := diagnosis.Run(errorTable(), diagnosis.NewEnvironment(), failureFeed{})
 
-		seen := map[Signal]map[diagnosis.Case]bool{}
+		seen := map[signal]map[diagnosis.Case]bool{}
 
 		for _, o := range outcomes {
-			sig := Signal(o.Signal)
+			sig := signal(o.Signal)
 			if seen[sig] == nil {
 				seen[sig] = map[diagnosis.Case]bool{}
 			}
@@ -242,28 +239,39 @@ var _ = Describe("The error window", func() {
 		}
 	})
 
-	// FailureReport.HasErrorNotClearedInTime judges each error entry against its
-	// own LastErrorAt, so an entry stuck past its window counts even while
-	// another counter keeps rising.
-	It("counts an entry stuck past its window while another counter keeps rising", func() {
+	// FailureReport.HasErrorNotClearedInTime judges each counter's errors
+	// against their own LastErrorAt, so a failure stuck past its window counts
+	// even while another counter keeps rising.
+	It("counts a failure stuck past its window while another counter keeps rising", func() {
 		now := failureT.Add(12 * time.Minute)
 		f := FailureReport{
-			ObservedAt: now,
-			Entries: []FailureEntry{
-				{Signal: "output_error", LastErrorAt: failureT},
-				{Signal: "processor_error", LastErrorAt: now.Add(-30 * time.Second)},
-			},
+			ObservedAt:      now,
+			OutputErrors:    &RecentErrors{LastErrorAt: failureT},
+			ProcessorErrors: &RecentErrors{LastErrorAt: now.Add(-30 * time.Second)},
 		}
 
 		Expect(f.HasErrorNotClearedInTime(time.Minute)).To(BeTrue(),
-			"the output_error entry is stuck past its window")
+			"the output errors are stuck past their window")
 	})
 
-	// An output error every minute for 15 minutes keeps one entry open since
-	// T, but each new error restarts its window, so the entry does not count:
+	// An input down for an hour is not an error that failed to clear: it
+	// lasts until Benthos reconnects, not over ErrorWindow.
+	It("does not count inputs or outputs not connected", func() {
+		now := failureT.Add(time.Hour)
+		f := FailureReport{
+			ObservedAt:          now,
+			InputsNotConnected:  &NotConnected{Count: 1, Since: failureT},
+			OutputsNotConnected: &NotConnected{Count: 1, Since: failureT},
+		}
+
+		Expect(f.HasErrorNotClearedInTime(time.Minute)).To(BeFalse())
+	})
+
+	// An output error every minute for 15 minutes keeps one failure open since
+	// T, but each new error restarts its window, so the failure does not count:
 	// HasErrorNotClearedInTime counts from the last error, not from when the
-	// entry appeared.
-	It("does not count an entry while its errors keep arriving", func() {
+	// failure appeared.
+	It("does not count a failure while its errors keep arriving", func() {
 		tl := newErrorTimeline(failureT.Add(-time.Second), func(at time.Time) int64 {
 			if at.Before(failureT) {
 				return 0
@@ -273,22 +281,22 @@ var _ = Describe("The error window", func() {
 		})
 
 		tl.runTo(failureT.Add(15 * time.Minute))
-		Expect(tl.failures.Entries).To(HaveLen(1))
-		Expect(tl.failures.Entries[0].Since).To(Equal(failureT), "the entry has been open since T")
-		Expect(tl.failures.Entries[0].LastErrorAt).To(Equal(failureT.Add(15 * time.Minute)))
+		Expect(failuresIn(tl.failures)).To(Equal(1))
+		Expect(tl.failures.OutputErrors.Since).To(Equal(failureT), "the failure has been open since T")
+		Expect(tl.failures.OutputErrors.LastErrorAt).To(Equal(failureT.Add(15 * time.Minute)))
 		Expect(tl.failures.HasErrorNotClearedInTime(time.Minute)).To(BeFalse(),
 			"the last error was at this very scrape")
 	})
 
-	// An entry may clear up to margin late before it counts.
+	// A failure may clear up to margin late before it counts.
 	// HasErrorNotClearedInTime is true only when the last error is more than
 	// ErrorWindow plus margin behind the scrape.
-	It("gives an entry its margin before it counts as not cleared", func() {
+	It("gives a failure its margin before it counts as not cleared", func() {
 		now := failureT.Add(15 * time.Minute)
 		failuresWithLastErrorAgo := func(age time.Duration) FailureReport {
-			return FailureReport{ObservedAt: now, Entries: []FailureEntry{{
-				Signal: "output_error", Since: now.Add(-age), LastErrorAt: now.Add(-age),
-			}}}
+			return FailureReport{ObservedAt: now, OutputErrors: &RecentErrors{
+				Since: now.Add(-age), LastErrorAt: now.Add(-age),
+			}}
 		}
 
 		f := failuresWithLastErrorAgo(ErrorWindow + 30*time.Second)
@@ -305,7 +313,7 @@ var _ = Describe("The error window", func() {
 type failureFeed struct{}
 
 func (failureFeed) Readable(time.Time) errorReadings {
-	s := errorReadings{increases: map[Signal]diagnosis.Reading{}}
+	s := errorReadings{increases: map[signal]diagnosis.Reading{}}
 	for _, c := range errorCounters {
 		s.increases[c.name] = diagnosis.Known(0)
 	}
@@ -316,5 +324,5 @@ func (failureFeed) Readable(time.Time) errorReadings {
 // Unreadable leaves every error reading out of the map; a missing key reads
 // as an unknown reading.
 func (failureFeed) Unreadable(time.Time) errorReadings {
-	return errorReadings{increases: map[Signal]diagnosis.Reading{}}
+	return errorReadings{increases: map[signal]diagnosis.Reading{}}
 }

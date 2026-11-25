@@ -18,8 +18,6 @@
 package benthosmetrics
 
 import (
-	"cmp"
-	"slices"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/diagnosis"
@@ -43,16 +41,16 @@ type failureTracker struct {
 	// name. It is nil only before the first scrape, which is the baseline
 	// itself. After resetForNewInstance it is empty, and a counter missing
 	// from it reads as 0.
-	lastCounts map[Signal]int64
+	lastCounts map[signal]int64
 
 	// lastErrorAt holds, per error counter, the last scrape at which it rose
 	// since the last reset.
-	lastErrorAt map[Signal]time.Time
+	lastErrorAt map[signal]time.Time
 
 	// notConnectedSince holds, for each connection check with something not
 	// connected, the scrape at which that started. It is nil before the
 	// first scrape and after any reset.
-	notConnectedSince map[Signal]time.Time
+	notConnectedSince map[signal]time.Time
 }
 
 // failureReading is what failureTracker.observe reads off one successful
@@ -61,11 +59,11 @@ type failureReading struct {
 	at time.Time
 
 	// errorCounts holds the raw error counters, keyed by the counter's name.
-	errorCounts map[Signal]int64
+	errorCounts map[signal]int64
 
 	// connections holds the number of inputs or outputs not connected,
 	// keyed by the connection check's name.
-	connections map[Signal]int64
+	connections map[signal]int64
 }
 
 // newFailureTracker returns the failureTracker for a Tracker's first scrape.
@@ -74,7 +72,7 @@ type failureReading struct {
 func newFailureTracker() *failureTracker {
 	return &failureTracker{
 		engine:      mustNewEngine(errorTable()),
-		lastErrorAt: map[Signal]time.Time{},
+		lastErrorAt: map[signal]time.Time{},
 	}
 }
 
@@ -82,7 +80,7 @@ func newFailureTracker() *failureTracker {
 // The new instance's counters count from 0, so every error they hold at the
 // next reading is new.
 func (ft *failureTracker) resetForNewInstance() {
-	ft.reset(map[Signal]int64{})
+	ft.reset(map[signal]int64{})
 }
 
 // resetAfterGap forgets every failure after a gap longer than ErrorWindow.
@@ -94,10 +92,10 @@ func (ft *failureTracker) resetAfterGap() {
 
 // reset starts the error state over with baseline as the counts the next
 // scrape's increases are measured from.
-func (ft *failureTracker) reset(baseline map[Signal]int64) {
+func (ft *failureTracker) reset(baseline map[signal]int64) {
 	ft.engine = mustNewEngine(errorTable())
 	ft.lastCounts = baseline
-	ft.lastErrorAt = map[Signal]time.Time{}
+	ft.lastErrorAt = map[signal]time.Time{}
 	ft.notConnectedSince = nil
 }
 
@@ -132,8 +130,8 @@ func (ft *failureTracker) observe(current failureReading) FailureReport {
 // increases returns how much each error counter rose since ft.lastCounts.
 // The first scrape is the baseline, so every increase is 0 there. The
 // counters never drop here: observe resets the tracker first (see restarted).
-func (ft *failureTracker) increases(current failureReading) map[Signal]int64 {
-	out := make(map[Signal]int64, len(errorCounters))
+func (ft *failureTracker) increases(current failureReading) map[signal]int64 {
+	out := make(map[signal]int64, len(errorCounters))
 	for _, c := range errorCounters {
 		var by int64
 		if ft.lastCounts != nil {
@@ -147,7 +145,7 @@ func (ft *failureTracker) increases(current failureReading) map[Signal]int64 {
 }
 
 // recordLastErrors dates each error counter that rose at the scrape at.
-func (ft *failureTracker) recordLastErrors(increases map[Signal]int64, at time.Time) {
+func (ft *failureTracker) recordLastErrors(increases map[signal]int64, at time.Time) {
 	for name, by := range increases {
 		if by > 0 {
 			ft.lastErrorAt[name] = at
@@ -155,47 +153,31 @@ func (ft *failureTracker) recordLastErrors(increases map[Signal]int64, at time.T
 	}
 }
 
-// judge builds the FailureReport for the reading current: error entries first,
-// then connection entries, each group with the larger Count first.
+// judge builds the FailureReport for the reading current: a RecentErrors per
+// fired error signal, and a NotConnected per connection check with something
+// not connected. A RecentErrors' Count is read off the engine's window as it
+// stands now: a Fired's own Value is frozen at the tick the signal fired.
 func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading) FailureReport {
-	errorEntries := ft.errorEntries(fired, current)
-	connectionEntries := ft.notConnectedEntries(current)
+	report := FailureReport{ObservedAt: current.at}
 
-	sortByCountDesc(errorEntries)
-	sortByCountDesc(connectionEntries)
-
-	return FailureReport{
-		Entries:    append(errorEntries, connectionEntries...),
-		ObservedAt: current.at,
-	}
-}
-
-// errorEntries returns one error entry per fired error signal. Its Count is
-// the errors within ErrorWindow, read off the engine's window as it stands
-// now: a Fired's own Value is frozen at the tick the signal fired.
-func (ft *failureTracker) errorEntries(fired []diagnosis.Fired, current failureReading) []FailureEntry {
-	var entries []FailureEntry
-
+	firedSince := make(map[signal]time.Time, len(fired))
 	for _, f := range fired {
-		c := errorCounterOf(Signal(f.Signal))
-		count, _ := ft.engine.Reduction(f.Signal, f.Signal).Get()
-
-		entries = append(entries, FailureEntry{
-			Signal:      c.name,
-			Label:       c.label,
-			Count:       int64(count),
-			Since:       f.Since,
-			LastErrorAt: redate(current.at, ft.lastErrorAt[c.name]),
-		})
+		firedSince[signal(f.Signal)] = f.Since
 	}
 
-	return entries
-}
+	for _, c := range errorCounters {
+		since, ok := firedSince[c.name]
+		if !ok {
+			continue
+		}
 
-// notConnectedEntries returns one connection entry per connection check with
-// an input or output that is not connected.
-func (ft *failureTracker) notConnectedEntries(current failureReading) []FailureEntry {
-	var entries []FailureEntry
+		count, _ := ft.engine.Reduction(string(c.name), string(c.name)).Get()
+		*c.field(&report) = &RecentErrors{
+			Count:       int64(count),
+			Since:       since,
+			LastErrorAt: redate(current.at, ft.lastErrorAt[c.name]),
+		}
+	}
 
 	for _, c := range connectionChecks {
 		n := current.connections[c.name]
@@ -203,23 +185,17 @@ func (ft *failureTracker) notConnectedEntries(current failureReading) []FailureE
 			continue
 		}
 
-		entries = append(entries, FailureEntry{
-			Signal:     c.name,
-			Label:      c.label,
-			Count:      n,
-			Since:      ft.notConnectedSince[c.name],
-			Connection: true,
-		})
+		*c.field(&report) = &NotConnected{Count: n, Since: ft.notConnectedSince[c.name]}
 	}
 
-	return entries
+	return report
 }
 
 // firstNotConnectedSince returns, per connection check with something not
 // connected, when that started: the time from previous, or at if previous
 // has none.
-func firstNotConnectedSince(previous map[Signal]time.Time, counts map[Signal]int64, at time.Time) map[Signal]time.Time {
-	out := make(map[Signal]time.Time, len(counts))
+func firstNotConnectedSince(previous map[signal]time.Time, counts map[signal]int64, at time.Time) map[signal]time.Time {
+	out := make(map[signal]time.Time, len(counts))
 	for name, n := range counts {
 		if n == 0 {
 			continue
@@ -242,12 +218,4 @@ func firstNotConnectedSince(previous map[Signal]time.Time, counts map[Signal]int
 // drops monotonic readings, then still measures real time.
 func redate(at, t time.Time) time.Time {
 	return at.Add(-at.Sub(t))
-}
-
-// sortByCountDesc sorts entries in place by the larger Count first, keeping
-// equals in list order.
-func sortByCountDesc(entries []FailureEntry) {
-	slices.SortStableFunc(entries, func(a, b FailureEntry) int {
-		return cmp.Compare(b.Count, a.Count)
-	})
 }
