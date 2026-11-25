@@ -63,11 +63,7 @@ If the instance that reports the topic has gone offline, the Topic Browser says 
 
 Restart the instance only when the checks above point to the Topic Browser of the instance: either the reason on its card is `benthos degraded` and the log shows no cause you can fix, or messages are published but the Topic Browser does not read them. A restart starts the Topic Browser again.
 
-{% hint style="warning" %}
-A restart interrupts this instance's processes and collection. Source observations sent during the interruption may be lost. The devices keep running, and other instances keep collecting. Only this instance is interrupted. Plan the restart for a maintenance window.
-{% endhint %}
-
-To restart the instance, follow [Restart an Instance](../../production/deployment/restart-an-instance.md).
+To restart the instance, follow [Restart an Instance](../../production/deployment/restart-an-instance.md). Read its warning first: a restart interrupts collection on this instance.
 
 After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count can start from zero again. Topics that send data infrequently may take longer to reappear in the Topic Browser after a UMH Core restart.
 

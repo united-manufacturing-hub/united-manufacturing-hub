@@ -3,7 +3,7 @@
 Restarting an instance stops its container and starts it again with the same image, environment and persistent storage. This page covers the whole instance, not a bridge, flow or service.
 
 {% hint style="warning" %}
-A restart stops every bridge and flow this instance runs, so it collects nothing until it is back. [High Availability](../high-availability.md) shortens that gap but does not close it — a container restart takes 30-60 seconds. Only [Redundant Data Collection](../architecture-patterns/redundant-data-collection.md) keeps collection running, and it needs redundant PLCs. Plan a maintenance window.
+A restart stops every bridge and flow this instance runs. It collects nothing until its bridges and flows have recovered, and values your devices send in that time may be lost. The devices keep running, and other instances keep collecting. Only [Redundant Data Collection](../architecture-patterns/redundant-data-collection.md) keeps collection running, and it needs redundant PLCs. Plan a maintenance window.
 {% endhint %}
 
 ## Restart the instance
