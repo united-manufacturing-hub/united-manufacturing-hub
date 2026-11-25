@@ -4,7 +4,7 @@ This page lists where to go for help with UMH Core, and which contact fits which
 
 ## Technical support
 
-**Enterprise:** Email **support@umh.app**. This is the support channel covered by your agreement and applicable SLAs. You’re welcome to contact your Value Engineer directly, but SLA coverage does not apply to direct messages. If your agreement defines a different support process, that process takes precedence. Coverage and response times depend on your contract. The standard terms are published at [terms.umh.app](https://terms.umh.app/).
+**Enterprise:** Contact support through the channel defined in your agreement and in the [terms and conditions](https://terms.umh.app/). This is the support channel covered by your agreement and applicable SLAs. You’re welcome to contact your Value Engineer directly, but SLA coverage does not apply to direct messages. Coverage and response times depend on your contract.
 
 **Community:** Ask installation, configuration, and usage questions in the UMH community on [Discord](https://discord.com/invite/F9mqkZnm9d).
 
