@@ -7,7 +7,7 @@ Data flows move and transform industrial data in UMH Core. Three types serve dif
 ## Flow Types
 
 ### [Bridges](bridges.md)
-Connect the Unified Namespace to one external system each. The read flow reads from the external system and publishes to the UNS, and the write flow subscribes to UNS topics and writes to the external system. A connection probe checks whether the external system is reachable, and the data is published under the bridge location. Support for 50+ industrial protocols (OPC UA, Modbus, S7) plus IT systems. Write flows coming soon - use stand-alone flows meanwhile.
+Connect the Unified Namespace to one external system each. The read flow reads from the external system and publishes to the UNS, and the write flow subscribes to UNS topics and writes to the external system. A connection probe checks whether the external system is reachable, and the data is published under the bridge location. Support for 50+ industrial protocols (OPC UA, Modbus, S7) plus IT systems.
 
 ### [Stand-alone Flows](stand-alone-flow.md)
 Raw Benthos access for custom processing when bridges or stream processors aren't sufficient. Used as fallback for write flows, external integrations, and specialized transformations.
