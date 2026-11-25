@@ -35,7 +35,7 @@ flowchart LR
 |---|---|---|
 | Prefix | `umh.v1` | Required. Always `umh.v1`. |
 | Location path | `acme.cologne.packaging.line_1` | Required. One or more levels, starting at level 0. |
-| Data contract | `_pump_v1` | Required. One segment: the first one that starts with `_`. |
+| Data contract | `_pump_v1` | Required. One segment: the first one that starts with `_`. `_` alone is not a data contract. |
 | Virtual path | `motor` | Optional. Any number of segments between the data contract and the name. |
 | Name | `current` | Required. One segment, at the end of the topic. |
 
@@ -79,7 +79,7 @@ The name works for both kinds of data:
 
 ## Characters
 
-A segment may contain letters, digits, `_` and `-`. Any other character, a space included, is rejected.
+A segment may contain the letters `a`–`z` and `A`–`Z`, digits, `_` and `-`. Any other character is rejected, such as `ü` or a space.
 
 Write segments in lowercase, with `_` between words, such as `line_1` and `inlet_temperature`. In `_raw`, segments taken from a device address keep the spelling of the address. The S7 address `DB1.DW20` becomes the virtual path `DB1` and the name `DW20`.
 
