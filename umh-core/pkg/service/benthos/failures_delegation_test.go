@@ -158,10 +158,10 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 		at := time.Now()
 		stubStoredFailures(name, &benthosmetrics.FailureReport{
 			ObservedAt: at,
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
+			OutputErrors: &benthosmetrics.RecentErrors{
+				Count:       1,
 				LastErrorAt: at.Add(-4 * time.Minute),
-			}},
+			},
 		})
 
 		ok, reason := fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})
@@ -212,9 +212,9 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 	It("does not ask the Failures lookup with an FSMv1 monitor backend", func() {
 		setBenthosMetricsFlag("true")
 		stubStoredFailures(name, &benthosmetrics.FailureReport{
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
-			}},
+			OutputErrors: &benthosmetrics.RecentErrors{
+				Count: 1,
+			},
 		})
 
 		fsmv1 := &BenthosService{
@@ -265,10 +265,10 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 
 		collectedAt := time.Now().Add(-2 * time.Second)
 		stored := &benthosmetrics.FailureReport{
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
+			OutputErrors: &benthosmetrics.RecentErrors{
+				Count:       1,
 				LastErrorAt: collectedAt.Add(-4 * time.Minute),
-			}},
+			},
 		}
 
 		stubStoredFailuresAt(name, stored, collectedAt)
@@ -278,9 +278,9 @@ var _ = Describe("The lookup path of IsMetricsErrorFree", func() {
 			"still inside the health freshness rule")
 
 		aged := &benthosmetrics.FailureReport{
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
-			}},
+			OutputErrors: &benthosmetrics.RecentErrors{
+				Count: 1,
+			},
 		}
 		stubStoredFailuresAt(name, aged, time.Now().Add(-2*constants.BenthosMaxMetricsAndConfigAge))
 		ok, reason = fsmv2BackendService(name).IsMetricsErrorFree(benthos_monitor.BenthosMetrics{})

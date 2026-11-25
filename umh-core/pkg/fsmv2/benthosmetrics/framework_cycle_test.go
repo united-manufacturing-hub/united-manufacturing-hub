@@ -308,8 +308,8 @@ var _ = Describe("The framework cycle", func() {
 		ok, _ = degraded.Result.Sample.Failures.ErrorFree()
 		Expect(ok).To(BeFalse(),
 			"errors counted between the restart and the first scrape after it still degrade")
-		Expect(degraded.Result.Sample.Failures.Entries).To(HaveLen(1))
-		Expect(degraded.Result.Sample.Failures.Entries[0].Count).To(Equal(int64(3)))
+		Expect(degraded.Result.Sample.Failures.OutputErrors).NotTo(BeNil())
+		Expect(degraded.Result.Sample.Failures.OutputErrors.Count).To(Equal(int64(3)))
 	})
 
 	// A Benthos whose metrics stop arriving counts as stale: the worker
@@ -396,7 +396,7 @@ var _ = Describe("The framework cycle", func() {
 		clockNow = t0.Add(time.Second)
 		fired := observeOneCycle(worker, spec)
 		Expect(fired.Result.Sample.Failures).NotTo(BeNil())
-		Expect(fired.Result.Sample.Failures.Entries).To(HaveLen(1),
+		Expect(fired.Result.Sample.Failures.OutputErrors).NotTo(BeNil(),
 			"the worker's deps hold the error window state")
 
 		// The readers reach that one copy through the package's Failures

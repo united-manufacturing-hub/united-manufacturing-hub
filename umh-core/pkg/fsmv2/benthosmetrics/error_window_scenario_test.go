@@ -73,8 +73,8 @@ var _ = Describe("The error window", func() {
 		fired := observeOneCycle(worker, spec)
 		ok, _ = fired.Result.Sample.Failures.ErrorFree()
 		Expect(ok).To(BeFalse(), "the error burst degrades the flow at once")
-		Expect(fired.Result.Sample.Failures.Entries).To(HaveLen(1))
-		Expect(fired.Result.Sample.Failures.Entries[0].Count).To(Equal(int64(5)))
+		Expect(fired.Result.Sample.Failures.OutputErrors).NotTo(BeNil())
+		Expect(fired.Result.Sample.Failures.OutputErrors.Count).To(Equal(int64(5)))
 
 		// The counter stays flat. One scrape per second, up to and
 		// including ten minutes after the error itself: still degraded.

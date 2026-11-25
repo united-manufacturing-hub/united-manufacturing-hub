@@ -312,9 +312,7 @@ var _ = Describe("The Failures lookup", func() {
 
 		// A stored sample carries its Failures.
 		stored := &benthosmetrics.FailureReport{
-			Entries: []benthosmetrics.FailureEntry{{
-				Signal: "output_error", Label: "output error", Count: 1,
-			}},
+			OutputErrors: &benthosmetrics.RecentErrors{Count: 1},
 		}
 		reader.err = nil
 		reader.obs = &fsmv2.Observation[simple.Status[Scrape]]{

@@ -64,19 +64,23 @@ func (f *errorWindowFake) setReadAdvance(d time.Duration) {
 	f.advance.Store(int64(d))
 }
 
-// benthosEntry returns f's entry named signal, or nil when f holds none.
-func benthosEntry(f *benthosmetrics.FailureReport, signal benthosmetrics.Signal) *benthosmetrics.FailureEntry {
+// outputErrors returns f's output errors, or nil when f holds none.
+func outputErrors(f *benthosmetrics.FailureReport) *benthosmetrics.RecentErrors {
 	if f == nil {
 		return nil
 	}
 
-	for i := range f.Entries {
-		if f.Entries[i].Signal == signal {
-			return &f.Entries[i]
-		}
+	return f.OutputErrors
+}
+
+// inputsNotConnected returns f's inputs not connected, or nil when f holds
+// none.
+func inputsNotConnected(f *benthosmetrics.FailureReport) *benthosmetrics.NotConnected {
+	if f == nil {
+		return nil
 	}
 
-	return nil
+	return f.InputsNotConnected
 }
 
 // flowErrorFree is f.ErrorFree, except that a zero Sample, stored before
@@ -178,7 +182,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
 
-				e := benthosEntry(s.Result.Sample.Failures, benthosmetrics.SignalOutputError)
+				e := outputErrors(s.Result.Sample.Failures)
 				if e == nil {
 					return false, failuresSeen(obs), nil
 				}
@@ -219,7 +223,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 		if err := waitForSample("the entry still holds the flat counter, thirty seconds short of ten minutes after the last error",
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
-				e := benthosEntry(s.Result.Sample.Failures, benthosmetrics.SignalOutputError)
+				e := outputErrors(s.Result.Sample.Failures)
 
 				if e != nil && e.LastErrorAt.After(lastErrorAt) {
 					lastErrorAt = e.LastErrorAt
@@ -257,7 +261,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 		if err := waitForSample("the flow is error-free again ten minutes after its last error, with no restart",
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
-				e := benthosEntry(s.Result.Sample.Failures, benthosmetrics.SignalOutputError)
+				e := outputErrors(s.Result.Sample.Failures)
 
 				// The window lets the entry go at ten minutes: still present
 				// past that is the bug this scenario pins, not a state to wait
@@ -293,7 +297,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
 				inputBeforeRestart = s.Result.Sample.Metrics.InputReceivedTotal()
-				e := benthosEntry(s.Result.Sample.Failures, benthosmetrics.SignalOutputError)
+				e := outputErrors(s.Result.Sample.Failures)
 				ok, _ := flowErrorFree(s.Result.Sample.Failures)
 
 				return !ok && e != nil, failuresSeen(obs), nil
@@ -328,7 +332,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 			func(obs benthosObservation) (bool, string, error) {
 				s := obs.Status
 
-				e := benthosEntry(s.Result.Sample.Failures, benthosmetrics.SignalInputConnection)
+				e := inputsNotConnected(s.Result.Sample.Failures)
 				if e == nil {
 					return false, failuresSeen(obs), nil
 				}
@@ -338,7 +342,7 @@ var BenthosErrorWindowScenario = scenariorunner.Scenario{
 					return false, "", fmt.Errorf("the connection entry's reason is %q", reason)
 				}
 
-				done := !ok && e.Connection && e.Count == 1
+				done := !ok && e.Count == 1
 
 				return done, failuresSeen(obs), nil
 			}); err != nil {
