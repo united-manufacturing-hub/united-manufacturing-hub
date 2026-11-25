@@ -15,7 +15,7 @@ Go to **Data Flows** and click **Add Bridge**:
 ![Create a New Bridge](./images/bridges-create-from-scratch-or-existing.png)
 
 - **From Scratch**: start from a pre-configured protocol template, which is functional out of the box, or customize the template to fit your needs.
-- **From Existing Bridge**: pick a healthy bridge from any instance and start with a copy of its configuration. Adapt the bridge's name, connection and addresses.
+- **From Existing Bridge**: pick a healthy bridge from any instance and start with a copy of its configuration. Adapt the bridge's name, the external system's address and port, and the protocol addresses.
 
 The remaining steps describe the from-scratch path. Starting from an existing bridge skips the template list and lands on the same screens with the fields already filled in.
 
@@ -59,4 +59,4 @@ Follow [Set up a read flow](set-up-a-read-flow.md), then come back for Step 6.
 
 ## Step 6: Deploy
 
-Click **Save & Deploy**. The bridge checks the connection to the external system, and the read flow starts reading from it.
+Click **Save & Deploy**. The connection probe checks whether the external system is reachable, and the read flow starts reading from it.
