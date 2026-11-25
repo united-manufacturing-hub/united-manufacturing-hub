@@ -27,10 +27,8 @@ Free space on the `/data` volume, or shorten how long Redpanda keeps data. See [
 
 When **CPU healthy** shows a `Limited visibility:` line, set a CPU limit or [enable CPU pressure stats](enable-cpu-pressure-stats.md) for full monitoring. The line does not degrade the container.
 
-When the status says `CPU not measured` and names a file, check whether the container can read that file:
+When the status says `CPU not measured` and names a file, check whether the container can read that file. Run `cat` with the file the status names inside the container, the way your [deployment](../../../production/deployment/README.md) runs a command in a container. With Docker:
 
 ```bash
-docker exec umh-core cat /sys/fs/cgroup/cpu.stat
+docker exec <container name> cat /sys/fs/cgroup/cpu.stat
 ```
-
-Replace `umh-core` with the name of your container and the path with the file the status names.

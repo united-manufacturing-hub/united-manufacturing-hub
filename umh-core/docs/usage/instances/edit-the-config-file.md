@@ -27,7 +27,7 @@ umh-core rejects a `config.yaml` with a key it does not know, for example a miss
 
 ## Repair the file on the Docker host
 
-When the Config File page cannot load a usable file, edit `config.yaml` on the Docker host:
+When the Config File page cannot load a usable file, edit `/data/config.yaml` inside the container, the way your [deployment](../../production/deployment/README.md) runs a command in a container. With Docker:
 
 ```bash
 docker exec -it <container name> vi /data/config.yaml

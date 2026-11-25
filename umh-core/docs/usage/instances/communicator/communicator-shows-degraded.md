@@ -18,7 +18,7 @@ The communicator counts each failed request to the Management Console once, unde
 |---|---|
 | `umh_fsmv2_worker_network_errors_total` | See [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md). |
 | `umh_fsmv2_worker_proxy_block_errors_total` | Ask your IT department to allow `management.umh.app` on the proxy. |
-| `umh_fsmv2_worker_auth_failures_total` | Check the `AUTH_TOKEN` of your `docker run` command. If the token is correct, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md). |
+| `umh_fsmv2_worker_auth_failures_total` | Check the `AUTH_TOKEN` the container was started with. If the token is correct, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md). |
 | `umh_fsmv2_worker_instance_deleted_total` | Check whether the instance still exists in the Management Console, and check `API_URL`. |
 | `umh_fsmv2_worker_server_errors_total` | Wait. umh-core retries. If the counter keeps rising, contact UMH support. |
 | `umh_fsmv2_worker_backend_rate_limit_errors_total` | umh-core retries. If the counter keeps rising, contact UMH support. |

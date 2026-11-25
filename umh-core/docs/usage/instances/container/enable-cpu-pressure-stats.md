@@ -16,7 +16,8 @@ only if the kernel booted with Pressure Stall Information (PSI) on and the machi
 Most distributions ship both on. The Red Hat family is the exception: RHEL, Rocky, AlmaLinux and
 Oracle Linux ship PSI off, and version 8 of each also boots cgroup v1.
 
-Check your own machine:
+Check your own machine: run `cat /sys/fs/cgroup/cpu.pressure` inside the container, the way your
+[deployment](../../../production/deployment/README.md) runs a command in a container. With Docker:
 
 ```bash
 docker exec <container name> cat /sys/fs/cgroup/cpu.pressure
@@ -56,7 +57,7 @@ same way and run `grub-mkconfig -o /boot/grub/grub.cfg`.
 
 ## Confirm UMH Core can read cpu.pressure
 
-Run the `docker exec` check again. It reads the same file UMH Core reads.
+Run the `cat /sys/fs/cgroup/cpu.pressure` check inside the container again. It reads the same file UMH Core reads.
 
 The Management Console shows the result on the instance's detail page. The Technical Details
 `Pressure` line changes from `Pressure not measured (this operating system does not report CPU
@@ -70,7 +71,8 @@ If the file is still missing, run these checks on the machine, outside the conta
 2. If `psi=1` is there, run `cat /proc/pressure/cpu`. `No such file or directory` means the kernel
    was built without PSI and ignores `psi=1`. Set a CPU limit on the container instead.
 3. If `/proc/pressure/cpu` prints output, the machine reports pressure but the container does not
-   see it. Run `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Any output other than
+   see it. Run `stat -fc %T /sys/fs/cgroup` inside the container, with Docker
+   `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Any output other than
    `cgroup2fs` means the container runs without cgroup v2. Set a CPU limit on the container instead.
 4. If the container prints `cgroup2fs`, the machine and the container both support pressure, and
    UMH Core should read it. Set a CPU limit on the container for now, and send the output of the

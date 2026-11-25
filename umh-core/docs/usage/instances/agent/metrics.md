@@ -4,7 +4,7 @@ This page explains how to read the Prometheus metrics that a UMH Core instance s
 
 ## Read the metrics
 
-Every instance serves its metrics on port 8080, at the path `/metrics`, in the Prometheus text format. The endpoint runs inside the container, so you can read it when the Management Console cannot reach the instance. To read the metrics once, run this on the Docker host. The `-Y off` keeps `wget` from sending the request through the proxy of the container:
+Every instance serves its metrics on port 8080, at the path `/metrics`, in the Prometheus text format. The endpoint runs inside the container, so you can read it when the Management Console cannot reach the instance. To read the metrics once, run `wget -qO- -Y off http://localhost:8080/metrics` inside the container, the way your [deployment](../../../production/deployment/README.md) runs a command in a container. The `-Y off` keeps `wget` from sending the request through the proxy of the container. With Docker:
 
 ```bash
 docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics
