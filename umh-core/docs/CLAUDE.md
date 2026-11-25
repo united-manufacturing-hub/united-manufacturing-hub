@@ -31,6 +31,8 @@ A component page, such as Bridges, and a part page, such as Read Flow or Write F
 
 Do not describe known defects on any page. Add the docs update to the ticket that fixes them.
 
+Document what the reader cannot work out alone. State a general rule with the reason behind it instead of listing every case, and leave out what follows from it.
+
 ### Child pages
 
 - Steps live in a guide, a child of the part the steps change. A guide that changes several parts, such as creating a bridge, is a child of the component.
