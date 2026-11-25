@@ -87,6 +87,8 @@ Write segments in lowercase, with `_` between words, such as `line_1` and `inlet
 
 A **topic** is one concrete address, such as the one above. A **topic pattern** is a regular expression that matches topics. The `uns` input of a stand-alone flow subscribes to topics with topic patterns.
 
+Topic patterns use the [RE2 syntax](https://pkg.go.dev/regexp/syntax) of Go's regular expression engine. Regular expression engines differ, so a pattern written for another engine may fail. RE2 has no lookahead such as `(?=…)`, no lookbehind and no backreferences such as `\1`.
+
 A topic pattern matches a topic when it matches any part of it. These parts of the syntax matter most:
 
 | Syntax | Meaning |
