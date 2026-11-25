@@ -85,7 +85,7 @@ The main view shows all bridges with their state and throughput:
 
 - **Green**: the bridge is `active` or `idle`. An idle bridge is healthy and has no data to process.
 - **Red**: the bridge is degraded -- `degraded_connection`, `degraded_redpanda`, `degraded_dfc` or `degraded_other`.
-- **Grey**: every other state, including `starting`, `stopped`, and a bridge that failed to start.
+- **Grey**: every other state, including a starting state such as `starting_connection`, and `stopped`.
 
 ### Context Menu
 

@@ -74,8 +74,6 @@ Options include:
 Deleting a flow removes its configuration from the instance, and the flow stops processing. Data the flow already wrote to its outputs is not deleted. To undo, re-create the flow with the same configuration, so copy the flow's YAML from its configuration screen before you delete it.
 {% endhint %}
 
-A deleted flow also keeps its last state series on `/metrics` until the instance restarts, so the alert rule below keeps firing for it. See [Metrics](#metrics) for how to exclude a deleted flow from the rule.
-
 ## Enable Debug Logging
 
 For troubleshooting data processing issues in stand-alone flows, enable the `debug_level` configuration option:
@@ -150,7 +148,7 @@ Stand-alone flows run on FSMv1 and use the standard [FSMv1 metrics](../instances
 | The flow | `dataflow_component_instance` | `<flow>` |
 | Its Benthos process | `benthos_instance` | `dataflow-<flow>` |
 
-To alert on a flow that is not active, idle or stopped, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. A flow whose own name starts with `protocolconverter-` or `dfc-streamprocessor-` is left out too. To watch one flow, replace the filter with `exported_instance="<flow>"`:
+To alert on a flow that is not active, idle or stopped, use this rule with `for: 5m`. Prometheus renames `instance` to `exported_instance`. With `honor_labels: true` in the scrape job it keeps `instance`, so write `instance` in the rule instead. The same component also covers the internal flows of bridges and stream processors, so the rule leaves them out by name. A flow whose own name starts with `protocolconverter-` or `dfc-streamprocessor-` is left out too. To watch one flow, replace the filter with `exported_instance="<flow>"`, or `instance="<flow>"` with `honor_labels: true`:
 
 ```promql
 umh_core_service_current_state{component="dataflow_component_instance", exported_instance!~"(read-|write-)?protocolconverter-.*|dfc-streamprocessor-.*"} != 3 != 4 != 0

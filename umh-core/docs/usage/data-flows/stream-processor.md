@@ -42,7 +42,7 @@ Select source topics and they'll automatically get variable names:
 
 - Browse available topics in your UNS
 - Select multiple sources with checkboxes
-- Variables auto-generated (e.g., `_10` for first topic, `_10_2` for second)
+- Each variable is named after the last part of its topic, for example `temperature` for a topic ending in `temperature`
 - Use "Show Selected Only" to filter view
 - Copy variable names for use in expressions
 
@@ -56,8 +56,8 @@ Map source variables to model fields using expressions:
 
 - Each field in your data model appears on the right
 - Enter expressions using the source variables
-- Simple passthrough: the variable's name, for example `_10`
-- Calculations: `_10 + _10_2` or more complex formulas
+- Simple passthrough: the variable's name, for example `temperature`
+- Calculations: `temperature * 1.8 + 32` or more complex formulas
 - The expressions support standard mathematical operations
 
 ### Step 4: Code Mode (Advanced)
