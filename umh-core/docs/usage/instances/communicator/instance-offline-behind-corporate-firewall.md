@@ -6,7 +6,14 @@ The cause is usually one of three: the firewall blocks the connection, the netwo
 
 ## Which error the instance reports
 
-The Management Console does not show why the connection fails. The error counters of the communicator do. [Communicator Shows Degraded: Error counters](communicator-shows-degraded.md#error-counters) explains how to find the counter that rises. Continue with [Find the cause](#find-the-cause) when `umh_fsmv2_worker_network_errors_total` rises. A firewall, a proxy or Cloudflare that answers with status 403 also raises `umh_fsmv2_worker_auth_failures_total`. If that counter rises and the `AUTH_TOKEN` is correct, ask your IT department whether a firewall or proxy rule blocks `management.umh.app`, and check its log for the requests of the instance.
+The Management Console does not show why the connection fails. The error counters of the communicator do. [Communicator Shows Degraded: Error counters](communicator-shows-degraded.md#error-counters) explains how to find the counter that rises. Continue with [Find the cause](#find-the-cause) when `umh_fsmv2_worker_network_errors_total` rises. A firewall, a proxy or Cloudflare that answers with status 403 also raises `umh_fsmv2_worker_auth_failures_total`. If that counter rises and the `AUTH_TOKEN` is correct, find out who answers with 403. Run this on the Docker host. If the host uses a proxy, add `--proxy <proxy address>`:
+
+```bash
+curl -sI https://management.umh.app
+```
+
+- If the answer is `403` and contains the line `server: cloudflare`, Cloudflare blocked the request. Contact UMH support and include the `cf-ray` line of the answer.
+- If the answer is `403` without that line, a firewall or proxy in your network answered. Ask your IT department whether a rule blocks `management.umh.app`, and check its log for the requests of the instance.
 
 ## Find the cause
 
