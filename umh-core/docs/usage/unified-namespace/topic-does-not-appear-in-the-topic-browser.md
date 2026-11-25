@@ -49,7 +49,7 @@ If the topic is published and the Topic Browser reads it, the cause is in what t
 - **The search box holds text.** The search narrows the tree to matching topics. Clear it.
 - **The topic sits deeper than you expect.** The tree follows the [topic convention](topic-convention.md): location path, data contract, then any virtual path folders, then the tag. Search for the tag name to find it.
 - **The instance is offline.** See [When the instance is offline](#when-the-instance-is-offline).
-- **UMH Core has just restarted.** Topics show again as new messages for them arrive, as [Restart the container](#restart-the-container) describes.
+- **UMH Core has just restarted.** Topics show again as messages for them arrive, as [Restart the container](#restart-the-container) describes.
 
 If none of these applies, we know of no further step on the instance that brings the topic back. Collect the evidence that [Getting help](#getting-help) lists and contact us.
 
@@ -77,7 +77,7 @@ docker restart umh-core
 
 Replace `umh-core` with the name of your container if you named it differently.
 
-After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count starts from zero. Topics that send data infrequently may take longer to reappear in the Topic Browser after a UMH Core restart.
+After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count starts from zero. Each topic shows again once a message for it arrives, so a topic that sends data rarely can take a while to come back. A Management Console tab that stayed open during the restart can keep showing the older topics, with their age growing. To see only the topics reported since the restart, sign out of the Management Console and sign back in.
 
 ## Getting help
 

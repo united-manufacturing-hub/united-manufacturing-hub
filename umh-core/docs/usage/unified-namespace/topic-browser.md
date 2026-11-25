@@ -14,7 +14,7 @@ A topic reaches the tree in three steps:
 
 The Topic Browser aims for an interval of 1 to 15 seconds between two batches. It sets the interval from the size of recent batches and the CPU use of the Topic Browser process: large batches and low CPU use shorten it, small batches and high CPU use lengthen it. A new value can take longer than the interval to show: the Topic Browser checks the interval only when new messages arrive, and the update then still has to reach the Management Console.
 
-The instance keeps a topic in its list while umh-core runs, even after the topic stops receiving messages. When umh-core restarts, the Topic Browser does not read older messages again, so topics show again as new messages for them arrive.
+While UMH Core runs, a topic stays in the tree even after it stops sending data. After UMH Core restarts, the instance reports each topic again once a message for it arrives, so a topic that sends data rarely can take a while to come back. A Management Console tab that stayed open during the restart can keep showing the older topics, with their age growing. To see only the topics reported since the restart, sign out of the Management Console and sign back in.
 
 ## The Topic Browser screen
 
