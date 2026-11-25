@@ -42,7 +42,7 @@ The **UMH Topics** card builds the topic patterns for you in **Visual** mode. Ea
 
 To subscribe to only one level below the bridge location, such as one line, try these options in this order:
 
-1. Move the bridge to that level. Change its location on the **General** tab, so the bridge location matches the level you want.
+1. Move the bridge to that level. Change its location on the **General** tab, so the bridge location matches the level you want. Do this only for a bridge without a read flow: moving a bridge also moves the topics its read flow publishes to.
 2. Keep **Any suffix** and drop the other levels in **Processing**. The second example in Step 4 shows how.
 3. As a last resort, switch **UMH Topics** to **Code** mode and write the topic pattern yourself. [Topic validation](write-flow.md#topic-validation) lists the rules it must follow.
 
@@ -79,6 +79,8 @@ return msg;
 ## Step 5: Set the Destination
 
 The **Destination** card holds the settings of the external system you write to, for example the URL and method of an HTTP request. Its fields depend on the protocol. The protocol name on the card links to its documentation.
+
+Enter the settings of your test system. Check that they do not point to a production system: the write flow starts writing as soon as you deploy.
 
 ![The Destination card for an HTTP Client](images/write-flows-destination.png)
 

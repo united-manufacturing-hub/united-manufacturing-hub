@@ -54,19 +54,23 @@ Each card has a **Code** mode. **UMH Topics** also has a **Visual** mode, and **
 
 The Management Console sets `destination.protocol` for you. [Configuration](#configuration) shows the keys in `config.yaml`.
 
+## What the Management Console shows
+
+The bridge's overview page has a **Write Flow** card. It shows the health of the write flow and its throughput in msg/sec. **Logs** on the card shows errors from the external system.
+
+When a topic pattern breaks the [topic rules](#topic-validation), the write flow does not start and the bridge shows as degraded. Its status starts with "flow degraded:". The connection and the read flow keep running. [Write Flow Topics Rejected](write-flow-topics-rejected.md) explains the messages and how to fix them.
+
 ## What happens when a write fails
 
-UMH Core runs a write flow as a `uns` input, one processor and the output. It adds no retry, fallback or dead-letter queue of its own. What happens when the external system rejects a message or cannot be reached depends on the output. The documentation of the output describes whether and how it retries a failed write.
+A message that the output gives up on is lost. UMH Core adds no retry, fallback or dead-letter queue of its own, so failed messages are not kept for you to inspect or replay.
 
-An acknowledgement tells the `uns` input that a message is handled. When the output gives up on a message, it does not acknowledge it. The `uns` input does not deliver an unacknowledged message again. It continues with the next messages, and the failed message is not written.
-
-A dead-letter queue is where messages go that could not be written, so you can inspect or replay them instead of losing them. A write flow has no dead-letter queue.
+Whether and how often the output retries a failed write depends on the output. Its documentation describes it. When the output gives up, it does not acknowledge the message. The `uns` input continues with the next messages and does not deliver the failed message again.
 
 A `buffer` in `extra.code` acknowledges a message as soon as it stores the message, before the output writes it. A `memory` buffer can lose the messages it holds when the write flow restarts.
 
 ## Topic validation
 
-UMH Core validates every topic pattern of a write flow. A write flow subscribes only to topics at its bridge location and the levels below it, and to one data contract per topic pattern, in one or more versions. In **Visual** mode the Management Console builds topic patterns that pass the validation. The rules below matter when you write topic patterns in **Code** mode or in `config.yaml`. [Topic Convention](../unified-namespace/topic-convention.md) explains the parts of a UNS topic, and [Topic patterns](../unified-namespace/topic-convention.md#topic-patterns) explains the regular expression syntax.
+UMH Core validates every topic pattern of a write flow. A write flow subscribes only to topics at its bridge location or below it. Each topic pattern names one data contract. It may list several versions of that contract. In **Visual** mode the Management Console builds topic patterns that pass the validation. The rules below matter when you write topic patterns in **Code** mode or in `config.yaml`. [Topic Convention](../unified-namespace/topic-convention.md) explains the parts of a UNS topic, and [Topic patterns](../unified-namespace/topic-convention.md#topic-patterns) explains the regular expression syntax.
 
 UMH Core accepts a topic pattern only if it follows three rules:
 
@@ -94,7 +98,7 @@ Anything may follow the data contract. A topic pattern can match every tag of a 
 | All `_pump_v1` tags at the bridge location | `^umh\.v1\.{{ .location_path }}\._pump_v1\.` |
 | All `_pump_v1` tags at the bridge location and every level below it | `^umh\.v1\.{{ .location_path }}\.(?:[^._][^.]*\.)*_pump_v1\.` |
 | Only the `pressure` tag | `^umh\.v1\.{{ .location_path }}\._pump_v1\.pressure$` |
-| Versions 1 and 2 of `_pump`, both created | `^umh\.v1\.{{ .location_path }}\._pump_v[1-2]\.` |
+| Versions 1 and 2 of `_pump`, both on the instance | `^umh\.v1\.{{ .location_path }}\._pump_v[1-2]\.` |
 
 A new version of a data contract does not reach the write flow on its own. Add the version to the topic pattern, for example by changing `_pump_v1` to `_pump_v[1-2]`.
 
@@ -109,7 +113,7 @@ A write flow is stored in `config.yaml` in the section `dataflowcomponent_write`
 
 The Management Console writes these sections for you. Edit them by hand only on the instance's [Config File](../instances/config-file.md) page.
 
-This bridge has only a write flow. It writes every `_pump_v1` tag at its bridge location and below to a test MES over HTTP. Every bridge has a connection probe, also one with only a write flow:
+This bridge has only a write flow. It writes every `_pump_v1` tag at its bridge location and below to a test MES over HTTP. A bridge with only a write flow still needs a connection probe:
 
 ```yaml
 protocolConverter:
@@ -185,9 +189,10 @@ The table lists the keys that control the write flow:
 | `destination.protocol` | none | The output, such as `http_client` or `historian`. A write flow without it does not start. |
 | `destination.code` | none | The settings of the output, as YAML. |
 | `extra.code` | none | Advanced settings as YAML. Only `cache_resources`, `rate_limit_resources` and `buffer` are used. Other keys are ignored. See the [Benthos-UMH documentation](https://docs.umh.app/benthos-umh). |
+| `BYPASS_WRITE_FLOW_VALIDATION` | off | Environment variable. Lifts the location rule and the rule that the data contract must exist with a version, for every bridge on the instance. UMH Core reads it once at startup, so a change needs a new container. `docker restart` keeps the old value. See [Emergency setting](write-flow-topics-rejected.md#emergency-setting-bypass-write-flow-validation). |
 | `writeDFCDesiredState` | the bridge's `desiredState` | `active` or `stopped`. It sits in `protocolConverterServiceConfig`, next to `location`. `stopped` stops only the write flow. `active` is a request: the write flow starts only when it has a `destination.protocol` and the connection probe is up. A bridge with `desiredState: stopped` always stops its write flow. |
 
-Changes to the `config.yaml` keys take effect without a restart. UMH Core checks the topic patterns each time it loads the configuration. A topic pattern that breaks the rules keeps the write flow from starting, and the bridge shows as degraded. A stopped write flow, or one without `destination.protocol`, is not checked.
+Changes to the `config.yaml` keys take effect without a restart. UMH Core checks the topic patterns each time it loads the configuration. A topic pattern that breaks the rules keeps the write flow from starting, and the bridge shows as degraded. A stopped write flow, or one without a destination, is not checked.
 
 ### Metrics
 
@@ -200,10 +205,12 @@ For a bridge named `mixing-station`, the write flow's series carry these labels.
 | Its write flow | `dataflow_component_instance` | `write-protocolconverter-mixing-station` |
 | The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
 
-To alert when a write flow is not active (3), idle (4) or stopped (0) for 5 minutes, use this rule with `for: 5m`:
+To alert when a write flow is in any state other than active (3), idle (4) or stopped (0) for 5 minutes, use this rule with `for: 5m`:
 
 ```promql
 umh_core_service_current_state{component="dataflow_component_instance", exported_instance=~"write-protocolconverter-.*"} != 3 != 4 != 0
 ```
+
+This rule does not catch a write flow whose topic patterns break the rules, or whose connection is down. Such a write flow is stopped. Alert on the bridge's degraded state instead, with `component="protocol_converter_instance"`.
 
 [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains the state values and why Prometheus shows `instance` as `exported_instance`. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
