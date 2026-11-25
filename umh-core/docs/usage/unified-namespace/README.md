@@ -36,6 +36,8 @@ Every piece of data has an address that answers three questions:
 
 Result: `umh.v1.enterprise.site.area.line._pump_v1.inlet_temperature`
 
+[Topic Convention](topic-convention.md) explains every part of a topic.
+
 ### Bridges Handle All Data Flow
 Data enters and exits the UNS exclusively through [bridges](../data-flows/bridges.md). This ensures every message gets proper context, validation, and organization.
 
