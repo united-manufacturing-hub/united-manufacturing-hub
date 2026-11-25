@@ -4,7 +4,7 @@
 
 A bridge (UI: "Bridges", YAML: `protocolConverter:`) connects the Unified Namespace (UNS) to one external system, such as an OPC UA server, a Siemens S7 or a Modbus controller. Its read flow reads from the external system and publishes to the UNS. Its write flow subscribes to UNS topics and writes to the external system.
 
-It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle. [Connection Probe](connection-probe.md) and [Read Flow](read-flow.md) describe the parts. To create a bridge, see [Create a bridge](create-a-bridge.md).
+It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle. [Connection Probe](connection-probe.md), [Read Flow](read-flow.md) and [Write Flow](write-flow.md) describe the parts. To create a bridge, see [Create a bridge](create-a-bridge.md).
 
 ## UI Capabilities
 

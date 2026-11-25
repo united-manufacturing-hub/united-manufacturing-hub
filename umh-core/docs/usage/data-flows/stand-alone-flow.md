@@ -2,7 +2,7 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and [Bridges](bridges.md).
 
-Stand-alone flows provide raw Benthos access for custom data processing when bridges or stream processors aren't sufficient. They're the fallback mechanism for write flows, external integrations, and specialized transformations.
+Stand-alone flows provide raw Benthos access for custom data processing when bridges or stream processors aren't sufficient. Use them for external integrations and specialized transformations. To send UNS data to an external system, start with a bridge's [write flow](write-flow.md).
 
 ## When to Use
 
