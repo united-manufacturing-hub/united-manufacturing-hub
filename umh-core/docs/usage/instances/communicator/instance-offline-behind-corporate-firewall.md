@@ -2,11 +2,17 @@
 
 This page explains how to find out why an instance behind a corporate firewall never shows as online in the Management Console, and how to fix it. The steps need access to the Docker host, to the firewall and proxy settings, and to the corporate CA certificate, so you may need your IT department.
 
-The cause is usually one of three: the firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
+The cause is usually one of three:
+
+1. The firewall blocks the connection.
+2. The network requires a proxy.
+3. The firewall inspects TLS.
+
+A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
 
 ## Which error the instance reports
 
-The Management Console does not show why the connection fails. The error counters of the communicator do. [Communicator Shows Degraded: Error counters](communicator-shows-degraded.md#error-counters) explains how to find the counter that rises. Continue with [Find the cause](#find-the-cause) when `umh_fsmv2_worker_network_errors_total` rises. A firewall, a proxy or Cloudflare that answers with status 403 also raises `umh_fsmv2_worker_auth_failures_total`. If that counter rises and the `AUTH_TOKEN` is correct, find out who answers with 403. Run this on the Docker host. If the host uses a proxy, add `--proxy <proxy address>`:
+The Management Console does not show why the connection fails. The error counters of the communicator do. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to read them, and [Communicator Shows Degraded: Error counters](communicator-shows-degraded.md#error-counters) says what to do for each. Continue with [Find the cause](#find-the-cause) when `umh_fsmv2_worker_network_errors_total` rises. A firewall, a proxy or Cloudflare that answers with status 403 also raises `umh_fsmv2_worker_auth_failures_total`. If that counter rises and the `AUTH_TOKEN` is correct, find out who answers with 403. Run this on the Docker host. If the host uses a proxy, add `--proxy <proxy address>`:
 
 ```bash
 curl -sI https://management.umh.app

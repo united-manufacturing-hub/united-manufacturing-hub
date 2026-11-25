@@ -6,13 +6,13 @@ Follow this page when the Communicator card on the instance details page shows D
 |---|---|
 | `Messages are held because the last login could not be verified.` | umh-core logs in again by itself, and the reason clears after a login that it can verify. If the reason stays, send the agent log to UMH support. The **Logs** button on the Agent card opens it. |
 | `Outbound queue …` | The queue holds the messages that wait to be sent to the Management Console. Each open Management Console tab that watches the instance adds a copy of every status message to it. Close the tabs you do not use. |
-| `Authentication with the Management Console failed` | If `umh_fsmv2_worker_auth_failures_total` rises under the transport worker, the Management Console usually did not accept the `AUTH_TOKEN` of the instance. Check the token. If `umh_fsmv2_worker_instance_deleted_total` rises instead, the login got status 404. Usually the instance was deleted in the Management Console, and a new token does not fix that. |
+| `Authentication with the Management Console failed` | If `umh_fsmv2_worker_auth_failures_total` rises for the login (its `hierarchy_path` ends in `(transport)`, see [Communicator: Metrics](README.md#metrics)), the Management Console did not accept the `AUTH_TOKEN` of the instance. Check the token. If `umh_fsmv2_worker_instance_deleted_total` rises instead, the instance was usually deleted in the Management Console, and a new token does not fix that. |
 | `Connection to the Management Console is degraded` | The reason names the last error type. Find its counter in [Error counters](#error-counters). |
 | `Communicator status is stale` | umh-core did not update the communicator status in time. Check the agent log for errors. If the reason stays, send the agent log to UMH support. |
 
 ## Error counters
 
-The communicator counts each failed request to the Management Console once, under its cause. A counter that rises shows the cause. [Communicator: Error counters](README.md#error-counters) says what each counter counts, and [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to read them. To find the counter that rises without Prometheus, read the metrics once, wait a minute and read them again. The failed logins are the series whose `hierarchy_path` ends in `(transport)`.
+Each failed request to the Management Console raises the counter of its cause, so the counter that rises shows what to fix. [Communicator: Error counters](README.md#error-counters) says what each one counts.
 
 | Counter | What to do |
 |---|---|

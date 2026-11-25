@@ -27,7 +27,7 @@ The Usage and Peak Usage rows appear while the badge is Active or Degraded. Each
 | Degraded | `Communicator status is stale` | umh-core has not updated the communicator status for more than 10 seconds. |
 | Neutral | `Connecting to the Management Console` | The communicator is starting. |
 | Neutral | `Measuring outbound queue usage` | The connection works, and umh-core is still collecting samples of the queue. |
-| Neutral | `Communicator not running` | The transport worker is stopped or stopping. |
+| Neutral | `Communicator not running` | The communicator is stopped or stopping. |
 | Neutral | `Communicator status unknown` | umh-core could not read the communicator status. |
 
 [Communicator Shows Degraded](communicator-shows-degraded.md) lists what to do for each degraded reason.
