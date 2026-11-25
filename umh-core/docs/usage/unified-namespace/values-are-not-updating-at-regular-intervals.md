@@ -33,11 +33,14 @@ If the source publishes as often as you expect, the gaps you see come from how t
 
 No action is needed for these. The interval of the Topic Browser cannot be configured.
 
-## Interpret a missing burst of values
+## Interpret values discarded during a backlog
 
-When more than 10,000 messages reach the Topic Browser between two batches, it reads them but sends none of them to the Management Console. This happens while it catches up on a backlog, for example after it was turned off, or on an instance that publishes many messages per second. The History tab then shows a gap, and updates resume with the next batch. The Management Console shows no other sign of it.
+The Topic Browser holds at most 10,000 messages between two batches. When a new message arrives at that limit, it discards the values it holds, keeps the topic tree, and continues collecting. The next batch carries the values that arrived after the discard. This happens while it catches up on a backlog, for example after it was turned off, or on an instance that publishes many messages per second.
 
-If updates continue afterwards, no action is needed. If values are missing again and again on a busy instance, and you need every reading, save the data contract with a Historian bridge, as [Save data to the Historian](../historian/save-to-historian.md) describes.
+- **A topic that publishes continuously** appears again in the next batch, so its History tab can miss some values.
+- **A quiet topic** can lose its last value if the discard caught it. The Topic Browser misses that value until the topic publishes again.
+
+If you need every reading, save the data contract with a Historian bridge, as [Save data to the Historian](../historian/save-to-historian.md) describes.
 
 ## Getting help
 
