@@ -66,7 +66,7 @@ This step requires access to the instance’s Docker host.
 Restart the container only when the checks above point to the Topic Browser of the instance: the reason on its card is `benthos degraded` and the log shows no cause you can fix, or messages are published but the Topic Browser does not read them. The restart starts the Topic Browser afresh.
 
 {% hint style="warning" %}
-Restarting the container stops umh-core and every data flow in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
+Restarting the container stops UMH Core and every data flow in it. Nothing is read from your devices until it is back up, which takes about a minute. Plan it for a maintenance window.
 {% endhint %}
 
 The logs in `/data/logs` inside the container stay after the restart, so you can send them to us later. On the Docker host, run:
