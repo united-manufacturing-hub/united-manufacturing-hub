@@ -35,7 +35,11 @@ With the [memory monitor](memory-health.md) on, the row shows 60-second means. W
 
 With the memory monitor on, the info button next to the row shows the readings of the container and the machine, which [Memory thresholds](#memory-thresholds) describes. A reading turns red while it degrades the memory. It reads `not yet measured` while its window fills after a start, and `n/a` or `unavailable` when it cannot be measured.
 
+![The memory info button of the Container card on an instance with a 4 GiB memory limit and the memory monitor on](../images/container-memory-info.png)
+
 While the memory is degraded, the [Memory status](#memory-status) and its [Technical Details](#memory-technical-details) appear in the badge reason of the Container card, after `Memory degraded:`. While the memory is healthy, the badge reason does not show the memory.
+
+![The badge reason of a Degraded Container card with the memory status Memory running near its limit and its Technical Details](../images/container-memory-badge-reason.png)
 
 ## Container states
 
