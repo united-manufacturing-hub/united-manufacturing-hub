@@ -8,19 +8,21 @@ An instance is a running UMH Core container: a single Docker container that host
 
 ![The instance list with one UMH Core instance](./images/instance-list.png)
 
+The Management Console receives data only from the instances in the **instance filter**. Open it with the **Filter instances** button in the top bar. The button shows the name of the selected instance, or how many instances are selected. Select instances one by one, or select all. The **All** menu next to the search field is a different control: it only hides rows of the list.
+
 | Column | Shows |
 |---|---|
-| Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance that the instance filter leaves out shows **Not in the filter** and no other values. |
-| Instance name | The name of the instance. Click it to open the instance details page. For an instance in the instance filter, this works only while it is online. |
+| Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance outside the instance filter shows **Not in the filter** and no other values. |
+| Instance name | The name of the instance. Click it to open the instance details page. For an instance in the instance filter, this works only while it is online. For an instance outside it, a dialog offers **Filter only this instance** or **Add to the current filter**. |
 | Type | **Core** for UMH Core, **Classic** for UMH Classic. `n/a` while the instance is offline. |
 | Version | The UMH Core version, or for UMH Classic the version of the companion. A marker shows when a newer version is available, or that the version is no longer supported and needs an upgrade. |
 | Data flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
-| Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser, or to the Tag Browser for UMH Classic, and adds the instance to the instance filter. |
+| Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser, or to the Tag Browser for UMH Classic. |
 | Read throughput (msg/sec) | The messages per second of all data flows on the instance, input and output added together, as a one-minute average. |
 
 The row menu has these entries:
 
-- **Instance details**, disabled while the instance is offline.
+- **Instance details**, disabled while an instance in the instance filter is offline.
 - **Config file**, only for a UMH Core instance that is online and whose UMH Core version supports it.
 - **Upgrade**, only for a UMH Classic instance whose companion is not up to date.
 - **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license and audit logs enabled for your organization.
