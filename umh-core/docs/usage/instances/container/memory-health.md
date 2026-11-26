@@ -1,18 +1,18 @@
 # Memory Health
 
 {% hint style="info" %}
-The memory monitor is a preview and off by default. It turns on when the container starts with the environment variable `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](README.md#configuration).
+**Early access.** The memory monitor is off by default. It turns on when the container starts with the environment variable `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](README.md#configuration).
 {% endhint %}
 
 The memory health check decides whether the instance has the memory it needs. The Management Console shows the result in the Memory row and the badge of the Container card.
 
-## Without the memory monitor preview
+## Without the memory monitor
 
 Memory health is judged on one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. [Container: Memory and disk](README.md#memory-and-disk) gives the threshold.
 
-## With the memory monitor preview
+## With the memory monitor
 
-umh-core measures memory once per second. Memory is degraded while any of these causes holds. [Container: Memory monitor preview thresholds](README.md#memory-monitor-preview-thresholds) gives the value of each cause.
+umh-core measures memory once per second. Memory is degraded while any of these causes holds. [Container: Memory monitor thresholds](README.md#memory-monitor-thresholds) gives the value of each cause.
 
 | Cause | Degraded when | Judged only when |
 |---|---|---|
@@ -27,4 +27,4 @@ The reason line on the Container card names the cause, for example `Memory degra
 
 ## Metrics
 
-The memory monitor preview reports each reading as a Prometheus gauge. See [Container: Memory monitor preview gauges](README.md#memory-monitor-preview-gauges).
+The memory monitor reports each reading as a Prometheus gauge. See [Container: Memory monitor gauges](README.md#memory-monitor-gauges).
