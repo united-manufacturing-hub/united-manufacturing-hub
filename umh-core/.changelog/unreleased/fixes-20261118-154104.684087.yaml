@@ -1,3 +1,3 @@
 kind: fixes
-body: 'A degraded flow whose stream processor logged errors now counts down to when the error actually clears. The countdown is measured from the newest error line in the 10-minute window; before it was measured from the oldest, so a flow that kept erroring showed a countdown shorter than the time it needed and reached 0s while still degraded. The status still names the oldest line, which is the error that started it'
+body: 'Bridges and stand-alone flows: when a flow was degraded by an error in its logs, the status `found error (clears in …)` could count down to 0s while the flow stayed degraded. The countdown now ends when the flow recovers'
 time: 2026-11-18T15:41:04.684087+01:00

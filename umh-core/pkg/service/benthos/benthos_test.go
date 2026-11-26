@@ -52,7 +52,7 @@ var _ = Describe("Benthos Service", func() {
 		// Add the service to the S6 manager
 		err := service.AddBenthosToS6Manager(context.Background(), mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 4195,
-			DebugLevel: false,
+			DebugLevel:  false,
 		}, benthosName)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -119,7 +119,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should generate valid YAML", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test")
@@ -140,7 +140,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should set OPC_DEBUG=debug when DebugLevel is true", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: true,
+					DebugLevel:  true,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-debug")
@@ -151,7 +151,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should not set OPC_DEBUG when DebugLevel is false", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-info")
@@ -162,7 +162,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should not set OPC_DEBUG when DebugLevel is false (default)", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-empty")
@@ -195,7 +195,7 @@ var _ = Describe("Benthos Service", func() {
 						"memory": map[string]interface{}{"limit": "10MB"},
 					},
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test")
@@ -431,20 +431,20 @@ var _ = Describe("Benthos Service", func() {
 				// these can be produced using the log processor: https://docs.redpanda.com/redpanda-connect/components/processors/log/
 			})
 
-			It("should report the first offending entry and the newest offending timestamp", func() {
-				oldest := currentTime.Add(-3 * time.Minute)
-				newest := currentTime.Add(-1 * time.Minute)
+			It("should report the first offending entry and the timestamp of the last", func() {
+				firstAt := currentTime.Add(-3 * time.Minute)
+				lastAt := currentTime.Add(-1 * time.Minute)
 				logs := []s6service.LogEntry{
 					{Timestamp: currentTime.Add(-10 * time.Minute), Content: `level=error msg="aged out of the window"`},
-					{Timestamp: oldest, Content: `level=error msg="failed to connect to broker"`},
+					{Timestamp: firstAt, Content: `level=error msg="failed to connect to broker"`},
 					{Timestamp: currentTime.Add(-2 * time.Minute), Content: `level=info msg="all good"`},
-					{Timestamp: newest, Content: `level=error msg="failed to flush batch"`},
+					{Timestamp: lastAt, Content: `level=error msg="failed to flush batch"`},
 				}
 
-				isLogsFine, entry, newestOffending := service.IsLogsFine(logs, currentTime, logWindow)
+				isLogsFine, first, gotLastAt := service.IsLogsFine(logs, currentTime, logWindow)
 				Expect(isLogsFine).To(BeFalse())
-				Expect(entry.Timestamp).To(Equal(oldest))
-				Expect(newestOffending).To(Equal(newest))
+				Expect(first.Timestamp).To(Equal(firstAt))
+				Expect(gotLastAt).To(Equal(lastAt))
 			})
 		})
 	})
@@ -634,14 +634,14 @@ var _ = Describe("Benthos Service", func() {
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup initial configuration
 			initialConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"urls":   []string{"tcp://localhost:1883"},
@@ -656,7 +656,7 @@ var _ = Describe("Benthos Service", func() {
 			// Setup updated configuration with different input
 			updatedConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"urls":   []string{"tcp://localhost:1883"},
@@ -857,7 +857,7 @@ logger:
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 

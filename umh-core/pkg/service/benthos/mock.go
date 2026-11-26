@@ -432,7 +432,7 @@ func (m *MockBenthosService) ReconcileManager(ctx context.Context, services serv
 }
 
 // IsLogsFine mocks checking if the logs are fine.
-func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry, time.Time) {
+func (m *MockBenthosService) IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (ok bool, first s6service.LogEntry, lastAt time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

@@ -94,9 +94,9 @@ var _ = Describe("IsBenthosLogsFine log window", func() {
 
 var _ = Describe("IsBenthosLogsFine countdown", func() {
 	const (
-		oldestError = `level=error msg="failed to connect to broker" @service=benthos`
-		middleError = `level=error msg="failed to dispatch message" @service=benthos`
-		newestError = `level=error msg="failed to flush batch" @service=benthos`
+		brokerError   = `level=error msg="failed to connect to broker" @service=benthos`
+		dispatchError = `level=error msg="failed to dispatch message" @service=benthos`
+		flushError    = `level=error msg="failed to flush batch" @service=benthos`
 	)
 
 	var (
@@ -126,50 +126,50 @@ var _ = Describe("IsBenthosLogsFine countdown", func() {
 		}
 	}
 
-	// A flow stays degraded until the last offending line has aged out of
-	// the window, so the countdown belongs to the newest entry. The message
-	// still names the oldest one, because that is the root error.
-	It("counts down to the newest offending entry, and names the oldest", func() {
+	// A flow stays degraded until its last error has aged out of the window,
+	// so the countdown belongs to the last error. The message names the
+	// first one, because that one started it.
+	It("counts down to the last error, and names the first", func() {
 		now := start.Add(15 * time.Minute)
 		setProcess(
 			runningLongerThanTheWindow(now),
-			s6service.LogEntry{Timestamp: start.Add(6 * time.Minute), Content: oldestError},
-			s6service.LogEntry{Timestamp: start.Add(8 * time.Minute), Content: middleError},
-			s6service.LogEntry{Timestamp: start.Add(11 * time.Minute), Content: newestError},
+			s6service.LogEntry{Timestamp: start.Add(6 * time.Minute), Content: brokerError},
+			s6service.LogEntry{Timestamp: start.Add(8 * time.Minute), Content: dispatchError},
+			s6service.LogEntry{Timestamp: start.Add(11 * time.Minute), Content: flushError},
 		)
 
 		fine, reason := instance.IsBenthosLogsFine(now, constants.BenthosLogWindow)
 		Expect(fine).To(BeFalse())
-		// start+11m + 10m window - now = 6m. From the oldest entry it would
-		// be 1m, from the process start 1m as well.
-		Expect(reason).To(Equal("found error (clears in 6m0s): " + oldestError))
+		// start+11m + 10m window - now = 6m. Counting from the first error
+		// would give 1m.
+		Expect(reason).To(Equal("found error (clears in 6m0s): " + brokerError))
 	})
 
-	It("counts down from the single entry when there is only one", func() {
+	It("counts down from the only error", func() {
 		now := start.Add(15 * time.Minute)
 		setProcess(
 			runningLongerThanTheWindow(now),
-			s6service.LogEntry{Timestamp: start.Add(8 * time.Minute), Content: oldestError},
+			s6service.LogEntry{Timestamp: start.Add(8 * time.Minute), Content: brokerError},
 		)
 
 		fine, reason := instance.IsBenthosLogsFine(now, constants.BenthosLogWindow)
 		Expect(fine).To(BeFalse())
-		Expect(reason).To(Equal("found error (clears in 3m0s): " + oldestError))
+		Expect(reason).To(Equal("found error (clears in 3m0s): " + brokerError))
 	})
 
-	// Entries older than the window are not offending entries at all, so
-	// they must not drag the countdown back.
-	It("ignores offending entries that have already aged out", func() {
+	// An error older than the window no longer counts, so it is neither
+	// named nor counted down from.
+	It("ignores errors that have already aged out", func() {
 		now := start.Add(15 * time.Minute)
 		setProcess(
 			runningLongerThanTheWindow(now),
-			s6service.LogEntry{Timestamp: start.Add(1 * time.Minute), Content: middleError},
-			s6service.LogEntry{Timestamp: start.Add(7 * time.Minute), Content: oldestError},
-			s6service.LogEntry{Timestamp: start.Add(9 * time.Minute), Content: newestError},
+			s6service.LogEntry{Timestamp: start.Add(1 * time.Minute), Content: dispatchError},
+			s6service.LogEntry{Timestamp: start.Add(7 * time.Minute), Content: brokerError},
+			s6service.LogEntry{Timestamp: start.Add(9 * time.Minute), Content: flushError},
 		)
 
 		fine, reason := instance.IsBenthosLogsFine(now, constants.BenthosLogWindow)
 		Expect(fine).To(BeFalse())
-		Expect(reason).To(Equal("found error (clears in 4m0s): " + oldestError))
+		Expect(reason).To(Equal("found error (clears in 4m0s): " + brokerError))
 	})
 })
