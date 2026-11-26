@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.45.5]
+
+### Improvements
+
+- Maintenance release: internal changes only, no user-visible changes.
+
+## [0.45.4]
+
+### Improvements
+
+- Updated the bundled Redpanda Connect components from v4.116.1 to v4.117.0. See the [Redpanda Connect v4.117.0 release notes](https://github.com/redpanda-data/connect/releases/tag/v4.117.0) for the full list
+- parquet_encode processor (parquet_encode) now skips type coercion for schemas without logical types, so it encodes them faster
+- The CPU status now exclusively uses the CPU health check. `USE_FSMV2_CPU` is ignored and can be removed from the container's environment; the 70% CPU usage rule is no longer available. The `agent.useFSMv2CPU` setting in `config.yaml` is still accepted and has no effect. The `umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` Prometheus gauges now always report the CPU health check's 60-second average of the container's own usage, so an alert built on the old reading may need adjusting.
+- Updated the bundled Redpanda Connect components from v4.117.0 to v4.118.0. See the [Redpanda Connect v4.118.0 release notes](https://github.com/redpanda-data/connect/releases/tag/v4.118.0) for the full list
+- Azure Blob Storage output (azure_blob_storage) can now store blob index tags with each blob through the new tags field, so the blobs can be found and filtered by tag in Azure. A tag key that Azure does not allow is rejected when the config is loaded. With blob_type APPEND, tags are only set on a blob that the output creates, not on one that already exists
+
+### Fixes
+
+- Sparkplug B input now writes Bytes, File and array metrics to the UNS as base64 strings, and names their datatype in spb_datatype. Before, it dropped them without a warning. DataSet and Template metrics are still not supported, and the input now logs a warning when it drops one
+- Updated the OpenTelemetry OTLP trace exporters (v1.44.0 to v1.46.0), so a verbose OpenTelemetry logger can no longer write the collector endpoint URL to the log. Only a tracing setup with a custom verbose OpenTelemetry logger was exposed (CVE-2026-81870). Images built before v0.17.0 still contain the older exporters
+- Updated the OpenTelemetry log SDK (v0.19.0 to v1.47.0) and the Redpanda OpenTelemetry exporter that uses it, so a full log export buffer can no longer make the batch log processor spin and use up the CPU. benthos-umh itself does not set up such a processor, so only a custom setup that exports OpenTelemetry logs was exposed (CVE-2026-81872). Images built before v0.17.0 still contain the older version
+- Rebuilt with Go 1.27.4, which clears twelve Go standard library and toolchain advisories (GO-2026-6848 to GO-2026-6859). The one in the shipped runtime, CVE-2026-97054 (a crash in HTTP/1 servers that limit the request body size), could only be reached through a configured HTTP input such as otlp_http. The other eleven affect only builds with cgo or malicious build inputs. Images built before v0.17.0 still use Go 1.27.3
+- Updated the OpenTelemetry modules (otel, otel/trace, otel/sdk and otel/sdk/log to v1.47.0), so a trace attribute value made of Unicode replacement characters (U+FFFD) can no longer get past the configured attribute value length limit, and a large W3C baggage header no longer allocates more memory than needed. Only a tracing setup with the open_telemetry_collector or jaeger tracer and a finite attribute length limit was exposed to the first flaw (CVE-2026-128085). The second one (CVE-2026-128086) was only reachable through W3C baggage propagation
+- Azure Blob Storage output (azure_blob_storage) with blob_type APPEND no longer loses data when several writes create the same append blob at once
+- OPC UA input now publishes every value under the node it was read from when the server rejects the deadband filter. Before, values could appear under another node's name and tag in the Topic Browser, with no error
+- OPC UA input no longer stops reading when a server sends a notification it has no subscription for. Such a notification is now dropped and logged instead of ending the input
+- Kafka output (kafka) with idempotent_write enabled now starts. Before, it always failed with a configuration error. The output now waits for all in-sync replicas, as if ack_replicas were true, and sends one request at a time per broker
+- SFTP input (sftp) with minimum_age set no longer reads a file up to one second too early. SFTP reports modification times in whole seconds, so a file that a writer had just created could pass minimum_age and be read empty or incomplete. Files now wait up to one second longer than minimum_age
+- InfluxDB metrics exporter (metrics.influxdb) stops writing metrics when benthos shuts down. Before, it kept writing the same values at each interval until the process exited
+- UNS input (uns) no longer hangs on shutdown while its consumer group is rebalancing, for example when another benthos with the same consumer_group starts or stops at the same time
+- AWS DynamoDB CDC input (aws_dynamodb_cdc) no longer emits duplicate events or skips events when the snapshot and the change stream overlap within the same second or across time zones. It also resumes an interrupted snapshot with the right segment count, and keeps retrying when refreshing the table's shards fails instead of stopping
+
 ## [0.45.3]
 
 ### Improvements

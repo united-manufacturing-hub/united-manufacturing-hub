@@ -12,6 +12,10 @@ Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, refe
 
 Unless a page says otherwise, its primary reader is the person who installed and runs the instance ([Who we build for](https://engineering.umh.app/product/who-we-build-for.md)). For Bridges it is the OT team. For Metrics and for the steps on the Docker host it is IT. Those pages open with what they explain and what access the steps need, for example "This page explains how to collect UMH Core metrics with Prometheus. The steps need access to port 8080 on the Docker host."
 
+## Where readers get help
+
+The [Get Help](get-help.md) page is the only page that names where readers turn for help: technical support (Enterprise support and the community on Discord), security reports, and commercial requests. Do not restate these routes or their addresses on another page; link to Get Help. A page's own instructions stay on it: what to collect before asking, any safety warning, and the commercial contact of a licensing or billing step, such as the contact form on the billing page.
+
 ## Usage pages
 
 The usage pages mirror the instance details page in the Management Console. That page shows one card per component: Agent, Container, Communicator, Data Flows, Redpanda and Topic Browser. Each card has its own usage page. The Data Flows card leads to the Data Flows section, with one page each for Bridges, Stand-alone Flows and Stream Processors.

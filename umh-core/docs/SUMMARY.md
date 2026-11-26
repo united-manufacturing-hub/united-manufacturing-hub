@@ -26,9 +26,15 @@
     * [Payload Formats](usage/unified-namespace/payload-formats.md)
     * [Metadata and Tracing](usage/unified-namespace/metadata-and-tracing.md)
     * [Topic Browser](usage/unified-namespace/topic-browser.md)
+      * [Topic Does Not Appear in the Topic Browser](usage/unified-namespace/topic-does-not-appear-in-the-topic-browser.md)
+      * [Values Are Not Updating at Regular Intervals](usage/unified-namespace/values-are-not-updating-at-regular-intervals.md)
     * [Redpanda](usage/unified-namespace/redpanda.md)
   * [Data Flows](usage/data-flows/README.md)
     * [Bridges](usage/data-flows/bridges.md)
+      * [Connection Probe](usage/data-flows/connection-probe.md)
+      * [Read Flow](usage/data-flows/read-flow.md)
+        * [Set up a read flow](usage/data-flows/set-up-a-read-flow.md)
+      * [Create a bridge](usage/data-flows/create-a-bridge.md)
       * [Bridges Do Not Start](usage/data-flows/bridges-do-not-start.md)
     * [Stand-alone Flow](usage/data-flows/stand-alone-flow.md)
     * [Stream Processors](usage/data-flows/stream-processor.md)
@@ -91,6 +97,7 @@
   * [HTTP API Reference](reference/http-api/README.md)
     * [Topic Browser GraphQL API](reference/http-api/topic-browser-graphql.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
+* [Get Help](get-help.md)
 
 ## UMH Classic
 

@@ -162,7 +162,7 @@ flowchart LR
 - **MQTT Subscribe** for an existing MQTT broker
 - [See all 50+ supported protocols →](https://docs.umh.app/benthos-umh/input)
 
-Real hardware uses the address-mapping table instead of the generator. The [Bridges reference](../usage/data-flows/bridges.md) covers that, along with logs, metrics, and debug logging.
+Real hardware uses the address-mapping table instead of the generator. [Set up a read flow](../usage/data-flows/set-up-a-read-flow.md) covers that. The [Bridges reference](../usage/data-flows/bridges.md) covers logs, metrics, and debug logging.
 
 ## Concepts Learned
 

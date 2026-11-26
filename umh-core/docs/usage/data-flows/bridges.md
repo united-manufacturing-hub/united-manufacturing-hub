@@ -2,9 +2,9 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Bridges move data into and out of the Unified Namespace, providing connection monitoring and automatic data organization. While read flows work with any protocol, write flows are not yet implemented - use [stand-alone flows](stand-alone-flow.md) for writing to external systems.
+A bridge (UI: "Bridges", YAML: `protocolConverter:`) connects the Unified Namespace (UNS) to one external system, such as an OPC UA server, a Siemens S7 or a Modbus controller. Its read flow reads from the external system and publishes to the UNS. Its write flow subscribes to UNS topics and writes to the external system.
 
-> **New to UMH?** This page is the reference for setting up real bridges. If you just want to get mock data flowing and learn the basics first, start with [Step 2: Connect Data](../../getting-started/1-connect-data.md).
+It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle. [Connection Probe](connection-probe.md) and [Read Flow](read-flow.md) describe the parts. To create a bridge, see [Create a bridge](create-a-bridge.md).
 
 ## UI Capabilities
 
@@ -22,75 +22,6 @@ Bridges move data into and out of the Unified Namespace, providing connection mo
 | Edit bridges | ✅ | Modify and redeploy |
 | Delete bridges | ✅ | Clean removal |
 | Advanced mode | ✅ | Direct YAML editing |
-
-## Creating a Bridge (UI)
-
-### Step 1: Navigate to Data Flows
-
-Go to **Data Flows** and click **Add Bridge**:
-
-![Data Flows Overview](./images/bridges-overview.png)
-
-### Step 2: Choose How to Start
-
-![Create a New Bridge](./images/bridges-create-from-scratch-or-existing.png)
-
-- **From Scratch**: start from a pre-configured protocol template, which is functional out of the box, or customize the template to fit your needs.
-- **From Existing Bridge**: pick a healthy bridge from any instance and start with a copy of its configuration. Adapt the bridge's name, connection and addresses.
-
-The remaining steps describe the from-scratch path. Starting from an existing bridge skips the template list and lands on the same screens with the fields already filled in.
-
-### Step 3: Select a Template
-
-![Select a Template](./images/bridges-template-selection.png)
-
-Templates carry a working protocol configuration. Search by name, or narrow the list with the **Vendor** and **Protocol** filters.
-
-Behind the templates we support **50+ industrial protocols** through [Benthos-UMH](https://docs.umh.app/benthos-umh/input) plus everything from [Redpanda Connect](https://docs.redpanda.com/redpanda-connect/components/inputs/about/):
-
-Common industrial protocols:
-- **Modbus**: For PLCs and RTUs
-- **OPC UA**: For industrial servers
-- **S7**: For Siemens PLCs
-- **Ethernet/IP**: For Allen-Bradley
-- **And many more**: See full list at [Benthos-UMH Inputs](https://docs.umh.app/benthos-umh/input)
-
-### Step 4: Configure General Settings
-
-Fill in the basic information and proceed with Step 5.
-
-![General Information](./images/bridges-general-information.png)
-
-**General Information:**
-- **Name**: Unique identifier for your bridge
-- **Instance**: Select your UMH instance
-- **Level 0, Level 1, …**: pre-filled with the instance location. A level you add, such as area → line → machine, extends it, and the result is the bridge location.
-
-![Connection Configuration](./images/bridges-connection-configuration.png)
-
-**Connection:**
-- **IP Address**: IP address or hostname of the external system (becomes `{{ .IP }}` variable)
-- **Port**: Port of the external system (becomes `{{ .PORT }}` variable)
-
-The protocol itself needs no selection here. It comes from the template you picked in Step 3, and the **Read Flow** tab opens on that protocol's settings.
-
-### Step 5: Configure Protocol Settings
-
-Each protocol has specific settings. For example, S7:
-
-![Siemens S7 Configuration](./images/bridges-read-no-dfc-data-type-selector-for-siemens.png)
-
-### Step 6: Map Addresses
-
-Each row in the address mapping table becomes one UNS topic: the protocol address, followed by the data contract, virtual path, and tag name that build the topic.
-
-![Address Mapping Table](./images/bridges-read-address-table-model-dropdown.png)
-
-With `_historian` or `_raw`, Virtual Path and Tag Name are free-text fields. Selecting a custom data contract merges both columns into a single dropdown listing every field the contract's [data model](../data-modeling/data-models.md) defines, so you pick a valid path instead of typing one. A value the model rejects, for example after switching contracts, stays in the row, is flagged red, and blocks deploy until you correct it. Contracts whose data model references other models keep free-text input.
-
-### Step 7: Deploy
-
-Click **Save & Deploy**. The bridge checks the connection to the external system, and the read flow starts reading from it.
 
 ## Managing Bridges
 
@@ -151,11 +82,13 @@ To view debug logs, go to the bridge and select **Logs**.
 
 **IT protocols (MQTT, HTTP, Kafka) can provide relational data** - when you select "relational" as the data type in the UI, the bridge automatically uses [`nodered_js` processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) to handle complex business records like work orders or batch reports.
 
-For converting time-series to relational data, see [Stream Processors](stream-processor.md#time-series-to-relational-challenges) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
+For converting time-series to relational data, see [Stream Processors](stream-processor.md) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
 
-## Configuration (YAML)
+## Reference
 
-Advanced users can edit the YAML directly:
+### Configuration
+
+Advanced users can edit the YAML directly. [Connection Probe](connection-probe.md#configuration) describes the `connection` key, and [Read Flow](read-flow.md#configuration) describes the `dataflowcomponent_read` key.
 
 ```yaml
 protocolConverter:
@@ -171,32 +104,20 @@ protocolConverter:
           nmap:
             target: "{{ .IP }}"
             port: "{{ .PORT }}"
-        dataflowcomponent_read:
-          benthos:
-            input:
-              s7comm:
-                addresses:
-                  - DB1.DW20
-                  - DB3.I270
-                tcpDevice: "{{ .IP }}"
-                rack: 0
-                slot: 1
-            pipeline:
-              processors:
-                - tag_processor:
-                    defaults: |
-                      msg.meta.location_path = "{{ .location_path }}";
-                      msg.meta.data_contract = "_raw";
-                      msg.meta.tag_name = msg.meta.s7_address;
-                      return msg;
-            output:
-              uns: {}
+        # dataflowcomponent_read: the read flow, see Read Flow
       variables:
         IP: "192.168.1.100"
         PORT: "102"
 ```
 
-### Key Configuration Elements
+| Field | Description |
+|---|---|
+| `name` | Unique name of the bridge |
+| `desiredState` | `active` to run immediately, or `stopped` to keep it defined but off. |
+| `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., general OPC UA debug logging via the `OPC_DEBUG=debug` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. |
+| `protocolConverterServiceConfig.location` | The bridge's levels. The instance location (`agent.location`) plus these levels is the bridge location. Optional, but useful to identify per-machine data. |
+| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow: subscribes to UNS topics and writes to the external system, set with `source`, `processing` and `destination`. |
+| `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](../../reference/variables.md#user-defined-variables) for details. |
 
 **Location Path:**
 ```yaml
@@ -216,27 +137,16 @@ variables:
   SCAN_RATE: "1s"          # Custom variable {{ .SCAN_RATE }}
 ```
 
-**Connection Monitoring:**
-```yaml
-connection:
-  nmap:
-    target: "{{ .IP }}"    # Uses IP variable
-    port: "{{ .PORT }}"    # Uses PORT variable
-```
-
-## Metrics
+### Metrics
 
 The Management Console shows each bridge's message counts. Open the bridge and select **Metrics** (see [View Metrics](#view-metrics)). The view shows messages received and sent, errors, connection status and latency for the bridge's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry per-bridge message counts. It carries the bridge's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs bridges and what the labels and the state values mean.
 
-Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels:
+Bridges run on FSMv1 and use the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). For a bridge named `mixing-station`, the series carry these labels. The labels of the connection are in [Connection Probe](connection-probe.md#metrics), and the labels of the read flow are in [Read Flow](read-flow.md#metrics).
 
 | Part of the bridge | `component` | `instance` |
 |---|---|---|
 | The bridge | `protocol_converter_instance` | `mixing-station` |
-| Its connection | `connection_instance` | `protocolconverter-mixing-station` |
-| Its read flow | `dataflow_component_instance` | `read-protocolconverter-mixing-station` |
 | Its write flow | `dataflow_component_instance` | `write-protocolconverter-mixing-station` |
-| The Benthos process of its read flow | `benthos_instance` | `dataflow-read-protocolconverter-mixing-station` |
 | The Benthos process of its write flow | `benthos_instance` | `dataflow-write-protocolconverter-mixing-station` |
 
 To alert when a bridge has not been active for 5 minutes, use this rule with `for: 5m`. In Prometheus, write `exported_instance` for `instance`, or keep `instance` if the scrape job sets `honor_labels: true`:
@@ -245,15 +155,7 @@ To alert when a bridge has not been active for 5 minutes, use this rule with `fo
 umh_core_service_current_state{component="protocol_converter_instance"} != 3 != 4 != 0
 ```
 
-For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or restart the container. The connection reports errors and reconcile time, but no state. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
-
-### Connection Probe
-
-Before umh-core starts a bridge, it checks that the external system answers on its host and port. This connection probe runs on FSMv2. The `NMAP_BACKEND` environment variable that once switched it to FSMv1 is ignored and can be removed.
-
-When the external system stops answering, the bridge's own state changes. It stays in `starting_connection` if it has not started yet. It moves to `degraded_connection` if it was already running. To see whether the external system answers, read the bridge's state.
-
-The connection probe's series carry a `hierarchy_path` that ends in `connection-protocolconverter-<bridge>-001(nmap)`.
+For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 when idle and 0 when stopped. The rule does not fire for a bridge that is idle or stopped. A stopped bridge is one you stopped on purpose. When you delete a bridge, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name by adding `exported_instance!="<deleted bridge>"` to the selector, or restart the container. The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
 ## Next Steps
 

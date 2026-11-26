@@ -103,7 +103,7 @@ A panic is a crash inside umh-core that umh-core caught and recovered from. When
 | `umh_fsmv2_circuit_open` | gauge | 1 on a component and on every component above it, up to the top of the tree, while a component below has stopped after repeated panics. The component that panicked shows up in `umh_fsmv2_panic_recovery_total`. The series appears the first time the circuit opens. |
 | `umh_fsmv2_panic_recovery_total` | counter | Panics, by component. Label `panic_type` is `error_panic`, `string_panic` or `unknown_panic`. A panic inside an action is counted as `status="panic"` on `umh_fsmv2_action_execution_duration_seconds` instead. |
 
-Any increase of `umh_fsmv2_panic_recovery_total` is a defect in umh-core. Report it to UMH support.
+Any increase of `umh_fsmv2_panic_recovery_total` is a defect in umh-core. Report it through [Get Help](../../../get-help.md).
 
 ### Configuration errors
 

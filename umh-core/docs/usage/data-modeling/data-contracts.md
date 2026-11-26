@@ -53,7 +53,7 @@ Access configuration via: Instances → Select instance → `...` → Config Fil
 ### Basic Structure
 
 ```yaml
-datacontracts:
+dataContracts:
   - name: _pump_v1          # Contract name (used in bridges)
     model:
       name: pump            # References a data model
@@ -62,11 +62,7 @@ datacontracts:
 
 ### Naming Convention
 
-Contracts follow the pattern `_modelname_version`:
-- Always start with underscore
-- Include model name
-- End with version number
-- Examples: `_pump_v1`, `_temperature_sensor_v2`, `_workorder_v1`
+A contract is named `_<model>_v<version>`, such as `_pump_v1`, `_temperature_sensor_v2` or `_workorder_v1`. Only the built-in contracts `_raw` and `_historian` have no version. [Topic Convention](../unified-namespace/topic-convention.md#data-contract) explains where the contract sits in a topic.
 
 ## Enforcement Mechanism
 
@@ -108,8 +104,8 @@ Result:
 
 ### The Special _raw Contract
 
-```yaml
-# No explicit definition needed - always available
+```javascript
+// No explicit definition needed - always available
 msg.meta.data_contract = "_raw";
 ```
 
@@ -121,7 +117,7 @@ msg.meta.data_contract = "_raw";
 ### Model-Based Contracts
 
 ```yaml
-datacontracts:
+dataContracts:
   - name: _pump_v1
     model:
       name: pump
@@ -147,7 +143,7 @@ datacontracts:
 
 ```yaml
 # Model definition
-datamodels:
+dataModels:
   - name: temperature-sensor
     version:
       v1:
@@ -156,13 +152,16 @@ datamodels:
             _payloadshape: timeseries-number
 
 # Contract (auto-created or manual)
-datacontracts:
+dataContracts:
   - name: _temperature-sensor_v1
     model:
       name: temperature-sensor
       version: v1
+```
 
-# Usage in bridge
+Usage in a bridge:
+
+```javascript
 msg.meta.data_contract = "_temperature-sensor_v1";
 msg.meta.tag_name = "celsius";
 msg.payload = 23.5;
@@ -174,7 +173,7 @@ Stream processors don't use contracts directly - they reference models:
 
 ```yaml
 templates:
-  streamProcessors:
+  streamProcessor:
     pump_aggregator:
       model:           # Direct model reference
         name: pump

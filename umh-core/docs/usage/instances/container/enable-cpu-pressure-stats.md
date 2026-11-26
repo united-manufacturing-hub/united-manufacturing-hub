@@ -76,7 +76,6 @@ If the file is still missing, run these checks on the machine, outside the conta
    `cgroup2fs` means the container runs without cgroup v2. Set a CPU limit on the container instead.
 4. If the container prints `cgroup2fs`, the machine and the container both support pressure, and
    UMH Core should read it. Set a CPU limit on the container for now, and send the output of the
-   three checks above to us on [Discord](https://discord.com/invite/F9mqkZnm9d) or through your usual UMH
-   contact.
+   three checks above to us; [Get Help](../../../get-help.md) lists the ways to reach us.
 
 A CPU limit does not make pressure readable, so the `Pressure` line keeps reading `not measured`.

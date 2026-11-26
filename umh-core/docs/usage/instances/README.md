@@ -47,7 +47,7 @@ Each card is explained on the page of its component:
 | Communicator | [Communicator](communicator/README.md#the-communicator-card) |
 | Data Flows | [Data Flows](../data-flows/README.md#the-data-flows-card) |
 | Redpanda | [Redpanda](../unified-namespace/redpanda.md#redpanda-card) |
-| Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md#topic-browser-card) |
+| Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md#the-topic-browser-card) |
 
 **View Instance Config** opens the instance's `config.yaml`. It appears when the instance's UMH Core version supports it. See [Edit the Config File](edit-the-config-file.md).
 

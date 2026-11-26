@@ -2,74 +2,112 @@
 
 > **Prerequisite:** Understand the [UNS concept](README.md) and see it in action via [Getting Started](../../getting-started/).
 
-Every piece of data in the UNS has a unique address that tells you exactly where it came from and what it represents.
+Every message in the Unified Namespace has a topic: an address that says where the data comes from and what it is. This page explains the parts of a topic and how to write a topic pattern, a regular expression that matches topics. Pages of other features link here and add only their own rules.
 
-## See It In Action
+## The parts of a topic
 
-Here's how real PLC data appears in the Topic Browser:
+This topic carries the motor current of a pump on line 1 of the packaging area in Cologne:
 
-![Topic Browser showing DB1.DW20](../../getting-started/images/2-topic-browser-DB1.DW20.png)
-
-The topic `umh.v1.demo.DefaultArea.DefaultProductionLine.SIEMENS-S7._raw.DB1.DW20` tells us:
-- **WHERE**: demo → DefaultArea → DefaultProductionLine → SIEMENS-S7
-- **WHAT**: `_raw` (unprocessed device data)
-- **WHICH**: DB1.DW20 (specific PLC register)
-
-## The Pattern
-
-```
-umh.v1.<location_path>.<data_contract>[.<virtual_path>].<name>
+```text
+umh.v1.acme.cologne.packaging.line_1._pump_v1.motor.current
 ```
 
-### Breaking It Down
+It has five parts:
 
-| Part | Example | Purpose |
-|------|---------|---------|
-| `umh.v1` | Always `umh.v1` | Version prefix |
-| `location_path` | `enterprise.site.area.line` | Physical/logical hierarchy |
-| `data_contract` | `_raw` or `_pump_v1` | Data structure type |
-| `virtual_path` | `motor.diagnostics` | Optional folder organization |
-| `name` | `temperature` or `work_order.create` | The data point or action |
-
-## Location Path - WHERE
-
-The location path organizes your physical and logical structure:
-
-- **Level 0 (Required)**: Enterprise - your company
-- **Level 1**: Site - physical location
-- **Level 2**: Area - department or zone
-- **Level 3**: Line - production line or cell
-- **Level 4**: Machine - specific equipment
-
-You can use ISA-95, KKS, or any naming standard. The only rule: level 0 is mandatory.
-
-Example: `umh.v1.acme.chicago.packaging.line1.filler._raw.speed`
-
-## Data Contract - WHAT
-
-The contract defines the data structure:
-
-- **`_raw`**: Unvalidated device data for exploration
-- **`_devicemodel_v1`**: Validated device models (e.g., `_pump_v1`, `_cnc_v1`)
-- **`_businessmodel_v1`**: Business KPIs and aggregations (e.g., `_maintenance_v1`, `_production_v1`)
-
-Contracts always start with underscore. They're your data's "type system."
-
-## Virtual Path - Organization
-
-Optional segments for grouping related data:
-
-```
-umh.v1.acme.plant._pump_v1.motor.diagnostics.vibration
-                          └─────┬─────┘
-                          Virtual path for organization
+```mermaid
+flowchart LR
+    P["<b>umh.v1</b><br/>Prefix"]
+    subgraph L["Location path"]
+        L0["<b>acme</b><br/>Level 0"]
+        L1["<b>cologne</b><br/>Level 1"]
+        L2["<b>packaging</b><br/>Level 2"]
+        L3["<b>line_1</b><br/>Level 3"]
+        L0 --> L1 --> L2 --> L3
+    end
+    C["<b>_pump_v1</b><br/>Data contract"]
+    V["<b>motor</b><br/>Virtual path<br/>optional"]
+    N["<b>current</b><br/>Name"]
+    P --> L0
+    L3 --> C --> V --> N
 ```
 
-## Name - WHICH
+| Part | Example | Rule |
+|---|---|---|
+| Prefix | `umh.v1` | Required. Always `umh.v1`. |
+| Location path | `acme.cologne.packaging.line_1` | Required. One or more levels, starting at level 0. |
+| Data contract | `_pump_v1` | Required. One segment: the first one that starts with `_`. `_` alone is not a data contract. |
+| Virtual path | `motor` | Optional. Any number of segments between the data contract and the name. |
+| Name | `current` | Required. One segment, at the end of the topic. |
 
-The specific data point or action:
-- **Time-series**: `temperature`, `pressure`, `running`
-- **Relational**: `work_order.create`, `batch.complete`
+A segment is one value between dots. A level is a segment of the location path. A segment is never empty, so a topic has no `..`.
+
+## Location path
+
+The location path says where the data comes from. It has one or more levels, numbered from level 0. Only level 0 is required.
+
+You decide what each level stands for. ISA-95, KKS or any other naming standard works. With ISA-95, the levels are enterprise, site, area, line and machine, as in the topic above. A level of the location path does not start with `_`, because the first segment that starts with `_` is the data contract.
+
+The topics of a bridge start with its **bridge location**: the instance location plus the bridge's levels. The bridge's levels extend the instance location and never overwrite its levels. In a bridge, `{{ .location_path }}` holds the bridge location in dotted form, such as `acme.cologne.packaging`. [Bridges](../data-flows/bridges.md#configuration) explains where the levels are set.
+
+## Data contract
+
+The data contract says what the data is and which shape its payload has. It always starts with `_`.
+
+- `_raw` and `_historian` are built in and have no version. `_raw` holds unvalidated device data, for exploring a device.
+- Every other data contract belongs to one version of a data model and is written `_<model>_v<version>`, such as `_pump_v1`. The Management Console creates it when you create a version of a data model.
+
+A data contract is an entry under `dataContracts:` in `config.yaml`. It names the data model and the one version of it that the contract enforces:
+
+```yaml
+dataContracts:
+  - name: _pump_v1
+    model:
+      name: pump
+      version: v1
+```
+
+[Data Contracts](../data-modeling/data-contracts.md) explains how the contract is enforced.
+
+## Virtual path and name
+
+Everything after the data contract is defined by the data model. For `_raw` and `_historian`, which have no data model, the bridge or flow that publishes the message defines it. The name is the segment at the end of the topic. The segments between the data contract and the name are the virtual path, which groups related names like folders.
+
+The name works for both kinds of data:
+
+- **Time-series data**: the name is one measurement. In `_pump_v1.motor.current`, `motor` is the virtual path and `current` is the name.
+- **Relational data**: the name is a whole record, such as `order`, or an action on it, such as `create`. In `_maintenance_v1.work_order.create`, `work_order` is the virtual path and `create` is the name.
+
+## Characters
+
+A segment may contain the letters `a`–`z` and `A`–`Z`, digits, `_` and `-`. Any other character is rejected, such as `ü` or a space.
+
+Write segments in lowercase, with `_` between words, such as `line_1` and `inlet_temperature`. In `_raw`, segments taken from a device address keep the spelling of the address. The S7 address `DB1.DW20` becomes the virtual path `DB1` and the name `DW20`.
+
+## Topic patterns
+
+A **topic** is one concrete address, such as the one above. A **topic pattern** is a regular expression that matches topics. The `uns` input of a stand-alone flow subscribes to topics with topic patterns.
+
+Topic patterns use the [RE2 syntax](https://pkg.go.dev/regexp/syntax) of Go's regular expression engine. Regular expression engines differ, so a pattern written for another engine may fail. RE2 has no lookahead such as `(?=…)`, no lookbehind and no backreferences such as `\1`.
+
+A topic pattern matches a topic when it matches any part of it. These parts of the syntax matter most:
+
+| Syntax | Meaning |
+|---|---|
+| `^` | The start of the topic. Without `^` at the start, the pattern also matches topics that only contain it. |
+| `\.` | A literal dot. A plain `.` matches any character, so `umh.v1.acme` also matches `umhxv1xacme`. Write every dot as `\.`. |
+| `(?:[^._][^.]*\.)*` | Any number of location levels, including none. `[^._]` keeps the data contract out of the match. |
+| `(?:[^.]+\.)*` | Any number of virtual path segments, including none. |
+| `_pump_v(?:1\|2)` | Versions 1 and 2 of the data model `pump`, each version listed by its number. |
+| `$` | The end of the topic. Use it to match one name only. |
+
+These patterns match topics at the location path `acme.cologne.packaging`:
+
+| Matches | Topic pattern |
+|---|---|
+| All `_pump_v1` topics at `acme.cologne.packaging` itself | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.` |
+| All `_pump_v1` topics at `acme.cologne.packaging` and every level below it | `^umh\.v1\.acme\.cologne\.packaging\.(?:[^._][^.]*\.)*_pump_v1\.` |
+| Only the name `pressure`, with or without a virtual path | `^umh\.v1\.acme\.cologne\.packaging\._pump_v1\.(?:[^.]+\.)*pressure$` |
+| Versions 1 and 2 of `pump` | `^umh\.v1\.acme\.cologne\.packaging\._pump_v(?:1\|2)\.` |
 
 ## Next Steps
 
