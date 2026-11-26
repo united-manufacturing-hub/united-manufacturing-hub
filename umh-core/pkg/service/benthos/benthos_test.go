@@ -52,7 +52,7 @@ var _ = Describe("Benthos Service", func() {
 		// Add the service to the S6 manager
 		err := service.AddBenthosToS6Manager(context.Background(), mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 			MetricsPort: 4195,
-			DebugLevel: false,
+			DebugLevel:  false,
 		}, benthosName)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -119,7 +119,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should generate valid YAML", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test")
@@ -140,7 +140,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should set OPC_DEBUG=debug when DebugLevel is true", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: true,
+					DebugLevel:  true,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-debug")
@@ -151,7 +151,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should not set OPC_DEBUG when DebugLevel is false", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-info")
@@ -162,7 +162,7 @@ var _ = Describe("Benthos Service", func() {
 			It("should not set OPC_DEBUG when DebugLevel is false (default)", func() {
 				cfg := &benthosserviceconfig.BenthosServiceConfig{
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test-empty")
@@ -195,7 +195,7 @@ var _ = Describe("Benthos Service", func() {
 						"memory": map[string]interface{}{"limit": "10MB"},
 					},
 					MetricsPort: 4195,
-					DebugLevel: false,
+					DebugLevel:  false,
 				}
 
 				s6Config, err := service.GenerateS6ConfigForBenthos(cfg, "test")
@@ -488,8 +488,9 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
 				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 1 output errors"))
 			})
 
 			It("should ignore connection failures", func() {
@@ -519,8 +520,9 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
 				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 1 processor errors"))
 			})
 
 			It("should detect errors in any processor", func() {
@@ -537,6 +539,45 @@ var _ = Describe("Benthos Service", func() {
 				}
 				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
 				Expect(isMetricsErrorFree).To(BeFalse())
+			})
+
+			// The reason used to carry the count of whichever processor map
+			// iteration visited first, 6 or 6478 here. Neither equals the sum.
+			It("should report the summed processor error count", func() {
+				metrics := benthos_monitor.BenthosMetrics{
+					Metrics: benthos_monitor.Metrics{
+						Process: benthos_monitor.ProcessMetrics{
+							Processors: map[string]benthos_monitor.ProcessorMetrics{
+								"root.pipeline.processors.0":                       {Error: 0},
+								"root.pipeline.processors.3.switch.1.processors.1": {Error: 6478},
+								"root.pipeline.processors.3.switch.2.processors.0": {Error: 0},
+								"root.pipeline.processors.3.switch.6.processors.0": {Error: 6},
+							},
+						},
+					},
+				}
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 6484 processor errors"))
+			})
+
+			It("should report output errors before processor errors", func() {
+				metrics := benthos_monitor.BenthosMetrics{
+					Metrics: benthos_monitor.Metrics{
+						Outputs: map[string]benthos_monitor.OutputInstance{
+							"root.output": {Error: 2},
+						},
+						Process: benthos_monitor.ProcessMetrics{
+							Processors: map[string]benthos_monitor.ProcessorMetrics{
+								"proc1": {Error: 5},
+								"proc2": {Error: 7},
+							},
+						},
+					},
+				}
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 2 output errors"))
 			})
 		})
 	})
@@ -618,14 +659,14 @@ var _ = Describe("Benthos Service", func() {
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup initial configuration
 			initialConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"urls":   []string{"tcp://localhost:1883"},
@@ -640,7 +681,7 @@ var _ = Describe("Benthos Service", func() {
 			// Setup updated configuration with different input
 			updatedConfig = &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 				Input: map[string]interface{}{
 					"mqtt": map[string]interface{}{
 						"urls":   []string{"tcp://localhost:1883"},
@@ -841,7 +882,7 @@ logger:
 			// Add the service to the S6 manager
 			err := service.AddBenthosToS6Manager(ctx, mockSvcRegistry.GetFileSystem(), &benthosserviceconfig.BenthosServiceConfig{
 				MetricsPort: 4195,
-				DebugLevel: false,
+				DebugLevel:  false,
 			}, benthosName)
 			Expect(err).NotTo(HaveOccurred())
 

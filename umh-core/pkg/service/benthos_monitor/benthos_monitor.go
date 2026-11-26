@@ -189,6 +189,17 @@ func (m Metrics) OutputErrorTotal() int64 {
 	return total
 }
 
+// ProcessorErrorTotal returns the sum of Error across every processor path.
+// A message that fails in two processors counts twice.
+func (m Metrics) ProcessorErrorTotal() int64 {
+	var total int64
+	for _, proc := range m.Process.Processors {
+		total += proc.Error
+	}
+
+	return total
+}
+
 // HealthCheck contains information about the health of the Benthos service
 // https://docs.redpanda.com/redpanda-connect/guides/monitoring/
 type HealthCheck struct {
