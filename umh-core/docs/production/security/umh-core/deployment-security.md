@@ -282,4 +282,4 @@ The following security capabilities and documentation require an enterprise lice
 
 Enterprise license provides compliance documentation and SLA-backed support, not additional security features.
 
-For enterprise licensing information, contact the United Manufacturing Hub sales team.
+For enterprise licensing information, see [Commercial and account requests](../../../get-help.md#commercial-and-account-requests) on Get Help.

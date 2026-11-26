@@ -1,0 +1,3 @@
+kind: fixes
+body: 'OPC UA input and output: a bridge now rejects a replayed or out-of-order message from the server and reconnects, as the OPC UA specification requires. Conforming servers are unaffected. If a bridge keeps reconnecting to one server after this update while other servers stay connected, that server may break the rule; there is no setting to turn the check off, so please tell us the server and its firmware'
+time: 2026-11-18T21:00:02.000000+01:00

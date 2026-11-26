@@ -12,6 +12,10 @@ Each page has one [Diátaxis](https://diataxis.fr/) type: tutorial, how-to, refe
 
 Unless a page says otherwise, its primary reader is the person who installed and runs the instance ([Who we build for](https://engineering.umh.app/product/who-we-build-for.md)). For Bridges it is the OT team. For Metrics and for the steps on the Docker host it is IT. Those pages open with what they explain and what access the steps need, for example "This page explains how to collect UMH Core metrics with Prometheus. The steps need access to port 8080 on the Docker host."
 
+## Where readers get help
+
+The [Get Help](get-help.md) page is the only page that names where readers turn for help: technical support (Enterprise support and the community on Discord), security reports, and commercial requests. Do not restate these routes or their addresses on another page; link to Get Help. A page's own instructions stay on it: what to collect before asking, any safety warning, and the commercial contact of a licensing or billing step, such as the contact form on the billing page.
+
 ## Usage pages
 
 The usage pages mirror the instance details page in the Management Console. That page shows one card per component: Agent, Container, Communicator, Data Flows, Redpanda and Topic Browser. Each card has its own usage page. The Data Flows card leads to the Data Flows section, with one page each for Bridges, Stand-alone Flows and Stream Processors.
@@ -21,20 +25,29 @@ Subpages follow the component's internal structure in umh-core, the FSMv1 or FSM
 A component page, such as Bridges, and a part page, such as Read Flow or Write Flow, hold no steps. Pages written before this rule, Bridges among them, still do. Move their steps when you rework the page, and do not copy their shape. Leave out any section that doesn't apply, and keep this order:
 
 1. What the component or part is, in the primary reader's words, with no internals.
-2. What the Management Console shows. One sentence on what a status means is fine. The steps to fix it go to a troubleshooting child page.
-3. The rules of the component or part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this section.
-4. `## Reference`, the last section of the page, with these subsections. Only a short list of next steps may follow it.
+2. What the Management Console shows: the card and its fields.
+3. `## <Name> states`: every state or status the badge can show, one table row each, with what it means. One sentence on what a status means is fine. The steps to fix it go to a troubleshooting child page.
+4. `## <Name> thresholds`: the values at which a state changes, with the value it degrades at and the value it recovers at. Leave the section out when the component has no thresholds. A reference child page that covers one health check in detail, such as CPU Health, links here for the values.
+5. The rules of the component or part: what it accepts, what it rejects and how it behaves. Details for IT or support go last in this section.
+6. `## Reference`, the last section of the page, with these subsections. Only a short list of next steps may follow it.
    - `### Configuration`: the `config.yaml` keys and environment variables. For each, give the default and whether a change needs a restart or a new container (`docker restart` keeps the old environment).
-   - `### Metrics`: what the component or part tells the operator, one or two alert queries, and a link to where the metrics are defined in code. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Do not list every series, because names and help texts change with the code. Explain the frameworks, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there.
+   - `### Metrics`: every series the component or part reports, in a table with its name, type and what it reports, then one or two alert queries and a link to where the series are defined in code. Take the list from the code and check it against the `/metrics` output of a running instance. Link to the "Read the metrics" section of `usage/instances/agent/metrics.md` with a path relative to the current page. Explain the frameworks, the standard series every framework component reports, the `exported_instance` rename, Benthos and the `-1` sub-state once, on the agent Metrics page, and link there.
 
 Do not describe known defects on any page. Add the docs update to the ticket that fixes them.
+
+Document what the reader cannot work out alone. State a general rule with the reason behind it instead of listing every case, and leave out what follows from it.
 
 ### Child pages
 
 - Steps live in a guide, a child of the part the steps change. A guide that changes several parts, such as creating a bridge, is a child of the component.
 - A troubleshooting page is a child of the page whose screen shows the symptom.
-- The title tells the kind of page, because the sidebar has no group headings: a noun is something to understand ("Write Flow"), an imperative is something to do ("Set up a write flow"), a symptom is something that went wrong ("Bridges Do Not Start").
-- Order the children the same way: parts first, then explanations, then guides, then troubleshooting.
+- A reference child page holds the detail of one part of the page above it that is too long for that page, such as CPU Health below Container. It follows the same rules as a usage page: no steps and no reasoning about why the design is the way it is.
+- The title tells the kind of page, because the sidebar has no group headings: a noun is something to understand or look up ("Write Flow", "CPU Health"), an imperative is something to do ("Set up a write flow"), a symptom is something that went wrong ("Bridges Do Not Start").
+- Order the children the same way: parts and reference pages first, then explanations, then guides, then troubleshooting.
+
+## Images
+
+Add an image as a Markdown image, `![alt text](path)`, not as an HTML `<figure>`. The alt text says what the screenshot shows. GitBook shows a Markdown image at the full width of the page, so a screenshot of a small UI element includes enough of the screen around it to read well at that width.
 
 ## Config snippets
 

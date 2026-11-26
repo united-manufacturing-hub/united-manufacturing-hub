@@ -1,0 +1,3 @@
+kind: fixes
+body: 'OPC UA input and output with `autoReconnect` enabled: stopping or redeploying a bridge while it reconnects no longer risks a crash or closing the wrong connection, and no longer leaves a socket open when the server accepts the TCP connection but never answers the OPC UA handshake'
+time: 2026-11-18T21:00:09.000000+01:00

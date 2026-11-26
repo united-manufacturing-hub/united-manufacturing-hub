@@ -1,98 +1,211 @@
 # Container
 
-The Container card on the instance details page shows the CPU, memory and disk of the UMH Core container. When one of them crosses its threshold, the card shows Degraded. New bridges then wait to start.
+The container is the Docker container that UMH Core runs in. Its CPU, memory and disk are shared by every bridge, flow and Redpanda. When one of them crosses its threshold, the Container card shows Degraded, and new bridges wait to start.
 
 ## The Container card
 
-The CPU, Memory and Disk rows turn red when that resource is degraded.
+The Container card on the instance details page shows the CPU, memory and disk of the container, its CPU architecture and the Hardware ID of the installation.
 
 | Field | Shows |
 |---|---|
-| Status badge | The health of the container. Hover over it to see the reason. See [When the Container shows Degraded](#when-the-container-shows-degraded). |
+| Status badge | The health of the container. See [Container status](#container-status). |
 | CPU | The CPU usage. See [The CPU row](#the-cpu-row). |
-| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the host. |
+| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the machine. With the [memory monitor](#memory-with-the-memory-monitor), the row shows 60-second means. With a memory limit, it shows the container's memory against the limit, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. Without a limit, it shows the used memory of the whole machine against the machine's memory. |
 | Disk | The used and total space of the `/data` volume, and the percentage. |
 | Architecture | The CPU architecture UMH Core runs on, `amd64` or `arm64`. |
 | Hardware ID | The ID of this installation. UMH Core creates it on the first start and stores it in `/data/hwid`. It stays the same as long as the `/data` volume is kept. See [Container Layout](../../../reference/container-layout.md#hwid). |
 
-## When the Container shows Degraded
+The CPU, Memory and Disk rows turn red when that resource is degraded. The **S6 Logs** button is not available yet.
 
-The container shows Degraded when the CPU, the memory or the disk is degraded. The badge reason lists one line per degraded resource, such as `Memory degraded: Memory utilization critical`.
+### The CPU row
 
-| Resource | Degraded at | Reason line |
+From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the container's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. In this label, host means the machine. When the machine's busy cores cannot be measured, it falls back to the container's own usage. [CPU Health: With and without a CPU limit](cpu-health.md#with-and-without-a-cpu-limit) explains the difference. The info button next to it shows the readings of the container and the machine, which [CPU thresholds](#cpu-thresholds) describes. The row turns red while the [CPU status](#cpu-status) is degraded, and reads `N/A` when umh-core cannot measure the CPU.
+
+![The CPU info button of the Container card on an instance without a CPU limit](../images/container-cpu-info.png)
+
+The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details) appear in the badge reason of the Container card. While the CPU is degraded, the reason line starts with `CPU degraded:`, for example `CPU degraded: CPU limited`. While the whole container is Active, the reason is the CPU status itself, for example `CPU healthy. …`.
+
+![The badge reason of an Active Container card with the CPU status and its Technical Details](../images/container-badge-reason.png)
+
+## Container states
+
+### Container status
+
+The container shows Degraded when the CPU, the memory or the disk is degraded. The badge reason then lists one line per degraded resource. [Container thresholds](#container-thresholds) gives the values.
+
+| Badge | Reason | What it means |
 |---|---|---|
-| Memory | 80% of the total. With the [memory monitor preview](#memory-monitor-preview), memory also degrades for other causes. | `Memory degraded: Memory utilization critical` |
-| Disk | 85% of the `/data` volume | `Disk degraded: Disk utilization critical` |
-| CPU | See [The CPU row](#the-cpu-row) | `CPU degraded: …` |
+| Active | The [CPU status](#cpu-status), for example `CPU healthy. …` | CPU, memory and disk are healthy. Without a CPU status, the reason is `Container operating normally`. |
+| Degraded | `Memory degraded: Memory utilization critical` | The memory is above its threshold. With the memory monitor, the line names the cause, see [Memory with the memory monitor](#memory-with-the-memory-monitor). |
+| Degraded | `Disk degraded: Disk utilization critical` | The `/data` volume is above its threshold. |
+| Degraded | `CPU degraded: …`, followed by the [CPU status](#cpu-status) | CPU health is degraded. |
+| Degraded | `Container degraded` | A resource is degraded but gave no reason. |
+| Neutral | `Container status unknown` | umh-core has no reading of the container yet, for example in the first seconds after a start. |
 
-Memory from 70% and disk from 75% count as a warning. The badge stays Active and does not show the warning.
+### CPU status
 
-### What happens while the container is degraded
+| Status | What it means |
+|---|---|
+| **CPU healthy** | The container has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". |
+| **CPU: starting up.** | umh-core has not measured the CPU yet. This shows in the first seconds after a start. |
+| **CPU limited** | The container hit its CPU limit and was paused until the next scheduling period, for example in 12% of periods over the last minute. Work is being delayed. |
+| **CPU contention** | Tasks inside the container spent time waiting for a free CPU core, for example 23% of the last minute. |
+| **CPU taken by the server** | Other virtual machines on the same physical server took CPU this container needed. |
+| **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the container is at its CPU limit. The status message says which. |
+
+Every status except **CPU healthy** means CPU health is degraded.
+
+When no CPU limit is set and the operating system does not report CPU pressure stats, **CPU healthy** adds a line that starts with `Limited visibility:`. umh-core then cannot fully tell when work waits for a free core. [Enable CPU pressure stats](enable-cpu-pressure-stats.md) turns on full monitoring.
+
+If umh-core cannot read a file it needs to measure the CPU, the CPU health is degraded and the message names the file, for example `poll error: CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`.
+
+### CPU Technical Details
+
+Below the status, in the same badge reason, a Technical Details section lists every signal umh-core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy container states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
+
+```text
+CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can use 1.5 more before it is marked degraded.
+
+Technical Details:
+Instance headroom 1.5 cores = 2 total - 0.3 used - 0.2 reserved (degrades below 0).
+Instance usage not measured (throttling already shows whether this instance is hitting its CPU limit, so this rough estimate is not needed).
+Throttling 2% (degrades above 5%).
+Pressure 4% (degrades above 20%).
+Steal not measured (this instance is not running in a virtual machine, so no other virtual machine can take its CPU).
+```
+
+The headroom lines depend on the machine. A machine whose core count is readable also gets a Machine headroom line, which this example leaves out. A container with no CPU limit gets no Instance headroom line. Every other signal always has a line, even when this machine cannot measure it.
+
+A signal that is already past its threshold shows what would clear it instead, for example `Throttling 12% (recovers below 3%)`. A signal this machine cannot measure reads `not measured` with its reason, as the Steal line above does.
+
+### Memory with the memory monitor
+
+With the [memory monitor](memory-health.md) on, memory degrades for one of four causes. The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`. [Memory Health](memory-health.md) explains the causes, and [Memory monitor thresholds](#memory-monitor-thresholds) gives their values.
+
+## Container thresholds
+
+### Memory and disk
+
+| Resource | Degrades | Recovers |
+|---|---|---|
+| Memory | above 80% of the total | at or below 80% |
+| Disk | above 85% of the `/data` volume | at or below 85% |
+
+With the memory monitor, [Memory monitor thresholds](#memory-monitor-thresholds) replaces the memory row.
+
+### CPU thresholds
+
+Each CPU signal degrades at one value and recovers at another. The two are held apart so the status does not flicker. Throttling, pressure, steal and usage are worse the higher they read, headroom the lower. All readings are 60-second figures. [CPU Health](cpu-health.md) explains how the signals combine into the CPU status.
+
+| Signal | Measures | Degrades | Recovers | Measured only when |
+|---|---|---|---|---|
+| **Throttling** | The share of scheduling periods, about 100 ms each, in which the kernel paused the container because it used up its CPU limit. A workload whose average looks fine can still be paused during bursts. | above 5% | below 3% | a CPU limit is set |
+| **Pressure** | The share of time in which tasks of the container waited for a CPU core, from Linux Pressure Stall Information (PSI, `some avg60`). See [CPU Contention While Cores Are Free](cpu-contention-while-cores-are-free.md). | above 20% | below 12% | the container can read `cpu.pressure` (see [Enable CPU pressure stats](enable-cpu-pressure-stats.md)) |
+| **Steal** | Time the hypervisor gave this machine's CPU to other virtual machines. A burstable cloud instance whose CPU credits ran out also reports its capped time as steal. | above 10% | below 6% | the machine is a virtual machine |
+| **Machine headroom** | The cores free on the whole machine, including the CPU that software outside UMH Core uses. | less than 1 core free | more than 1.5 cores free | the machine's core count is readable |
+| **Instance headroom** | The CPU the container can still use under its CPU limit. | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
+| **Instance usage** | The CPU the container uses. | at 70% | below 60% | no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured |
+
+Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a newly started container gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine the Steal line reads `not measured` with its reason.
+
+### Memory monitor thresholds
+
+With the [memory monitor](memory-health.md) on, each cause degrades at one value and recovers at a lower one.
+
+| Cause | Degrades | Recovers |
+|---|---|---|
+| `container-limit-full` | at 80% of the container's own memory limit, as a 60-second mean. Judged only when the container has a limit. | below 75% |
+| `host-memory-full` | at 80% of the machine's memory, as a 60-second mean | below 75% |
+| `memory-pressure` | above 20%: processes in the container waited for memory for more than 20% of the last minute | below 12% |
+| `oom-kill` | at 1 OOM kill in the container within the last hour | at 0 for a whole hour |
+
+## While the container is degraded
 
 A new bridge waits to start while CPU, memory or disk is degraded. Bridges that already run keep running. The reason of the waiting bridge starts with the same line as the reason on the Container card. See [Bridges do not start](../../data-flows/bridges-do-not-start.md).
 
-### What to do
-
-- **Memory**: raise the memory limit of the container, or remove bridges or flows. If the memory preview names `host-memory-full` as the cause (see [Memory monitor](#memory-monitor-preview)), the machine is out of memory. A higher container limit does not help. Free memory on the machine or add memory to it. The [Sizing Guide](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
-- **Disk**: free space on the `/data` volume, or shorten how long Redpanda keeps data. See [Disk](../../../production/sizing-guide.md#disk).
-- **CPU**: raise or remove the CPU limit of the container, or reduce the load. [CPU Health](cpu-health/README.md) lists what to do for each CPU status.
-
-If a bridge must start before the resource problem is fixed, use the emergency setting. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
-
-## The CPU row
-
-The CPU row shows the CPU Health of the instance, which [CPU Health](cpu-health/README.md) explains. When umh-core cannot measure the CPU, the row reads `N/A` in red. The container is then degraded, and the reason line says why the measurement failed.
-
-## Memory monitor (preview)
-
-The memory monitor is a preview. It is off by default. It turns on when the container is started with `-e USE_FSMV2_MEMORY_MONITOR=true`, and the gauges below then appear. umh-core reads the variable once at startup, and `docker restart` keeps the old environment, so changing it needs a new container (`docker rm`, then `docker run` with the volume). They use the same `umh_fsmv2_worker_<gauge name>` series and `hierarchy_path` label as the [CPU Health gauges](cpu-health/README.md#metrics), and they also keep their previous value on a tick that could not measure. On a tick that could not measure, the age of `memory_last_sample_unix` is the only thing that reveals the freeze.
-
-With the preview on, the instance's memory status comes from this reading. Memory counts as degraded while any of these causes holds:
-
-| Cause | Degraded from | Healthy again below | Gauge |
-|---|---|---|---|
-| `container-limit-full` | 0.8 (80%) of the container's own memory limit, as a 60s mean. Judged only when the container has a limit. Without one, `memory_avg_used_fraction` still shows the container's share of the machine's memory, but only `host-memory-full` judges | 0.75 | `memory_avg_used_fraction` while `memory_total_is_cgroup_limit` is 1 |
-| `host-memory-full` | 0.8 (80%) of the machine's memory, as a 60s mean | 0.75 | `memory_avg_host_used_bytes` / `memory_host_total_bytes` |
-| `memory-pressure` | 0.20: processes in the container waited for memory for 20% of the last minute | 0.12 | `memory_pressure_avg60_ratio` |
-| `oom-kill` | 1 OOM kill in the container within the last hour | 0 for a whole hour | `memory_oom_kills_last_hour` |
-
-Memory also counts as degraded, and bridges are held back, whenever no reading from the last three seconds is available.
-
-`memory-pressure` needs cgroup v2 with pressure stall information (PSI) enabled, the same as CPU pressure (see [CPU Health](cpu-health/README.md#enabling-cpu-pressure-stats)). `oom-kill` counts only the kills after umh-core started, so it does not report a kill that restarted umh-core itself. The status message also shows the kernel's OOM kill count since the container started, which includes those kills.
-
-### Memory measurements
-
-| Gauge | Reports |
-|---|---|
-| `memory_avg_used_bytes` | the 60s mean of the container's memory in use, in bytes |
-| `memory_total_bytes` | the limit that usage is judged against: the container's memory limit, or the machine's total memory when the container has none |
-| `memory_avg_used_fraction` | the 60s mean of the memory in use as a 0..1 fraction of `memory_total_bytes` |
-| `memory_avg_host_used_bytes` | the whole machine's 60s mean used memory, in bytes. It works like `cpu_avg_host_busy_cores` in [CPU Health](cpu-health/README.md#measurements) |
-| `memory_host_total_bytes` | the machine's total memory, in bytes |
-| `memory_pressure_avg60_ratio` | the kernel's PSI memory-some avg60 as a 0..1 fraction |
-| `memory_oom_kills_last_hour` | the OOM kills in the container within the last hour |
-| `memory_last_sample_unix` | the unix seconds of the last tick that measured |
-
-### Memory flags
-
-| Flag | Applies to |
-|---|---|
-| `memory_used_ring_active` | `memory_avg_used_bytes` and `memory_avg_used_fraction` |
-| `memory_host_ring_active` | `memory_avg_host_used_bytes` |
-| `memory_pressure_signal_ready` | `memory_pressure_avg60_ratio` |
-| `memory_oom_signal_ready` | `memory_oom_kills_last_hour` |
-| `memory_used_from_cgroup` | `memory_avg_used_bytes` |
-| `memory_total_is_cgroup_limit` | `memory_total_bytes` and `memory_avg_used_fraction` |
-
-The `_ring_active` and `_signal_ready` flags work like the [CPU flags](cpu-health/README.md#flags). `memory_host_ring_active` also reads 0 while the machine's memory is unreadable. `memory_pressure_signal_ready` stays 0 on cgroup v1 and without PSI. `memory_oom_signal_ready` reads 0 before the second read of the OOM counter and while that counter is unreadable.
-
-The two source flags say where a number came from, not whether to trust it. `memory_used_from_cgroup` reads 0 when the container's cgroup was unreadable. `memory_avg_used_bytes` and `memory_avg_used_fraction` then have no value, `memory_used_ring_active` reads 0, and the machine's gauges carry the reading. `memory_total_is_cgroup_limit` reads 0 when the container has no memory limit and usage is judged against the machine's total memory.
+[Container Shows Degraded](container-shows-degraded.md) lists what to do for each resource and each CPU status.
 
 ## Reference
 
+### Configuration
+
+The environment variable `USE_FSMV2_MEMORY_MONITOR` changes how umh-core judges the memory. umh-core reads it once at startup. To change it, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `USE_FSMV2_MEMORY_MONITOR` | `false` | `true` turns on the early access memory monitor, which [Memory Health](memory-health.md) explains. |
+| `USE_FSMV2_CPU` | none | Ignored from v0.45.4. The CPU status always comes from the CPU health check. On v0.44.46 to v0.45.3, `USE_FSMV2_CPU=false` turns the check off and applies the 70% CPU usage rule instead. Remove the variable from your `docker run` command. |
+
+The CPU health check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
+
 ### Metrics
 
-The Container card reports on port 8080 as `umh_container_*` gauges for CPU, memory and disk, plus `umh_container_health_status`, which holds the health per resource: 0 = Neutral, 1 = Active, 2 = Degraded. The label `component` is `overall`, `cpu`, `memory` or `disk`. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint and why Prometheus renames the `instance` label.
+The container reports these series on port 8080. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint and the labels.
+
+#### Container gauges
+
+These gauges carry the label `instance`. They report the figures on the Container card, except the CPU gauges: these always report the container's own usage. Without a CPU limit, the CPU row shows the whole machine instead, which `umh_fsmv2_worker_cpu_avg_host_busy_cores` reports.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_container_cpu_usage_mcores` | gauge | CPU usage in millicores (1000 = 1 core), as a 60-second mean. |
+| `umh_container_cpu_core_count` | gauge | CPU cores available to the container. |
+| `umh_container_cpu_load_percent` | gauge | CPU usage as a percentage of the container's cores, as a 60-second mean. |
+| `umh_container_memory_used_bytes` | gauge | Memory in use, in bytes. |
+| `umh_container_memory_total_bytes` | gauge | The memory total the usage is measured against, in bytes. |
+| `umh_container_memory_usage_percent` | gauge | Memory in use as a percentage of the total. |
+| `umh_container_disk_used_bytes` | gauge | Used space of the `/data` volume, in bytes. |
+| `umh_container_disk_total_bytes` | gauge | Size of the `/data` volume, in bytes. |
+| `umh_container_disk_usage_percent` | gauge | Used space of the `/data` volume as a percentage. |
+| `umh_container_health_status` | gauge | The health per resource: 0 = Neutral, 1 = Active, 2 = Degraded. The label `component` is `overall`, `cpu`, `memory` or `disk`. |
+
+#### CPU health gauges
+
+The CPU health check reports the readings behind the [CPU status](#cpu-status). These are FSMv2 component series whose `hierarchy_path` ends in `(cpu)`, see [FSMv2 metrics](../agent/metrics.md#fsmv2-metrics). Each gauge keeps its last value until the next successful measurement.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_cpu_avg_usage_cores` | gauge | The container's own CPU usage, in cores, as a 60-second mean. |
+| `umh_fsmv2_worker_cpu_avg_usage_fraction` | gauge | The container's own CPU usage as a fraction (0 to 1) of the cores it may run on. |
+| `umh_fsmv2_worker_cpu_throttle_ratio` | gauge | Throttling: the fraction (0 to 1) of scheduling periods in the last 60 seconds in which the kernel paused the container. |
+| `umh_fsmv2_worker_cpu_pressure_avg60_ratio` | gauge | Pressure: the `some avg60` value of the container's `cpu.pressure`, as a fraction (0 to 1). |
+| `umh_fsmv2_worker_cpu_avg_host_busy_cores` | gauge | The busy cores of the whole machine, as a 60-second mean. |
+| `umh_fsmv2_worker_cpu_host_headroom_cores` | gauge | Machine headroom: the cores free on the machine after the reserve. It is negative when the machine is full. |
+| `umh_fsmv2_worker_cpu_capacity_cores` | gauge | The cores the CPU status is judged against: the CPU limit when one is set, otherwise the core count. |
+| `umh_fsmv2_worker_cpu_reserve_cores` | gauge | The cores held back from the capacity as a reserve. |
+| `umh_fsmv2_worker_cpu_host_cpus` | gauge | The core count of the machine. It is higher than the container's when the container is pinned to some cores. |
+| `umh_fsmv2_worker_cpu_last_sample_unix` | gauge | The time of the last successful measurement, in Unix seconds. |
+| `umh_fsmv2_worker_cpu_usage_ring_active` | gauge | 1 once `cpu_avg_usage_cores` has at least two samples in its 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_cpu_host_busy_ring_active` | gauge | 1 once `cpu_avg_host_busy_cores` has at least two samples in its 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_cpu_throttle_signal_ready` | gauge | 1 while `cpu_throttle_ratio` has a reading. It stays 0 on a machine that reports no throttling, for example without a CPU limit. |
+| `umh_fsmv2_worker_cpu_pressure_signal_ready` | gauge | 1 while `cpu_pressure_avg60_ratio` has a reading. It stays 0 when the container cannot read `cpu.pressure`. |
+| `umh_fsmv2_worker_cpu_host_headroom_available` | gauge | 1 when machine headroom can be measured. It is 0 when the container is pinned to some cores or the machine's core count cannot be read. |
+| `umh_fsmv2_worker_cpu_host_busy_cores_available` | gauge | 1 when the last measurement could read the machine's busy cores. |
+
+A gauge whose flag reads 0 is not worth acting on. `cpu_host_headroom_cores` is worth acting on only while `cpu_host_headroom_available`, `cpu_host_busy_cores_available` and `cpu_host_busy_ring_active` all read 1. Steal has no gauge. The badge reason shows it.
+
+#### Memory monitor gauges
+
+With the [memory monitor](#memory-with-the-memory-monitor) on, it reports these series, with a `hierarchy_path` that ends in `(memory)`. Without it, they do not exist. Each gauge keeps its last value until the next successful measurement.
+
+| Name | Type | Reports |
+|---|---|---|
+| `umh_fsmv2_worker_memory_avg_used_bytes` | gauge | Memory in use, in bytes, as a 60-second mean. |
+| `umh_fsmv2_worker_memory_total_bytes` | gauge | The memory total the usage is judged against, in bytes. |
+| `umh_fsmv2_worker_memory_avg_used_fraction` | gauge | Memory in use as a fraction (0 to 1) of the total, as a 60-second mean. |
+| `umh_fsmv2_worker_memory_avg_host_used_bytes` | gauge | The memory in use on the whole machine, in bytes, as a 60-second mean. |
+| `umh_fsmv2_worker_memory_host_total_bytes` | gauge | The memory of the machine, in bytes. |
+| `umh_fsmv2_worker_memory_pressure_avg60_ratio` | gauge | The `some avg60` value of the container's `memory.pressure`, as a fraction (0 to 1). |
+| `umh_fsmv2_worker_memory_oom_kills_last_hour` | gauge | Processes in the container that the kernel stopped in the last hour because memory ran out. |
+| `umh_fsmv2_worker_memory_last_sample_unix` | gauge | The time of the last successful measurement, in Unix seconds. |
+| `umh_fsmv2_worker_memory_used_ring_active` | gauge | 1 once `memory_avg_used_bytes` and `memory_avg_used_fraction` cover a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_memory_host_ring_active` | gauge | 1 once `memory_avg_host_used_bytes` covers a full 60-second window, otherwise 0. |
+| `umh_fsmv2_worker_memory_pressure_signal_ready` | gauge | 1 while `memory_pressure_avg60_ratio` has a reading. It stays 0 on cgroup v1 or without pressure stall information. |
+| `umh_fsmv2_worker_memory_oom_signal_ready` | gauge | 1 while `memory_oom_kills_last_hour` has a reading. |
+| `umh_fsmv2_worker_memory_used_from_cgroup` | gauge | 1 when `memory_avg_used_bytes` is the container's own usage. |
+| `umh_fsmv2_worker_memory_total_is_cgroup_limit` | gauge | 1 when `memory_total_bytes` is the container's memory limit. |
+
+#### Alert queries
 
 To alert when the container degrades:
 
@@ -100,12 +213,18 @@ To alert when the container degrades:
 umh_container_health_status{component="overall"} == 2
 ```
 
-To alert on a single resource, for example the disk:
+When umh-core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. Before the first successful measurement, `umh_fsmv2_worker_cpu_last_sample_unix` does not exist. To alert when an instance's CPU health check has not measured for a minute, including when it never measured, compare it with the `up` series of the scrape job. Replace `umh-core` with the name of your scrape job, and use a `for:` duration of a few minutes so that the first seconds after a start do not fire:
 
 ```promql
-umh_container_disk_usage_percent{exported_instance="Core"} > 80
+time() - umh_fsmv2_worker_cpu_last_sample_unix{job="umh-core"} > 60
+or
+(
+  up{job="umh-core"} == 1
+  unless on (job, instance)
+  umh_fsmv2_worker_cpu_last_sample_unix{job="umh-core"}
+)
 ```
 
-`umh_container_cpu_usage_mcores` and `umh_container_cpu_load_percent` report the CPU health check's 60-second average of the container's own usage. `umh_container_cpu_core_count` is the number of CPU cores available to the container. If reading the CPU, the memory or the disk fails, these gauges keep their last value. An alert on them then keeps its last state.
+The second part fires for each reachable instance without the gauge. An instance that cannot be scraped needs its own alert on `up == 0`.
 
-The container monitor, the part of the agent that collects these values, also reports the standard [FSMv1 metrics](../agent/metrics.md#fsmv1-metrics) with `component="container_monitor"` and `instance="Core"`. The definitions are in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go). umh-core also exposes the `umh_fsmv2_worker_cpu_*` gauges, which [CPU Health](cpu-health/README.md#metrics) lists.
+The `umh_container_*` gauges are defined in [`pkg/service/container_monitor/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/service/container_monitor/metrics.go), and the CPU and memory gauges in [`fsmv2/deps/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/fsmv2/deps/metrics.go).

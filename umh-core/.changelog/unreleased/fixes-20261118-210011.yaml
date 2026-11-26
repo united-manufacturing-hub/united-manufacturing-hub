@@ -1,0 +1,3 @@
+kind: fixes
+body: 'OPC UA input: a source or server timestamp before 1678 or after 2262 no longer turns into an unrelated date; a wire value of -1, for example, became 2185-07-21. Timestamps up to the year 9999 are now read correctly. In `opcua_source_timestamp` and `opcua_server_timestamp`, a value at or before 1601-01-01 now reads `0001-01-01T00:00:00.000000Z`, and a value after 9999 reads `9999-12-31T23:59:59.000000Z`'
+time: 2026-11-18T21:00:11.000000+01:00

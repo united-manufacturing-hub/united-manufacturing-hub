@@ -1,0 +1,3 @@
+kind: fixes
+body: 'OPC UA input and output: connecting to a PLC whose clock is behind the bridge''s, for example one without a battery-backed clock or NTP, no longer times out with `unable to find instance for SecureChannelID`'
+time: 2026-11-18T21:00:06.000000+01:00

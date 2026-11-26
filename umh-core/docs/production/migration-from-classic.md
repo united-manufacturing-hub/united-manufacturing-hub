@@ -211,9 +211,7 @@ protocolConverter:
 
 ## Getting Help
 
-- **Migration Issues**: See [Troubleshooting Guide](../production/troubleshooting.md)
-- **Configuration Questions**: Check [Configuration Reference](../reference/configuration-reference.md)
-- **Community Support**: Visit [UMH Community Forum](https://community.umh.app)
+Configuration questions are covered by the [Configuration Reference](../reference/configuration-reference.md). To reach UMH, see [Get Help](../get-help.md).
 
 ## Next Steps
 

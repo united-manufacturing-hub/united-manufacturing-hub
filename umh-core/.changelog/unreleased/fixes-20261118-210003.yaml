@@ -1,0 +1,3 @@
+kind: fixes
+body: 'OPC UA input and output: a connection no longer keeps accepting messages secured with an expired security token when the server gives the channel and its token different ids ([CWE-324](https://cwe.mitre.org/data/definitions/324.html)). An attacker would still have needed that token''s keys, so this could not be exploited on its own'
+time: 2026-11-18T21:00:03.000000+01:00
