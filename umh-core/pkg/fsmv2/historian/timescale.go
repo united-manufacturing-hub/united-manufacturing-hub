@@ -279,6 +279,7 @@ const (
 )
 
 func (d Deps) report(ctx context.Context, tag failureTag, host string, err error) {
+	// a slow or cancelled database is not an error in umh-core, and the ready gauges already show it
 	if ctx.Err() != nil {
 		return
 	}
@@ -388,38 +389,68 @@ func (d Deps) forgetDatabaseFigures() {
 	d.databaseSize.clear()
 }
 
-// The error is logged and reported, not returned: a summary that cannot be
-// read is not a connection fault, and returning it would drive the worker
-// degraded for a database that is answering.
-func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, bool) {
-	return func() (timescalemetrics.Summary, bool) {
+// errReadNotStarted means the poll's deadline passed before the read could query the database.
+var errReadNotStarted = errors.New("the poll's deadline passed before the read started")
+
+// readStartError returns why a read cannot start, or nil when it can.
+func readStartError(ctx context.Context) error {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return ctx.Err()
+	}
+
+	if ctx.Err() != nil {
+		return errReadNotStarted
+	}
+
+	return nil
+}
+
+// the error reaches the cache only, so an unreadable summary does not mark the worker degraded
+func summaryReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (timescalemetrics.Summary, error) {
+	return func() (timescalemetrics.Summary, error) {
+		if err := readStartError(ctx); err != nil {
+			return timescalemetrics.Summary{}, err
+		}
+
 		summary, err := timescalemetrics.CollectSummary(ctx, db)
+		if err != nil && errors.Is(ctx.Err(), context.Canceled) {
+			return timescalemetrics.Summary{}, ctx.Err()
+		}
+
 		if err != nil {
 			d.GetLogger().Debug("timescale summary",
 				deps.String("host", host),
 				deps.Err(err))
 			d.report(ctx, tagSummaryReadFailed, host, err)
 
-			return timescalemetrics.Summary{}, false
+			return timescalemetrics.Summary{}, err
 		}
 
-		return summary, true
+		return summary, nil
 	}
 }
 
-func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, bool) {
-	return func() (int64, bool) {
+func databaseSizeReader(ctx context.Context, d Deps, db timescalemetrics.Database, host string) func() (int64, error) {
+	return func() (int64, error) {
+		if err := readStartError(ctx); err != nil {
+			return 0, err
+		}
+
 		databaseOccupiedDiskBytes, err := timescalemetrics.ReadDatabaseOccupiedDiskBytes(ctx, db)
+		if err != nil && errors.Is(ctx.Err(), context.Canceled) {
+			return 0, ctx.Err()
+		}
+
 		if err != nil {
 			d.GetLogger().Debug("timescale database size",
 				deps.String("host", host),
 				deps.Err(err))
 			d.report(ctx, tagDatabaseSizeReadFailed, host, err)
 
-			return 0, false
+			return 0, err
 		}
 
-		return databaseOccupiedDiskBytes, true
+		return databaseOccupiedDiskBytes, nil
 	}
 }
 
@@ -439,11 +470,23 @@ func health(_ config.HistorianConfig, status TimescaleStatus) simple.Health {
 	return simple.Degraded("TimescaleDB answered, but the connection check failed")
 }
 
+// pollAndRecord records nothing for a cancelled poll, because it observed nothing.
+func pollAndRecord(ctx context.Context, d Deps, cfg config.HistorianConfig) (TimescaleStatus, error) {
+	status, err := Poll(ctx, d, cfg)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return status, err
+	}
+
+	recordStatus(d.MetricsRecorder(), status)
+
+	return status, err
+}
+
 func init() {
 	simple.Register(simple.MonitorSpec[config.HistorianConfig, TimescaleStatus, Deps]{
 		WorkerType: WorkerType,
 		Interval:   pollInterval,
-		Poll:       Poll,
+		Poll:       pollAndRecord,
 		Health:     health,
 		NewDeps:    newDeps,
 	})
@@ -474,13 +517,11 @@ type readCache[T any] struct {
 	mu       sync.Mutex
 }
 
-// refresh reads again once the interval has elapsed or the database changed. A
-// failed read drops the previous value and waits its turn rather than retrying
-// every poll.
+// refresh drops the value on a failed read; a cancelled read or one that never started leaves the cache for the next poll and returns nil.
 func (c *readCache[T]) refresh(
 	now time.Time,
 	dsn string,
-	read func() (T, bool),
+	read func() (T, error),
 ) *T {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -488,14 +529,20 @@ func (c *readCache[T]) refresh(
 	if dsn != c.dsn {
 		c.dsn = dsn
 		c.value = nil
+		c.readAt = time.Time{}
 	} else if !c.readAt.IsZero() && now.Sub(c.readAt) < c.interval {
 		return c.value
 	}
 
+	value, err := read()
+	// the cached value is due for a re-read, so it is not current either
+	if errors.Is(err, context.Canceled) || errors.Is(err, errReadNotStarted) {
+		return nil
+	}
+
 	c.readAt = now
 
-	value, ok := read()
-	if !ok {
+	if err != nil {
 		c.value = nil
 
 		return nil

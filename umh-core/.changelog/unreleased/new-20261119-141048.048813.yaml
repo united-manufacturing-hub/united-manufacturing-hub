@@ -1,0 +1,3 @@
+kind: new
+body: Historian reachability, query latency, disk usage, stored data span and failed jobs are now available as `umh_fsmv2_worker_historian_*` Prometheus metrics on port 8080.
+time: 2026-11-19T14:10:48.048813+01:00
