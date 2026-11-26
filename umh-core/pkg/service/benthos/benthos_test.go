@@ -488,8 +488,9 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
 				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 1 output errors"))
 			})
 
 			It("should ignore connection failures", func() {
@@ -519,8 +520,9 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				isMetricsErrorFree, _ := service.IsMetricsErrorFree(metrics)
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
 				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 1 processor errors"))
 			})
 
 			It("should detect errors in any processor", func() {
@@ -539,10 +541,9 @@ var _ = Describe("Benthos Service", func() {
 				Expect(isMetricsErrorFree).To(BeFalse())
 			})
 
-			// Regression: the reason used to name whichever positive processor
-			// map iteration visited first, so unchanged counters alternated
-			// between 6 and 6478 in the Degraded tooltip.
-			It("reports the summed processor error count on every call", func() {
+			// The reason used to carry the count of whichever processor map
+			// iteration visited first, 6 or 6478 here. Neither equals the sum.
+			It("should report the summed processor error count", func() {
 				metrics := benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
 						Process: benthos_monitor.ProcessMetrics{
@@ -555,14 +556,12 @@ var _ = Describe("Benthos Service", func() {
 						},
 					},
 				}
-				for range 100 {
-					isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
-					Expect(isMetricsErrorFree).To(BeFalse())
-					Expect(reason).To(Equal("benthos reported 6484 processor errors"))
-				}
+				isMetricsErrorFree, reason := service.IsMetricsErrorFree(metrics)
+				Expect(isMetricsErrorFree).To(BeFalse())
+				Expect(reason).To(Equal("benthos reported 6484 processor errors"))
 			})
 
-			It("reports output errors before processor errors", func() {
+			It("should report output errors before processor errors", func() {
 				metrics := benthos_monitor.BenthosMetrics{
 					Metrics: benthos_monitor.Metrics{
 						Outputs: map[string]benthos_monitor.OutputInstance{

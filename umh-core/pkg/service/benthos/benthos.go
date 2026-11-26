@@ -1101,9 +1101,7 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 		return false, fmt.Sprintf("benthos reported %d output errors", total)
 	}
 
-	// Check processor errors. ProcessorErrorTotal sums across all processor
-	// paths, so the count stays the same on every reconcile instead of
-	// naming whichever path map iteration visits first.
+	// Check processor errors.
 	if total := metrics.Metrics.ProcessorErrorTotal(); total > 0 {
 		return false, fmt.Sprintf("benthos reported %d processor errors", total)
 	}

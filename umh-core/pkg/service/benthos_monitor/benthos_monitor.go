@@ -190,10 +190,7 @@ func (m Metrics) OutputErrorTotal() int64 {
 }
 
 // ProcessorErrorTotal returns the sum of Error across every processor path.
-// Used by benthos.IsMetricsErrorFree so the reported count does not depend on
-// map iteration order when several processors report errors. The sum counts
-// processor error events, not distinct failed messages: a message that fails
-// in two processors counts twice.
+// A message that fails in two processors counts twice.
 func (m Metrics) ProcessorErrorTotal() int64 {
 	var total int64
 	for _, proc := range m.Process.Processors {
