@@ -4,23 +4,19 @@ This guide adds a [write flow](write-flow.md) to a bridge in the Management Cons
 
 Before you start you need:
 
-- A data contract on the instance, such as `_pump_v1`. The Management Console creates one when you create a data model. See [Data Contracts](../data-modeling/data-contracts.md).
+- A data contract on the instance, such as `_pump_v1`, or the built-in `_raw`. The Management Console creates one when you create a data model. See [Data Contracts](../data-modeling/data-contracts.md).
 - Data arriving in the UNS for that contract at the bridge location. Check it in the [Topic Browser](../unified-namespace/topic-browser.md).
 - A test system that accepts the data, not your production MES.
 
 {% hint style="warning" %}
-**WARNING: Risk of unexpected machine or process operation**
-
-Writing to an external system can affect the operation of connected machinery or processes. Incorrect writes can result in death, serious injury or equipment damage.
-
-**UMH does not provide safety functions.** Data delivery guarantees do not make UMH suitable for use as part of a safety function. Safety functions must be implemented independently of UMH using appropriate safety-rated controllers and devices, correctly programmed and validated for the application.
+Writing to an external system can affect the operation of connected machinery or processes. Read the safety warning on [Write Flow](write-flow.md) before you start.
 {% endhint %}
 
 ## Step 1: Open the bridge's overview page
 
 Go to **Data Flows** and select the **Bridges** list. Select the bridge to open its overview page. The overview page shows one card each for the connection, the read flow and the write flow.
 
-For a new bridge, select **Add Bridge** instead and pick a template with the **Write Flow** badge, such as **HTTP Client**. The editor opens directly, so continue with Step 3.
+For a new bridge, follow [Create a bridge](create-a-bridge.md) and pick a template with the **Write Flow** badge, such as **HTTP Client**. Its Step 5 sends you to Steps 3 to 5 here.
 
 ## Step 2: Open the Write Flow tab
 
@@ -43,12 +39,12 @@ The **UMH Topics** card builds the topic patterns for you in **Visual** mode. Ea
 To subscribe to only one level below the bridge location, such as one line, try these options in this order:
 
 1. Move the bridge to that level. Change its location on the **General** tab, so the bridge location matches the level you want. Do this only for a bridge without a read flow: moving a bridge also moves the topics its read flow publishes to.
-2. Keep **Any suffix** and drop the other levels in **Processing**. The second example in Step 4 shows how.
+2. Keep **Any suffix** and drop messages from the other levels in **Processing**. The second example in Step 4 shows how.
 3. As a last resort, switch **UMH Topics** to **Code** mode and write the topic pattern yourself. [Topic validation](write-flow.md#topic-validation) lists the rules it must follow.
 
 ## Step 4: Shape the message in Processing
 
-The **Processing** card holds JavaScript that runs on every message. The write flow runs it in the Benthos `nodered_js` processor. To write the UNS message unchanged, keep `return msg;`. `msg.payload` holds the UNS payload, as described in [Payload Formats](../unified-namespace/payload-formats.md). `msg.meta.umh_topic` holds the topic the message came from. Return `msg` to write it, or return `null` to drop it. The [Node-RED JavaScript processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) page describes the full API of `nodered_js`.
+To write each message unchanged, keep `return msg;`. The **Processing** card holds JavaScript that runs on every message. `msg.payload` holds the UNS payload, as described in [Payload Formats](../unified-namespace/payload-formats.md). `msg.meta.umh_topic` holds the topic the message came from. Return `msg` to write it, or return `null` to drop it. The [Node-RED JavaScript processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) page describes the full API of `nodered_js`.
 
 This example turns a time-series message into the JSON body a test MES expects:
 
@@ -61,7 +57,7 @@ msg.payload = {
 return msg;
 ```
 
-This example writes only the data of `line-1` directly below the bridge location, and drops the rest. UMH Core replaces `{{ .location_path }}` with the bridge location, so `prefix` is the start of every topic at the bridge location. The example drops topics that do not start with `prefix`, then compares the first level after it:
+This example writes only the data of `line-1` directly below the bridge location, and drops the rest. UMH Core replaces `{{ .location_path }}` with the bridge location, so `prefix` is the start of every topic at the bridge location:
 
 ```javascript
 const prefix = "umh.v1.{{ .location_path }}.";
@@ -80,19 +76,19 @@ return msg;
 
 The **Destination** card holds the settings of the external system you write to, for example the URL and method of an HTTP request. Its fields depend on the protocol. The protocol name on the card links to its documentation.
 
-Enter the settings of your test system. Check that they do not point to a production system: the write flow starts writing as soon as you deploy.
+Enter the settings of your test system.
 
 ![The Destination card for an HTTP Client](images/write-flows-destination.png)
 
 ## Step 6: Deploy and check
 
-1. Turn on **Activate Flow** on the **Write Flow** card.
+1. On the **Write Flow** tab, turn on **Activate Flow**.
 2. Select **Save & Deploy**. The dialog shows **Deploy successful** once the bridge runs.
-3. Open the bridge's overview page. The **Write Flow** card shows the health and the throughput in msg/sec.
-4. Check that the external system gets the messages. Select **Logs** on the **Write Flow** card to see errors from the external system.
+3. Open the bridge's overview page. The **Write Flow** card shows **Active** and a throughput above 0 msg/sec.
+4. Check that the external system gets the messages. Select **Logs** on the **Write Flow** card to see the log of the write flow, including errors from the external system.
 
 ![The Write Flow card on the bridge overview page](images/write-flows-overview-page.png)
 
-If the dialog shows **Bridge deploy failed** and names your topics, see [Write Flow Topics Rejected](write-flow-topics-rejected.md).
+If the dialog shows **Bridge deploy failed** or **Bridge update failed** and names your topics, see [Write Flow Topics Rejected](write-flow-topics-rejected.md).
 
 To stop only the write flow, turn off **Activate Flow** and deploy again. The read flow keeps running.
