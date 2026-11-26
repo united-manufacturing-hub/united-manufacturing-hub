@@ -18,6 +18,10 @@ A restart stops every bridge and flow this instance runs. It collects nothing un
 
 ## What a restart does not do
 
-A restart does not apply a change the container reads at startup, such as a changed environment variable. Applying it means removing the container and starting a new one, which is a recreation.
+A restart stops and starts the same container. The container keeps the settings it was created with: environment variables, mounts, secret mounts and other creation flags. To change one of them, remove the container and create a new one. That is a recreation. Editing the contents of a mounted file does not need one.
+
+When you recreate, give the new container the same configuration as the old one and change only what you intended to change. `docker inspect <container name>` lists the environment, mounts, networks and flags of the old container. Run it before you remove the container.
+
+The new container must also mount the same `/data`. It holds the configuration, the Redpanda data and the logs. A container started with `docker run` does not reuse the anonymous volume of the old one, so it starts with an empty `/data`. If the old container ran with `--rm`, removing it deletes that volume. [Add your corporate CA to the container](../../usage/instances/communicator/instance-offline-behind-corporate-firewall.md#add-your-corporate-ca-to-the-container) shows how to find the volume and copy the data out before you remove the container.
 
 A restart does not change the image. To move the instance to a new version, see [Updating with Docker](docker/updating.md) or [Updating with Docker Compose](docker-compose/updating.md).
