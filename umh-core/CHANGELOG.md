@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.45.6]
+
+### Fixes
+
+- OPC UA input and output: fixed two vulnerabilities that let the OPC UA server a bridge connects to, or anyone who can inject into a connection with security mode None, take the bridge down with a crafted value. A 21-byte value made it use full CPU and ever more memory until it was killed ([CWE-835](https://cwe.mitre.org/data/definitions/835.html)); other crafted values crashed it or made it allocate gigabytes of memory from 10 bytes ([CWE-1284](https://cwe.mitre.org/data/definitions/1284.html), [CWE-789](https://cwe.mitre.org/data/definitions/789.html); reported by abdel084cb of Safetybits). Advisories: [GHSA-h3g2-2pf7-h77p](https://github.com/gopcua/opcua/security/advisories/GHSA-h3g2-2pf7-h77p), [GHSA-798p-q82c-7h3m](https://github.com/gopcua/opcua/security/advisories/GHSA-798p-q82c-7h3m). Affects benthos-umh v0.16.2 and earlier, including the version in the current umh-core. Update now; this fix might not be in a umh-core release yet
+- OPC UA input and output: a bridge now rejects a replayed or out-of-order message from the server and reconnects, as the OPC UA specification requires. Conforming servers are unaffected. If a bridge keeps reconnecting to one server after this update while other servers stay connected, that server may break the rule; there is no setting to turn the check off, so please tell us the server and its firmware
+- OPC UA input and output: a connection no longer keeps accepting messages secured with an expired security token when the server gives the channel and its token different ids ([CWE-324](https://cwe.mitre.org/data/definitions/324.html)). An attacker would still have needed that token's keys, so this could not be exploited on its own
+- OPC UA input and output: username login no longer fails with `remote key size should be 128-256 bytes` on PLCs that list the old Basic128Rsa15 policy first for user names and have a certificate larger than 2048 bits, such as the Siemens S7-1200 G2 and S7-1500
+- OPC UA input and output: when a server rejects a single read or write request, the bridge no longer loses its connection to the server, and the error log shows the status the server sent, such as `StatusBadTooManyOperations`, instead of `EOF`. A rejected subscription setup still makes the bridge reconnect
+- OPC UA input and output: connecting to a PLC whose clock is behind the bridge's, for example one without a battery-backed clock or NTP, no longer times out with `unable to find instance for SecureChannelID`
+- OPC UA input with `autoReconnect` enabled: after a short connection loss in which the server kept the session, the bridge no longer stops delivering data while still showing as connected and logging no error. It now also recovers the values it missed during the loss, as far as the server still holds them; values the server already discarded, for example from a full `queueSize` queue, stay lost
+- OPC UA input and output: an endpoint such as `opc.tcp://localhost:4840` no longer fails to connect when the host name resolves to an IPv6 address first and the server listens on IPv4 only. The bridge now tries each address of the host name
+- OPC UA input and output with `autoReconnect` enabled: stopping or redeploying a bridge while it reconnects no longer risks a crash or closing the wrong connection, and no longer leaves a socket open when the server accepts the TCP connection but never answers the OPC UA handshake
+- OPC UA input and output: the Aes256_Sha256_RsaPss security policy no longer fails with `Could not validate signature` against servers built on the OPC Foundation .NET stack, such as opc-plc
+- OPC UA input: a source or server timestamp before 1678 or after 2262 no longer turns into an unrelated date; a wire value of -1, for example, became 2185-07-21. Timestamps up to the year 9999 are now read correctly. In `opcua_source_timestamp` and `opcua_server_timestamp`, a value at or before 1601-01-01 now reads `0001-01-01T00:00:00.000000Z`, and a value after 9999 reads `9999-12-31T23:59:59.000000Z`
+
 ## [0.45.5]
 
 ### Improvements

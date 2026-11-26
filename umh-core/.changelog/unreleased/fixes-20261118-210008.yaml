@@ -1,3 +1,0 @@
-kind: fixes
-body: 'OPC UA input and output: an endpoint such as `opc.tcp://localhost:4840` no longer fails to connect when the host name resolves to an IPv6 address first and the server listens on IPv4 only. The bridge now tries each address of the host name'
-time: 2026-11-18T21:00:08.000000+01:00

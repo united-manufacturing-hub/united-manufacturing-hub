@@ -1,3 +1,0 @@
-kind: fixes
-body: 'OPC UA input and output: when a server rejects a single read or write request, the bridge no longer loses its connection to the server, and the error log shows the status the server sent, such as `StatusBadTooManyOperations`, instead of `EOF`. A rejected subscription setup still makes the bridge reconnect'
-time: 2026-11-18T21:00:05.000000+01:00
