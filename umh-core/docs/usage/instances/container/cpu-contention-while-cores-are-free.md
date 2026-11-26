@@ -1,6 +1,6 @@
 # CPU contention while cores are free
 
-The **CPU contention** status means that work in the UMH Core container had to wait for a CPU core. It can appear while the machine has free cores. Work that waits finishes late, for example a bridge reading its PLC or UMH Core applying a configuration change. The share of time spent waiting is called CPU pressure. When it rises above its **Degrades** threshold in [Container: CPU thresholds](README.md#cpu-thresholds), the CPU health is degraded. New bridges then wait (see [CPU Health: New bridges while CPU health is degraded](cpu-health.md#new-bridges-while-cpu-health-is-degraded)). The CPU health recovers once pressure falls below its **Recovers** threshold.
+The **CPU contention** status means that work in the UMH Core container had to wait for a CPU core. It can appear while the machine has free cores. Work that waits finishes late, for example a bridge reading its PLC or UMH Core applying a configuration change. The share of time spent waiting is called CPU pressure. When it rises above its **Degrades** threshold in [Container: CPU thresholds](README.md#cpu-thresholds), the CPU health is degraded. New bridges then wait (see [Container: While the container is degraded](README.md#while-the-container-is-degraded)). The CPU health recovers once pressure falls below its **Recovers** threshold.
 
 ## What to do
 

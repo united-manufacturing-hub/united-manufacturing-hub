@@ -1,6 +1,6 @@
 # Agent
 
-The agent is the `umh-core` process inside the UMH Core container. It starts, watches and restarts the components inside the container. These components are the bridges, the stand-alone flows, the stream processors and Redpanda. Two frameworks inside the agent do this work: FSMv1, the older one, and FSMv2, the newer one. See [Which framework runs a component](metrics.md#which-framework-runs-a-component).
+The agent is the `umh-core` process inside the UMH Core container. It starts, watches and restarts the components inside the container. These components are the bridges, the stand-alone flows, the stream processors and Redpanda.
 
 ## The Agent card
 
@@ -13,8 +13,6 @@ The Agent card on the instance details page shows the identity and the version o
 | Location | The location path of the instance, one level per line. It is set when you create the instance and cannot be changed on the card. |
 | Core Version | The version of UMH Core. Hover over it to see the versions of S6 Overlay, Benthos and Redpanda. A marker next to the version shows when the release channel has a newer version. |
 | Release Channel | The release channel the instance follows, from `agent.releaseChannel` in the config file: `stable`, `nightly` or `enterprise`. It shows `n/a` when `agent.releaseChannel` is missing or has another value. The `RELEASE_CHANNEL` environment variable overwrites the key on every start, so to change the channel, start a new container with the new value. |
-
-UMH Core bundles third-party software, such as S6 Overlay, Benthos and Redpanda, together with the libraries they depend on. For a software bill of materials (SBOM) that lists every component and its version, contact UMH.
 
 The **Logs** button opens the logs of the agent. The agent writes them to `/data/logs/umh-core/`. See [Container Layout](../../../reference/container-layout.md#logs). The **Metrics** button is not available yet.
 
@@ -47,9 +45,11 @@ UMH Core has no health or readiness endpoint. Port 8080 serves `/metrics` and an
 
 ## Reference
 
+UMH Core bundles third-party software, such as S6 Overlay, Benthos and Redpanda, together with the libraries they depend on. For a software bill of materials (SBOM) that lists every component and its version, contact UMH.
+
 ### Metrics
 
-The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. Prometheus usually renames `instance` to `exported_instance`.
+Two frameworks inside the agent manage the components: FSMv1, the older one, and FSMv2, the newer one. See [Which framework runs a component](metrics.md#which-framework-runs-a-component). The agent reports on port 8080 whether its control loop runs and how long a cycle takes. [Read the metrics](metrics.md#read-the-metrics) explains how to reach the endpoint. The series are standard [FSMv1 metrics](metrics.md#fsmv1-metrics) with `component="control_loop"` for the control loop and `component="agent_monitor"` for the agent monitor, the part of the agent that reports the health on the Agent card. Select the agent alone with `instance="main"` for the control loop and `instance="Core"` for the agent monitor. Prometheus usually renames `instance` to `exported_instance`.
 
 To alert when the control loop stalls, alert on any increase of the starved counter:
 

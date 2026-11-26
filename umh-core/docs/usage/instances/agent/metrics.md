@@ -1,6 +1,6 @@
 # Metrics
 
-This page explains how to read the Prometheus metrics that a UMH Core instance serves on port 8080, and how umh-core names them. The metrics come from umh-core, the process inside the UMH Core container. The steps need access to the Docker host. Each component page explains its own metrics and alert queries, see [Metrics by component](#metrics-by-component).
+This page explains how to read the Prometheus metrics that a UMH Core instance serves on port 8080, and how umh-core names them. The metrics come from umh-core, the process inside the UMH Core container. The steps need access to the Docker host.
 
 ## Read the metrics
 

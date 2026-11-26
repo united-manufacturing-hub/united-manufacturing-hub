@@ -1,6 +1,6 @@
 # Container Shows Degraded
 
-Follow this page when the Container card on the instance details page shows Degraded. The badge reason lists one line per degraded resource, such as `Memory degraded: Memory utilization critical`. [Container states](README.md#container-states) explains each line. Some steps need access to the Docker host.
+Follow this page when the Container card on the instance details page shows Degraded. Some steps need access to the Docker host. The badge reason lists one line per degraded resource, such as `Memory degraded: Memory utilization critical`. [Container states](README.md#container-states) explains each line.
 
 While the container is degraded, new bridges wait to start. If a bridge must start before the resource problem is fixed, use the emergency setting. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
 

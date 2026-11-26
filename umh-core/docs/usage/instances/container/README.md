@@ -10,7 +10,7 @@ The Container card on the instance details page shows the CPU, memory and disk o
 |---|---|
 | Status badge | The health of the container. See [Container status](#container-status). |
 | CPU | The CPU usage. See [The CPU row](#the-cpu-row). |
-| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the host. With the [memory monitor preview](#memory-with-the-memory-monitor-preview), the row shows 60-second means. With a memory limit, it shows the container's memory against the limit, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. Without a limit, it shows the used memory of the whole machine against the machine's memory. |
+| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the machine. With the [memory monitor preview](#memory-with-the-memory-monitor-preview), the row shows 60-second means. With a memory limit, it shows the container's memory against the limit, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. Without a limit, it shows the used memory of the whole machine against the machine's memory. |
 | Disk | The used and total space of the `/data` volume, and the percentage. |
 | Architecture | The CPU architecture UMH Core runs on, `amd64` or `arm64`. |
 | Hardware ID | The ID of this installation. UMH Core creates it on the first start and stores it in `/data/hwid`. It stays the same as long as the `/data` volume is kept. See [Container Layout](../../../reference/container-layout.md#hwid). |
@@ -19,7 +19,7 @@ The CPU, Memory and Disk rows turn red when that resource is degraded. The **S6 
 
 ### The CPU row
 
-From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the instance's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. When the machine's busy cores cannot be measured, it falls back to the instance's own usage. [CPU Health: With and without a CPU limit](cpu-health.md#with-and-without-a-cpu-limit) explains the difference. The info button next to it shows the readings of the container and the machine, which [CPU thresholds](#cpu-thresholds) describes. The row turns red while the [CPU status](#cpu-status) is degraded, and reads `N/A` when umh-core cannot measure the CPU.
+From v0.44.46, the CPU row shows 60-second mean CPU usage. With a CPU limit, it shows the container's own usage against the limit, for example `0.2 / 0.3 cores (67% of limit, 60s avg)`. Without a limit, it shows the busy cores of the whole machine, including software outside UMH Core, against the machine's cores, for example `2.1 / 14.0 cores (15% of host, 60s avg)`. In this label, host means the machine. When the machine's busy cores cannot be measured, it falls back to the container's own usage. [CPU Health: With and without a CPU limit](cpu-health.md#with-and-without-a-cpu-limit) explains the difference. The info button next to it shows the readings of the container and the machine, which [CPU thresholds](#cpu-thresholds) describes. The row turns red while the [CPU status](#cpu-status) is degraded, and reads `N/A` when umh-core cannot measure the CPU.
 
 ![The CPU info button of the Container card on an instance without a CPU limit](../images/container-cpu-info.png)
 
@@ -43,22 +43,22 @@ The container shows Degraded when the CPU, the memory or the disk is degraded. T
 
 | Status | What it means |
 |---|---|
-| **CPU healthy** | The instance has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". |
-| **CPU: starting up.** | UMH Core has not measured the CPU yet. This shows in the first seconds after a start. |
-| **CPU limited** | The instance hit its CPU limit and was paused until the next scheduling period, for example in 12% of periods over the last minute. Work is being delayed. |
-| **CPU contention** | Tasks inside the instance spent time waiting for a free CPU core, for example 23% of the last minute. |
-| **CPU taken by the server** | Other virtual machines on the same physical server took CPU this instance needed. |
-| **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the instance is at its CPU limit. The status message says which. |
+| **CPU healthy** | The container has the CPU it needs. Usage is shown for context, for example "1.2 of 4 cores". |
+| **CPU: starting up.** | umh-core has not measured the CPU yet. This shows in the first seconds after a start. |
+| **CPU limited** | The container hit its CPU limit and was paused until the next scheduling period, for example in 12% of periods over the last minute. Work is being delayed. |
+| **CPU contention** | Tasks inside the container spent time waiting for a free CPU core, for example 23% of the last minute. |
+| **CPU taken by the server** | Other virtual machines on the same physical server took CPU this container needed. |
+| **CPU running near full** | There is no room left for the next burst of work, because either the machine is full or the container is at its CPU limit. The status message says which. |
 
-Every status except **CPU healthy** means CPU health is degraded, and new bridges wait while it lasts.
+Every status except **CPU healthy** means CPU health is degraded.
 
-When no CPU limit is set and the operating system does not report CPU pressure stats, **CPU healthy** adds a line that starts with `Limited visibility:`. UMH Core then cannot fully tell when work waits for a free core. [Enable CPU pressure stats](enable-cpu-pressure-stats.md) turns on full monitoring.
+When no CPU limit is set and the operating system does not report CPU pressure stats, **CPU healthy** adds a line that starts with `Limited visibility:`. umh-core then cannot fully tell when work waits for a free core. [Enable CPU pressure stats](enable-cpu-pressure-stats.md) turns on full monitoring.
 
-If UMH Core cannot read a file it needs to measure the CPU, the CPU health is degraded and the message names the file, for example `poll error: CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`.
+If umh-core cannot read a file it needs to measure the CPU, the CPU health is degraded and the message names the file, for example `poll error: CPU not measured: open /sys/fs/cgroup/cpu.stat: no such file or directory`.
 
 ### CPU Technical Details
 
-Below the status, in the same badge reason, a Technical Details section lists every signal UMH Core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy instance states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
+Below the status, in the same badge reason, a Technical Details section lists every signal umh-core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy instance states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
 
 ```text
 CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can use 1.5 more before it is marked degraded.
@@ -83,25 +83,25 @@ With the [memory monitor preview](memory-health.md) on, memory degrades for one 
 
 ### Memory and disk
 
-| Resource | Degraded above | Active again at or below | Warning from |
-|---|---|---|---|
-| Memory | 80% of the total | 80% | 70% |
-| Disk | 85% of the `/data` volume | 85% | 75% |
+| Resource | Degrades | Recovers |
+|---|---|---|
+| Memory | above 80% of the total | at or below 80% |
+| Disk | above 85% of the `/data` volume | at or below 85% |
 
-Memory and disk recover at the same value they degrade at. A warning does not change the badge. The badge stays Active and does not show the warning. With the memory monitor preview, [Memory monitor preview thresholds](#memory-monitor-preview-thresholds) replaces the memory row.
+With the memory monitor preview, [Memory monitor preview thresholds](#memory-monitor-preview-thresholds) replaces the memory row.
 
 ### CPU thresholds
 
-Each CPU signal degrades at one value and recovers at another. The two are held apart so the status does not flicker. Throttling, pressure, steal and usage are worse the higher they read, headroom the lower. All readings are 60-second figures. A reading must exceed a threshold to count. Where the table says "at", reaching it is enough. [CPU Health](cpu-health.md) explains how the signals combine into the CPU status.
+Each CPU signal degrades at one value and recovers at another. The two are held apart so the status does not flicker. Throttling, pressure, steal and usage are worse the higher they read, headroom the lower. All readings are 60-second figures. [CPU Health](cpu-health.md) explains how the signals combine into the CPU status.
 
 | Signal | Measures | Degrades | Recovers | Measured only when |
 |---|---|---|---|---|
 | **Throttling** | The share of scheduling periods, about 100 ms each, in which the kernel paused the container because it used up its CPU limit. A workload whose average looks fine can still be paused during bursts. | above 5% | below 3% | a CPU limit is set |
-| **Pressure** | The share of time in which tasks of the instance waited for a CPU core, from Linux Pressure Stall Information (PSI, `some avg60`). See [CPU Contention While Cores Are Free](cpu-contention-while-cores-are-free.md). | above 20% | below 12% | the container can read `cpu.pressure` (see [Enable CPU pressure stats](enable-cpu-pressure-stats.md)) |
+| **Pressure** | The share of time in which tasks of the container waited for a CPU core, from Linux Pressure Stall Information (PSI, `some avg60`). See [CPU Contention While Cores Are Free](cpu-contention-while-cores-are-free.md). | above 20% | below 12% | the container can read `cpu.pressure` (see [Enable CPU pressure stats](enable-cpu-pressure-stats.md)) |
 | **Steal** | Time the hypervisor gave this machine's CPU to other virtual machines. A burstable cloud instance whose CPU credits ran out also reports its capped time as steal. | above 10% | below 6% | the machine is a virtual machine |
 | **Machine headroom** | The cores free on the whole machine, including the CPU that software outside UMH Core uses. | less than 1 core free | more than 1.5 cores free | the machine's core count is readable |
-| **Instance headroom** | The CPU the instance can still use under its CPU limit. | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
-| **Instance usage** | The CPU the instance uses. | at 70% | below 60% | no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured |
+| **Instance headroom** | The CPU the container can still use under its CPU limit. | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
+| **Instance usage** | The CPU the container uses. | at 70% | below 60% | no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured |
 
 Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a newly started instance gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine the Steal line reads `not measured` with its reason.
 
@@ -109,12 +109,12 @@ Steal uses the 95th percentile once 20 samples are in, and the mean before that,
 
 With the [memory monitor preview](memory-health.md) on, each cause degrades at one value and recovers at a lower one.
 
-| Cause | Degraded from | Healthy again below |
+| Cause | Degrades | Recovers |
 |---|---|---|
-| `container-limit-full` | 80% of the container's own memory limit, as a 60-second mean. Judged only when the container has a limit. | 75% |
-| `host-memory-full` | 80% of the machine's memory, as a 60-second mean | 75% |
-| `memory-pressure` | Above 20%: processes in the container waited for memory for more than 20% of the last minute | 12% |
-| `oom-kill` | 1 OOM kill in the container within the last hour | 0 for a whole hour |
+| `container-limit-full` | at 80% of the container's own memory limit, as a 60-second mean. Judged only when the container has a limit. | below 75% |
+| `host-memory-full` | at 80% of the machine's memory, as a 60-second mean | below 75% |
+| `memory-pressure` | above 20%: processes in the container waited for memory for more than 20% of the last minute | below 12% |
+| `oom-kill` | at 1 OOM kill in the container within the last hour | at 0 for a whole hour |
 
 ## While the container is degraded
 
@@ -210,7 +210,7 @@ To alert when the container degrades:
 umh_container_health_status{component="overall"} == 2
 ```
 
-When UMH Core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. Before the first successful measurement, `umh_fsmv2_worker_cpu_last_sample_unix` does not exist. To alert when an instance's CPU health check has not measured for a minute, including when it never measured, compare it with the `up` series of the scrape job. Replace `umh-core` with the name of your scrape job, and use a `for:` duration of a few minutes so that the first seconds after a start do not fire:
+When umh-core cannot read a file it needs for the CPU, the CPU gauges keep their previous value. Before the first successful measurement, `umh_fsmv2_worker_cpu_last_sample_unix` does not exist. To alert when an instance's CPU health check has not measured for a minute, including when it never measured, compare it with the `up` series of the scrape job. Replace `umh-core` with the name of your scrape job, and use a `for:` duration of a few minutes so that the first seconds after a start do not fire:
 
 ```promql
 time() - umh_fsmv2_worker_cpu_last_sample_unix{job="umh-core"} > 60

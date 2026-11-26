@@ -4,15 +4,15 @@
 The memory monitor is a preview and off by default. It turns on when the container starts with the environment variable `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](README.md#configuration).
 {% endhint %}
 
-The memory health check decides whether the instance has the memory it needs. The Management Console shows the result in the Memory row and the badge of the Container card. [Container: Memory thresholds](README.md#memory-and-disk) and [Container: Memory monitor preview thresholds](README.md#memory-monitor-preview-thresholds) give the values, and [Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do.
+The memory health check decides whether the instance has the memory it needs. The Management Console shows the result in the Memory row and the badge of the Container card.
 
 ## Without the memory monitor preview
 
-Memory health is judged on one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. Memory is degraded above 80%.
+Memory health is judged on one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. [Container: Memory and disk](README.md#memory-and-disk) gives the threshold.
 
 ## With the memory monitor preview
 
-UMH Core measures memory once per second. Memory is degraded while any of these causes holds:
+umh-core measures memory once per second. Memory is degraded while any of these causes holds. [Container: Memory monitor preview thresholds](README.md#memory-monitor-preview-thresholds) gives the value of each cause.
 
 | Cause | Degraded when | Judged only when |
 |---|---|---|
@@ -23,7 +23,7 @@ UMH Core measures memory once per second. Memory is degraded while any of these 
 
 `container-limit-full` and `host-memory-full` use 60-second means. Each cause degrades at one value and recovers at a lower one. Memory also counts as degraded, and new bridges wait, whenever no reading from the last three seconds is available.
 
-The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full`.
+The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full`. [Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do.
 
 ## Metrics
 

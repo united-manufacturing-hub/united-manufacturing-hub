@@ -1,6 +1,8 @@
 # Communicator Shows Degraded
 
-Follow this page when the Communicator card on the instance details page shows Degraded. [Communicator states](README.md#communicator-states) explains each reason. If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md). Some steps need access to the Docker host.
+Follow this page when the Communicator card on the instance details page shows Degraded. Some steps need access to the Docker host.
+
+[Communicator states](README.md#communicator-states) explains each reason.
 
 | Reason starts with | What to do |
 |---|---|
@@ -9,6 +11,8 @@ Follow this page when the Communicator card on the instance details page shows D
 | `Authentication with the Management Console failed` | If `umh_fsmv2_worker_auth_failures_total` rises for the login (its `hierarchy_path` ends in `(transport)`, see [Communicator: Metrics](README.md#metrics)), the Management Console did not accept the `AUTH_TOKEN` of the instance. Check the token. If `umh_fsmv2_worker_instance_deleted_total` rises instead, the instance was usually deleted in the Management Console, and a new token does not fix that. |
 | `Connection to the Management Console is degraded` | The reason names the last error type. Find its counter in [Error counters](#error-counters). |
 | `Communicator status is stale` | umh-core did not update the communicator status in time. Check the agent log for errors. If the reason stays, send the agent log to UMH support. |
+
+If the instance never shows as online, see [Instance Stays Offline Behind a Corporate Firewall](instance-offline-behind-corporate-firewall.md).
 
 ## Error counters
 
