@@ -481,9 +481,19 @@ var workerMetricsExporter = &WorkerMetricsExporter{
 	prevCounters: make(map[string]int64),
 }
 
-// ExportWorkerMetrics exports metrics from ObservedState to Prometheus.
-// No-op if observed does not implement MetricsHolder.
-func ExportWorkerMetrics(hierarchyPath string, observed fsmv2.ObservedState) {
+// WorkerMetricsHandle exports one worker's metrics to Prometheus under the worker's hierarchy path.
+type WorkerMetricsHandle struct {
+	exporter      *WorkerMetricsExporter
+	hierarchyPath string
+}
+
+// NewWorkerMetricsHandle returns the handle a collector exports its worker's metrics through.
+func NewWorkerMetricsHandle(hierarchyPath string) *WorkerMetricsHandle {
+	return &WorkerMetricsHandle{exporter: workerMetricsExporter, hierarchyPath: hierarchyPath}
+}
+
+// Export exports observed's worker metrics. No-op if observed does not implement MetricsHolder.
+func (h *WorkerMetricsHandle) Export(observed fsmv2.ObservedState) {
 	holder, ok := observed.(deps.MetricsHolder)
 	if !ok {
 		return
@@ -494,7 +504,7 @@ func ExportWorkerMetrics(hierarchyPath string, observed fsmv2.ObservedState) {
 		return
 	}
 
-	workerMetricsExporter.export(hierarchyPath, &metrics)
+	h.exporter.export(h.hierarchyPath, &metrics)
 }
 
 func (e *WorkerMetricsExporter) export(hierarchyPath string, metrics *deps.Metrics) {
