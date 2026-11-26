@@ -172,7 +172,11 @@ func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading)
 		}
 
 		count, _ := ft.engine.Reduction(string(c.name), string(c.name)).Get()
-		*c.field(&report) = &RecentErrors{
+		// Both loops bind c.field(&report) before assigning through it:
+		// nilaway panics on `*c.field(&report) = ...` because field is a
+		// func-typed struct field, not a function.
+		slot := c.field(&report)
+		*slot = &RecentErrors{
 			Count:       int64(count),
 			Since:       since,
 			LastErrorAt: redate(current.at, ft.lastErrorAt[c.name]),
@@ -185,7 +189,8 @@ func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading)
 			continue
 		}
 
-		*c.field(&report) = &NotConnected{Count: n, Since: ft.notConnectedSince[c.name]}
+		slot := c.field(&report)
+		*slot = &NotConnected{Count: n, Since: ft.notConnectedSince[c.name]}
 	}
 
 	return report
