@@ -43,7 +43,7 @@ If you need every reading, save the data contract with a Historian bridge, as [S
 
 ## Getting help
 
-If none of the checks above explains the gaps, tell us on [Discord](https://discord.gg/F9mqkZnm8U) or through your usual UMH contact. Include:
+If none of the checks above explains the gaps, contact us through one of the routes on [Get Help](../../get-help.md). Include:
 
 - the instance, the topic, and the times of the gaps,
 - what produces the topic and how often it should publish,
