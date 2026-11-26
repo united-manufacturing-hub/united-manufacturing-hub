@@ -61,7 +61,7 @@ If umh-core cannot read a file it needs to measure the CPU, the CPU health is de
 
 ### CPU Technical Details
 
-Below the status, in the same badge reason, a Technical Details section lists every signal umh-core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy instance states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
+Below the status, in the same badge reason, a Technical Details section lists every signal umh-core can measure on that machine. Both the status and Technical Details show the thresholds. A healthy container states its remaining headroom. Each Technical Details line gives the reading next to the threshold that would change the status:
 
 ```text
 CPU healthy. This instance is using 0.3 of 2 cores (15% of its limit) and can use 1.5 more before it is marked degraded.
@@ -74,7 +74,7 @@ Pressure 4% (degrades above 20%).
 Steal not measured (this instance is not running in a virtual machine, so no other virtual machine can take its CPU).
 ```
 
-The headroom lines depend on the machine. A machine whose core count is readable also gets a Machine headroom line, which this example leaves out. An instance with no CPU limit gets no Instance headroom line. Every other signal always has a line, even when this machine cannot measure it.
+The headroom lines depend on the machine. A machine whose core count is readable also gets a Machine headroom line, which this example leaves out. A container with no CPU limit gets no Instance headroom line. Every other signal always has a line, even when this machine cannot measure it.
 
 A signal that is already past its threshold shows what would clear it instead, for example `Throttling 12% (recovers below 3%)`. A signal this machine cannot measure reads `not measured` with its reason, as the Steal line above does.
 
@@ -106,7 +106,7 @@ Each CPU signal degrades at one value and recovers at another. The two are held 
 | **Instance headroom** | The CPU the container can still use under its CPU limit. | usage past 90% of the limit | below 85% of the limit | a CPU limit is set |
 | **Instance usage** | The CPU the container uses. | at 70% | below 60% | no CPU limit is set, the kernel publishes no PSI, and the machine's free cores cannot be measured |
 
-Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a newly started instance gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine the Steal line reads `not measured` with its reason.
+Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a newly started container gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine the Steal line reads `not measured` with its reason.
 
 ### Memory monitor thresholds
 

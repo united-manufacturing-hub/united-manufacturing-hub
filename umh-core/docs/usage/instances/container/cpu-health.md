@@ -10,8 +10,8 @@ The CPU health check decides whether the container has the CPU it needs. The Man
 
 CPU health is degraded in either of these cases:
 
-- The headroom falls below its threshold. Headroom is the CPU the instance can still use.
-- Throttling, CPU pressure or steal is above its threshold. Each of them shows that work of the instance is delayed.
+- The headroom falls below its threshold. Headroom is the CPU the container can still use.
+- Throttling, CPU pressure or steal is above its threshold. Each of them shows that work of the container is delayed.
 
 High usage alone degrades CPU health only when the check has no other signal: no CPU limit is set, the container cannot read CPU pressure, and the machine's free cores cannot be measured. **Instance usage** in [Container: CPU thresholds](README.md#cpu-thresholds) gives the values.
 
