@@ -4,23 +4,6 @@ Follow this page when the Container card on the instance details page shows Degr
 
 While the container is degraded, new bridges wait to start. If a bridge must start before the resource problem is fixed, use the emergency setting. See [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission).
 
-## Memory
-
-Without the [memory monitor](memory-health.md), the line reads `Memory utilization critical`. Raise the memory limit of the container, or remove bridges or flows. [Sizing Guide: Memory](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
-
-With the memory monitor, the line gives the memory status. [Memory status](README.md#memory-status) explains each status.
-
-| Status | What to do |
-|---|---|
-| **Memory running near its limit** | Raise the memory limit of the container, or remove bridges or flows. |
-| **Machine memory running near full** | Add memory to the machine, or reduce what else runs on it. A higher container limit does not help. |
-| **Memory contention** | Reduce the load on the instance, or give it more memory. If other software on the machine uses much of its memory, reduce that software too. |
-| **Memory ran out** | Give the instance more memory, or reduce the load on it. |
-
-## Disk
-
-Free space on the `/data` volume, or shorten how long Redpanda keeps data. See [Disk](../../../production/sizing-guide.md#disk).
-
 ## CPU
 
 [CPU status](README.md#cpu-status) explains each status. [CPU Health](cpu-health.md) explains the signals behind them.
@@ -39,3 +22,20 @@ When the status says `CPU not measured` and names a file, check whether the cont
 ```bash
 docker exec <container name> cat /sys/fs/cgroup/cpu.stat
 ```
+
+## Memory
+
+Without the [memory monitor](memory-health.md), the line reads `Memory utilization critical`. Raise the memory limit of the container, or remove bridges or flows. [Sizing Guide: Memory](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
+
+With the memory monitor, the line gives the memory status. [Memory status](README.md#memory-status) explains each status.
+
+| Status | What to do |
+|---|---|
+| **Memory running near its limit** | Raise the memory limit of the container, or remove bridges or flows. |
+| **Machine memory running near full** | Add memory to the machine, or reduce what else runs on it. A higher container limit does not help. |
+| **Memory contention** | Reduce the load on the instance, or give it more memory. If other software on the machine uses much of its memory, reduce that software too. |
+| **Memory ran out** | Give the instance more memory, or reduce the load on it. |
+
+## Disk
+
+Free space on the `/data` volume, or shorten how long Redpanda keeps data. See [Disk](../../../production/sizing-guide.md#disk).

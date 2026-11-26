@@ -8,7 +8,7 @@ The memory health check decides whether the container has the memory it needs. T
 
 ## Without the memory monitor
 
-Memory health is judged on one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. [Container: Memory and disk](README.md#memory-and-disk) gives the threshold.
+Memory health is judged on one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. [Container: Memory thresholds](README.md#memory-thresholds) gives the threshold.
 
 ## When memory health is degraded
 
@@ -18,7 +18,7 @@ With the memory monitor, umh-core measures memory once per second. Memory health
 - Memory pressure: processes in the container wait for memory.
 - OOM kills: the kernel stopped a process in the container because memory ran out.
 
-[Container: Memory monitor thresholds](README.md#memory-monitor-thresholds) gives the value of each reading and when it is measured.
+[Container: Memory thresholds](README.md#memory-thresholds) gives the value of each reading and when it is measured.
 
 [Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do for each status.
 
