@@ -17,7 +17,6 @@ A source can publish less often than you expect for one of these reasons:
 
 - **Downsampling can suppress unchanged values.** A tag’s age can increase even while the bridge continues reading its device. See [Downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) for details.
 - **The bridge reads only on change.** An OPC UA bridge with `subscribeEnabled: true` in its input, for example, gets a value from the server only when the value changes. To read at fixed times instead, set `subscribeEnabled: false` in the OPC UA input of the bridge. The bridge then reads every `pollRate` milliseconds, 1,000 by default, and the downsampler still drops unchanged values.
-- **A stream processor publishes when its inputs arrive.** It publishes each time one of the topics it reads sends a value, once every one of them has sent at least one. It can be no more regular than those topics, so check them first.
 
 ### Compare the measured and arrival times
 
