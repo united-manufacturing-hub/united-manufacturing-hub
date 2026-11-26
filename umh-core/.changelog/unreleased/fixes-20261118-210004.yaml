@@ -1,0 +1,3 @@
+kind: fixes
+body: 'OPC UA input and output: username login no longer fails with `remote key size should be 128-256 bytes` on PLCs that list the old Basic128Rsa15 policy first for user names and have a certificate larger than 2048 bits, such as the Siemens S7-1200 G2 and S7-1500'
+time: 2026-11-18T21:00:04.000000+01:00
