@@ -6,9 +6,16 @@ While the container is degraded, new bridges wait to start. If a bridge must sta
 
 ## Memory
 
-Raise the memory limit of the container, or remove bridges or flows. The [Sizing Guide](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
+Without the [memory monitor](memory-health.md), the line reads `Memory utilization critical`. Raise the memory limit of the container, or remove bridges or flows. [Sizing Guide: Memory](../../../production/sizing-guide.md#memory) lists how much memory UMH Core needs.
 
-If the [memory monitor](memory-health.md) names `host-memory-full` as the cause, the machine is out of memory. A higher container limit does not help. Free memory on the machine or add memory to it.
+With the memory monitor, the line gives the memory status. [Memory status](README.md#memory-status) explains each status.
+
+| Status | What to do |
+|---|---|
+| **Memory running near its limit** | Raise the memory limit of the container, or remove bridges or flows. |
+| **Machine memory running near full** | Add memory to the machine, or reduce what else runs on it. A higher container limit does not help, because the machine has no memory left to give. |
+| **Memory contention** | Reduce the load on the instance, or give it more memory. If other software on the machine uses much of its memory, reduce that software too. |
+| **Memory ran out** | Give the instance more memory, or reduce the load on it. The status stays until a whole hour passes without another OOM kill. |
 
 ## Disk
 

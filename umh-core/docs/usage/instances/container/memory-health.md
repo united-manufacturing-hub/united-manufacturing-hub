@@ -23,7 +23,7 @@ umh-core measures memory once per second. Memory is degraded while any of these 
 
 `container-limit-full` and `host-memory-full` use 60-second means. Each cause degrades at one value and recovers at a lower one. Memory also counts as degraded, and new bridges wait, whenever no reading from the last three seconds is available.
 
-The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full`. [Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do.
+The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full`. [Container: Memory status](README.md#memory-status) lists each status and its cause, and [Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do.
 
 ## Metrics
 
