@@ -124,12 +124,15 @@ type Collector[TObserved any] struct {
 
 // NewCollector creates a new collector with the given configuration.
 // The type parameter TObserved is inferred from the config parameter.
+//
+// The collector claims the worker-metric series of the worker's hierarchy path,
+// so build it only for a worker that is being added. Stop deletes the series.
 func NewCollector[TObserved any](config CollectorConfig[TObserved]) *Collector[TObserved] {
 	return &Collector[TObserved]{
 		config:        config,
 		state:         collectorStateCreated,
 		restartChan:   make(chan struct{}, 1),
-		workerMetrics: metrics.NewWorkerMetricsHandle(config.Identity.HierarchyPath),
+		workerMetrics: metrics.ClaimWorkerMetrics(config.Identity.HierarchyPath),
 	}
 }
 
@@ -172,6 +175,11 @@ func (c *Collector[TObserved]) IsRunning() bool {
 	defer c.mu.RUnlock()
 
 	return c.running
+}
+
+// WorkerMetrics returns the handle the collector exports the worker's metrics through.
+func (c *Collector[TObserved]) WorkerMetrics() *metrics.WorkerMetricsHandle {
+	return c.workerMetrics
 }
 
 // TriggerNow signals the observation loop to collect immediately.
@@ -245,12 +253,16 @@ func (c *Collector[TObserved]) Restart() {
 	}
 }
 
-// Stop stops the collector when its worker is removed. Restart does not call it.
+// Stop stops the observation loop for good and deletes the worker-metric
+// series the collector exported. A collection that returns after Stop exports
+// nothing.
 func (c *Collector[TObserved]) Stop(ctx context.Context) {
 	c.stopObservationLoop(ctx)
+	c.workerMetrics.Release()
 }
 
-// stopObservationLoop stops the observation loop and waits for it to exit, bounded by ctx and 5 seconds.
+// stopObservationLoop stops the observation loop and waits for it to exit,
+// bounded by ctx and 5 seconds. Restart uses it to keep the worker's metrics.
 func (c *Collector[TObserved]) stopObservationLoop(ctx context.Context) {
 	c.mu.Lock()
 

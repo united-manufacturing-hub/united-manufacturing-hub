@@ -20,6 +20,7 @@ import (
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/persistence"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/supervisor/metrics"
 )
 
 // TestMarkAsStarted sets the supervisor as started with a valid context and
@@ -51,6 +52,22 @@ func (s *Supervisor[TObserved, TDesired]) TestMarkAsStarted() {
 	s.started.Store(true)
 
 	s.startWorkerRunners(supervisorCtx)
+}
+
+// TestWorkerMetrics returns the handle that workerID's collector exports its
+// worker metrics through, and panics for an unknown worker. A test keeps it to export
+// the way a collection that returns after the worker's removal does.
+// DO NOT USE in production code.
+func (s *Supervisor[TObserved, TDesired]) TestWorkerMetrics(workerID string) *metrics.WorkerMetricsHandle {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	workerCtx, exists := s.workers[workerID]
+	if !exists {
+		panic("TestWorkerMetrics: unknown worker " + workerID)
+	}
+
+	return workerCtx.collector.WorkerMetrics()
 }
 
 // TestTick exposes tick() for testing. DO NOT USE in production code.

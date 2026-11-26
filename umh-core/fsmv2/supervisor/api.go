@@ -543,8 +543,7 @@ func (s *Supervisor[TObserved, TDesired]) registerWorker(workerCtx *WorkerContex
 	s.logger.Info("worker_added")
 }
 
-// stopWorker tears down a worker that just left the registry, deleting the
-// state-duration series of the worker's current state.
+// stopWorker stops the worker's collector and executor and deletes its state-duration and worker-metric series.
 func (s *Supervisor[TObserved, TDesired]) stopWorker(
 	ctx context.Context,
 	workerCtx *WorkerContext[TObserved, TDesired],
