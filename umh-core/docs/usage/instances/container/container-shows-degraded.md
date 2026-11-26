@@ -13,9 +13,9 @@ With the memory monitor, the line gives the memory status. [Memory status](READM
 | Status | What to do |
 |---|---|
 | **Memory running near its limit** | Raise the memory limit of the container, or remove bridges or flows. |
-| **Machine memory running near full** | Add memory to the machine, or reduce what else runs on it. A higher container limit does not help, because the machine has no memory left to give. |
+| **Machine memory running near full** | Add memory to the machine, or reduce what else runs on it. A higher container limit does not help. |
 | **Memory contention** | Reduce the load on the instance, or give it more memory. If other software on the machine uses much of its memory, reduce that software too. |
-| **Memory ran out** | Give the instance more memory, or reduce the load on it. The status stays until a whole hour passes without another OOM kill. |
+| **Memory ran out** | Give the instance more memory, or reduce the load on it. |
 
 ## Disk
 

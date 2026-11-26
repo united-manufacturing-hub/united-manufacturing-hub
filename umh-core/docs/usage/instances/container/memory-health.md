@@ -4,26 +4,23 @@
 **Early access.** The memory monitor is off by default. It turns on when the container starts with the environment variable `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](README.md#configuration).
 {% endhint %}
 
-The memory health check decides whether the instance has the memory it needs. The Management Console shows the result in the Memory row and the badge of the Container card.
+The memory health check decides whether the container has the memory it needs. The Management Console shows the result in the Memory row of the Container card and, while the memory is degraded, as the [Memory status](README.md#memory-status) in its badge reason.
 
 ## Without the memory monitor
 
 Memory health is judged on one number: the memory the container uses, as a share of its memory limit, or of the machine's memory when the container has no limit. [Container: Memory and disk](README.md#memory-and-disk) gives the threshold.
 
-## With the memory monitor
+## When memory health is degraded
 
-umh-core measures memory once per second. Memory is degraded while any of these causes holds. [Container: Memory monitor thresholds](README.md#memory-monitor-thresholds) gives the value of each cause.
+With the memory monitor, umh-core measures memory once per second. Memory health is degraded while any of these readings is past its threshold:
 
-| Cause | Degraded when | Judged only when |
-|---|---|---|
-| `container-limit-full` | The container is close to its own memory limit. | the container has a memory limit |
-| `host-memory-full` | The machine is close to full. | always |
-| `memory-pressure` | Processes in the container waited for memory, as the kernel reports in its pressure stall information (PSI). | the container runs with cgroup v2 and PSI, the same as for CPU pressure (see [Enable CPU pressure stats](enable-cpu-pressure-stats.md)) |
-| `oom-kill` | The kernel stopped a process in the container because memory ran out (out of memory, OOM). Only the kills after umh-core started count, so a kill that restarted umh-core itself does not. The status message also shows the kernel's count since the container started, which includes those kills. | always |
+- Instance memory or Machine memory: the container is close to its memory limit, or the whole machine is close to full.
+- Memory pressure: processes in the container wait for memory.
+- OOM kills: the kernel stopped a process in the container because memory ran out.
 
-`container-limit-full` and `host-memory-full` use 60-second means. Each cause degrades at one value and recovers at a lower one. Memory also counts as degraded, and new bridges wait, whenever no reading from the last three seconds is available.
+[Container: Memory monitor thresholds](README.md#memory-monitor-thresholds) gives the value of each reading and when it is measured.
 
-The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full`. [Container: Memory status](README.md#memory-status) lists each status and its cause, and [Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do.
+[Container Shows Degraded: Memory](container-shows-degraded.md#memory) says what to do for each status.
 
 ## Metrics
 
