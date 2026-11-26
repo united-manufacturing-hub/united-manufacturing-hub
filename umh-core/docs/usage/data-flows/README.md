@@ -4,6 +4,17 @@
 
 Data flows move and transform industrial data in UMH Core. Three types serve different purposes:
 
+## The Data Flows card
+
+The Data Flows card on the instance details page counts the data flows of the instance.
+
+| Field | Shows |
+|---|---|
+| Status badge | The health of the data flows as a whole. |
+| Data Flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
+| Bridges | The number of bridges. It links to the list of this instance's bridges. |
+| Status Breakdown | How many data flows are **Active**, **Degraded**, **Other** (Neutral) and **Unknown** (no health reported). It appears once the instance has a data flow. |
+
 ## Flow Types
 
 ### [Bridges](bridges.md)

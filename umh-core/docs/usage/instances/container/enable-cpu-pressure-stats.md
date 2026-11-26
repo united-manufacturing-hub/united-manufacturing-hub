@@ -1,13 +1,13 @@
 # Enable CPU pressure stats
 
 {% hint style="info" %}
-UMH Core reads CPU pressure as part of the CPU health check, which is on by default from
-v0.44.46. See [CPU Health](README.md).
+UMH Core reads CPU pressure as part of the CPU health check. See
+[CPU Health](cpu-health.md).
 {% endhint %}
 
 Follow this page when the Technical Details `Pressure` line reads `Pressure not measured (this
-operating system does not report CPU pressure stats).`, for example on an instance with the status
-**CPU healthy, limited visibility**. Without CPU pressure stats and without a CPU limit, UMH Core
+operating system does not report CPU pressure stats).`, for example when **CPU healthy** shows a
+`Limited visibility:` line. Without CPU pressure stats and without a CPU limit, UMH Core
 judges CPU health on machine headroom, plus steal on a virtual machine. Once the kernel reports
 pressure to the container, the `Pressure` line in Technical Details shows a percentage.
 
@@ -16,7 +16,8 @@ only if the kernel booted with Pressure Stall Information (PSI) on and the machi
 Most distributions ship both on. The Red Hat family is the exception: RHEL, Rocky, AlmaLinux and
 Oracle Linux ship PSI off, and version 8 of each also boots cgroup v1.
 
-Check your own machine:
+Check your own machine: run `cat /sys/fs/cgroup/cpu.pressure` inside the container, the way your
+[deployment](../../../production/deployment/README.md) runs a command in a container. With Docker:
 
 ```bash
 docker exec <container name> cat /sys/fs/cgroup/cpu.pressure
@@ -56,12 +57,12 @@ same way and run `grub-mkconfig -o /boot/grub/grub.cfg`.
 
 ## Confirm UMH Core can read cpu.pressure
 
-Run the `docker exec` check again. It reads the same file UMH Core reads.
+Run the `cat /sys/fs/cgroup/cpu.pressure` check inside the container again. It reads the same file UMH Core reads.
 
 The Management Console shows the result on the instance's detail page. The Technical Details
 `Pressure` line changes from `Pressure not measured (this operating system does not report CPU
 pressure stats).` to a percentage. `Pressure not available (measuring).` means UMH Core can read the
-file and is filling its 60-second window. Wait a minute and look again.
+file and has not taken its first reading yet. Look again after a few seconds.
 
 If the file is still missing, run these checks on the machine, outside the container:
 
@@ -70,11 +71,11 @@ If the file is still missing, run these checks on the machine, outside the conta
 2. If `psi=1` is there, run `cat /proc/pressure/cpu`. `No such file or directory` means the kernel
    was built without PSI and ignores `psi=1`. Set a CPU limit on the container instead.
 3. If `/proc/pressure/cpu` prints output, the machine reports pressure but the container does not
-   see it. Run `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Any output other than
+   see it. Run `stat -fc %T /sys/fs/cgroup` inside the container, with Docker
+   `docker exec <container name> stat -fc %T /sys/fs/cgroup`. Any output other than
    `cgroup2fs` means the container runs without cgroup v2. Set a CPU limit on the container instead.
 4. If the container prints `cgroup2fs`, the machine and the container both support pressure, and
    UMH Core should read it. Set a CPU limit on the container for now, and send the output of the
-   three checks above to us; [Get Help](../../../../get-help.md) lists the ways to reach us.
+   three checks above to us; [Get Help](../../../get-help.md) lists the ways to reach us.
 
-With a CPU limit, UMH Core measures throttling and the headroom left under the limit, and the `Pressure`
-line keeps reading `not measured`.
+A CPU limit does not make pressure readable, so the `Pressure` line keeps reading `not measured`.

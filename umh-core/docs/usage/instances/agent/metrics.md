@@ -1,39 +1,22 @@
 # Metrics
 
-This page explains how to collect UMH Core metrics with Prometheus and how to read them. The steps need access to port 8080 on the Docker host and to your Prometheus setup.
-
-Every UMH Core instance serves Prometheus metrics in the Prometheus text format on port 8080, at the path `/metrics`. The metrics come from umh-core, the process inside the UMH Core container. Use them to monitor an instance with Prometheus and Grafana. Because the endpoint runs inside the container, you can read it when the Management Console cannot reach the instance.
-
-The component pages explain what one component reports and give alert queries for it. See [Metrics by component](#metrics-by-component).
+This page explains how to read the Prometheus metrics that a UMH Core instance serves on port 8080, and how umh-core names them. The metrics come from umh-core, the process inside the UMH Core container. The steps need access to the Docker host.
 
 ## Read the metrics
 
-To read the metrics once, run this on the machine that runs the container:
+Every instance serves its metrics on port 8080, at the path `/metrics`, in the Prometheus text format. The endpoint runs inside the container, so you can read it when the Management Console cannot reach the instance. To read the metrics once, run `wget -qO- -Y off http://localhost:8080/metrics` inside the container, the way your [deployment](../../../production/deployment/README.md) runs a command in a container. The `-Y off` keeps `wget` from sending the request through the proxy of the container. With Docker:
 
 ```bash
-docker exec <container name> wget -qO- http://localhost:8080/metrics
+docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics
 ```
 
-To collect the metrics with Prometheus, publish port 8080 when you start the container. Add `-p <host-ip>:8080:8080` to your `docker run` command, where `<host-ip>` is an address of the host that Prometheus can reach, for example `127.0.0.1` when Prometheus runs on the same host. The install command from the Management Console does not publish this port. For a running container, remove the container and start it again with the same `docker run` command plus `-p <host-ip>:8080:8080`. `docker restart` keeps the old port mappings.
+The install command from the Management Console names the container `umh-core` and does not publish port 8080. For Prometheus to scrape the instance, remove the container and start it again with the same `docker run` command plus `-p <host-ip>:8080:8080`. `docker restart` keeps the old port mappings. The endpoint has no authentication, so give `<host-ip>` an address on a trusted network, for example `127.0.0.1` when Prometheus runs directly on the same host. When Prometheus runs in a container on a Docker bridge network, `127.0.0.1` is that container itself, so give an address of the host that the Prometheus container can reach. Without it, Docker publishes the port on every interface of the host.
 
-The endpoint has no authentication. Without `<host-ip>`, Docker publishes the port on every interface of the host, so always give an address on a trusted network.
+The port inside the container is always 8080, because umh-core sets `agent.metricsPort` in `config.yaml` back to 8080 on every start. To use another port on the host, change the host side of the mapping, for example `-p <host-ip>:9100:8080`.
 
-Then add a scrape job to your Prometheus configuration:
-
-```yaml
-scrape_configs:
-  - job_name: umh-core
-    static_configs:
-      - targets: ["<device-ip>:8080"]
-```
-
-Prometheus sets its own `instance` label on every scrape. With the default `honor_labels: false`, it renames umh-core's `instance` label to `exported_instance`. In Prometheus queries, write `exported_instance="Core"` where the component pages write `instance="Core"`. Alternatively, set `honor_labels: true` in the scrape job.
-
-The port inside the container is always 8080. umh-core sets `agent.metricsPort` in `config.yaml` back to 8080 on every start. To use another port on the host, change the host side of the mapping, for example `-p <host-ip>:9100:8080`.
+Prometheus renames umh-core's `instance` label to `exported_instance`, unless the scrape job sets `honor_labels: true`. With the default setting, write `exported_instance="Core"` in Prometheus queries where the component pages write `instance="Core"`. With `honor_labels: true`, keep `instance`.
 
 Most series appear only after umh-core records their first value. The FSMv2 counters, for example, appear after their first count. A missing series therefore does not mean the component is missing. `umh_core_errors_total` is the exception. It exists at 0 from the moment umh-core creates the component.
-
-When you remove a component, such as a bridge, most of its series stay on `/metrics` with their last value. The series disappear when umh-core restarts. umh-core deletes only `umh_fsmv2_state_duration_seconds` together with the component.
 
 ## Which framework runs a component
 
@@ -45,11 +28,12 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Persistence and configuration components (internal parts of umh-core) | FSMv2 | none |
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
 | Bridge connection probe | FSMv2 | none. `NMAP_BACKEND` is ignored |
-| CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored |
+| CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored from v0.45.4 |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
 | Container memory and disk | FSMv1 | none |
+| Memory health (early access) | FSMv2 | off unless `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](../container/README.md#configuration) |
 
 A switch is an environment variable of the container. umh-core reads it once at startup. To change it, remove the container and start it again with the same `docker run` command plus the variable. `docker restart` keeps the old environment. See [Environment Variables](../../../reference/environment-variables.md).
 
@@ -58,7 +42,7 @@ A switch is an environment variable of the container. umh-core reads it once at 
 Components that run under FSMv2 report two kinds of series:
 
 - Standard series, named `umh_fsmv2_<name>`. Every FSMv2 component can report them.
-- Component series, named `umh_fsmv2_worker_<name>`. Only the component that records the value reports them. The component pages list them.
+- Component series, named `umh_fsmv2_worker_<name>`. Only the component that records the value reports them. The component pages explain them.
 
 Both kinds carry the label `hierarchy_path`. It names the component that reports the series. FSMv2 components form a tree. A component can start child components, and each child can start its own children. The path lists every component from the top of the tree down to the one that reports, separated by `/`. Each step is written as `<id>(<type>)`. For example, the part of the communicator that sends messages to the Management Console has this path:
 
@@ -190,7 +174,7 @@ umh-core counts one error at several layers, for example under the bridge and ag
 
 `umh_core_reconcile_duration_milliseconds` with `component="control_loop"` and `instance="main"` is the duration of one whole cycle of umh-core's control loop. A cycle should finish within 100 milliseconds. A longer cycle writes a warning to the agent log. Other `instance` values time single steps inside that cycle. A component's step names start with the component's name. The filter `instance=~"<name>(\\..*)?"` selects all of them. Do not add the steps up. They are nested inside each other, and a sum counts time twice.
 
-`umh_core_reconcile_starved_total_seconds` adds more than one second for each second of a stall. Only an increase above zero is meaningful. It means the control loop did not run for more than 15 seconds.
+Alert on any increase of `umh_core_reconcile_starved_total_seconds` above zero. It means the control loop did not run for more than 15 seconds.
 
 ## Metrics by component
 
@@ -200,7 +184,6 @@ Each component page has a Metrics section. It explains what the component report
 |---|---|
 | Agent | [Agent](README.md#metrics) |
 | Container | [Container](../container/README.md#metrics) |
-| CPU health | [CPU Health](../container/cpu-health/README.md) |
 | Communicator | [Communicator](../communicator/README.md#metrics) |
 | Redpanda | [Redpanda](../../unified-namespace/redpanda.md#metrics) |
 | Topic Browser | [Topic Browser](../../unified-namespace/topic-browser.md#metrics) |
@@ -209,7 +192,7 @@ Each component page has a Metrics section. It explains what the component report
 | Stream processors | [Stream Processors](../../data-flows/stream-processor.md#metrics) |
 | Historian | [Historian](../../historian/README.md#metrics) |
 
-Each bridge, stand-alone flow and stream processor runs in Benthos. Benthos and Redpanda keep their own metrics. umh-core does not copy them to port 8080. Per-bridge message counts are therefore not on port 8080. The Metrics view of a bridge in the Management Console shows them.
+Benthos and Redpanda keep their own metrics. umh-core does not copy them to port 8080. Per-bridge message counts are therefore not on port 8080. The Metrics view of a bridge in the Management Console shows them.
 
 ## Where the metrics are defined
 
@@ -238,7 +221,6 @@ The series below are for UMH support and may change without notice. The same por
 - `umh_fsmv2_variable_propagation_total`
 - `umh_fsmv2_hierarchy_depth`
 - `umh_fsmv2_hierarchy_size`
-- `umh_fsmv2_adapter_dropped_messages_total`
 - `umh_fsmv2_worker_compaction_deltas_deleted_total`, `umh_fsmv2_worker_compaction_cycles_total`, `umh_fsmv2_worker_last_compaction_duration_ms`, `umh_fsmv2_worker_maintenance_cycles_total` and `umh_fsmv2_worker_last_maintenance_duration_ms`, reported by the persistence component
 - `umh_communicator_action_panics_total`
 - `umh_core_filesystem_ops_total`
