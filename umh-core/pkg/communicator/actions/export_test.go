@@ -20,7 +20,10 @@ package actions
 import (
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/protocolconverterserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/s6"
 )
@@ -81,4 +84,11 @@ func EditedFlowLogs(dfcType DFCType, snapshot *protocolconverter.ProtocolConvert
 // Sentry events fire.
 func (a *DeployProtocolConverterAction) SetFSMLogger(l deps.FSMLogger) {
 	a.fsmLogger = l
+}
+
+// ConnectionInfoFromSpec exposes connectionInfoFromSpec to the specs.
+func ConnectionInfoFromSpec(spec protocolconverterserviceconfig.ProtocolConverterServiceConfigSpec, logger *zap.SugaredLogger) (string, uint32) {
+	ip, port, _ := connectionInfoFromSpec(spec, logger)
+
+	return ip, port
 }
