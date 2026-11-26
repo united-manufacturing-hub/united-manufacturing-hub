@@ -35,7 +35,7 @@ The main view shows all bridges with connection status and throughput:
 - **Yellow dot**: Starting or warning state
 - **Grey dot**: Intermediate states (starting, stopping, or stuck in starting state)
 
-A bridge whose connection is up but that has neither a read flow nor a write flow waits in the state `starting_failed_dfc_missing`. Its status starts with "No DFC added yet", where DFC means flow. The bridge starts once you add a flow.
+A bridge can be saved without a read flow or a write flow. Once its connection is up and Redpanda is healthy, it waits until you add a flow. Its status shows **Not Configured**, and **Technical Details** shows the state `starting_failed_dfc_missing`. The bridge starts once you add a flow.
 
 ### Context Menu
 
@@ -84,7 +84,7 @@ To view debug logs, go to the bridge and select **Logs**.
 
 **IT protocols (MQTT, HTTP, Kafka) can provide relational data** - when you select "relational" as the data type in the UI, the bridge automatically uses [`nodered_js` processor](https://docs.umh.app/benthos-umh/processing/node-red-javascript-processor) to handle complex business records like work orders or batch reports.
 
-For converting time-series to relational data, see [Stream Processors](stream-processor.md) or use [Stand-alone Flows](stand-alone-flow.md) with state management.
+For converting time-series to relational data, see [Stream Processors](stream-processor.md) or use [Stand-alone Flows](stand-alone-flow.md).
 
 ## Reference
 
