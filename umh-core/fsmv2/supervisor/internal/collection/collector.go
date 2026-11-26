@@ -221,9 +221,9 @@ func (c *Collector[TObserved]) Restart() {
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	c.Stop(stopCtx)
+	c.stopObservationLoop(stopCtx)
 
-	// Reset state so we can start again (Stop sets state to stopped)
+	// Reset state so we can start again (stopObservationLoop sets state to stopped)
 	c.mu.Lock()
 	c.state = collectorStateCreated
 	c.restartChan = make(chan struct{}, 1)
@@ -243,7 +243,13 @@ func (c *Collector[TObserved]) Restart() {
 	}
 }
 
+// Stop stops the collector when its worker is removed. Restart does not call it.
 func (c *Collector[TObserved]) Stop(ctx context.Context) {
+	c.stopObservationLoop(ctx)
+}
+
+// stopObservationLoop stops the observation loop and waits for it to exit, bounded by ctx and 5 seconds.
+func (c *Collector[TObserved]) stopObservationLoop(ctx context.Context) {
 	c.mu.Lock()
 
 	if c.state != collectorStateRunning {
