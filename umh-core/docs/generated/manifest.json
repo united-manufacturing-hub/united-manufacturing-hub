@@ -1,0 +1,117 @@
+{
+  "sourceCommit": "bea4c5dc0",
+  "screenshots": [
+    {
+      "story": "pages-topics--number",
+      "published": "umh-core/docs/generated/topic-browser-main.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1653
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "3eaa8f540652d7ea5f9ed852572560b13db57418abb09235a34838a8ec6006e7",
+      "referencedBy": [
+        "usage/unified-namespace/topic-browser.md"
+      ]
+    },
+    {
+      "story": "pages-topics--string",
+      "published": "umh-core/docs/generated/topic-browser-text-topic.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1057
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "0a47993f866b33d98a305990eaa2b9e68389510619dc385970450fb27ce76747",
+      "referencedBy": [
+        "usage/unified-namespace/topic-browser.md"
+      ]
+    },
+    {
+      "story": "pages-topics--relational-topic",
+      "published": "umh-core/docs/generated/topic-browser-relational-topic.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1262
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "94a154dee1db2e5f3a83c8c0c123c990b184a48d35165d9b94fbfba78c7da51e",
+      "referencedBy": [
+        "usage/unified-namespace/topic-browser.md"
+      ]
+    },
+    {
+      "story": "pages-topics--several-instances",
+      "published": "umh-core/docs/generated/topic-browser-several-instances.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1668
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "21fd1a581b081621964857e6e10794f0deeb91e43a20adf98ed3b6dd4d18893e",
+      "referencedBy": [
+        "usage/unified-namespace/topic-browser.md"
+      ]
+    },
+    {
+      "story": "regions-topics-details--with-bridge",
+      "published": "umh-core/docs/generated/topic-browser-details-panel.png",
+      "viewport": {
+        "width": 1440,
+        "height": 631
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "ace320382f6fa7f5bff68043ce8cb14e585cccc5fd155df5bdee36b857d6faaf",
+      "referencedBy": [
+        "usage/unified-namespace/topic-browser.md"
+      ]
+    },
+    {
+      "story": "regions-topics-sql-query--numbers",
+      "published": "umh-core/docs/generated/topic-browser-sql-query.png",
+      "viewport": {
+        "width": 1440,
+        "height": 686
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "4def181752175036ec300319e8903588f3697e3b8f6b09d2cff0d4bf737d1841",
+      "referencedBy": [
+        "usage/unified-namespace/topic-browser.md"
+      ]
+    },
+    {
+      "story": "pages-topics--no-topics",
+      "published": "umh-core/docs/generated/topic-browser-empty-tree.png",
+      "viewport": {
+        "width": 1440,
+        "height": 642
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "877c860ec9ca2dfc00f95b34f12609bad2f4aaccb845d2f67e48a9a79c9ac2c3",
+      "referencedBy": [
+        "usage/unified-namespace/topic-does-not-appear-in-the-topic-browser.md"
+      ]
+    },
+    {
+      "story": "pages-topics--number-instance-offline",
+      "published": "umh-core/docs/generated/topic-browser-instance-offline.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1748
+      },
+      "deviceScaleFactor": 2,
+      "theme": "dark",
+      "sha256": "d0ad1700e8831099ee7f3c8bb713d552fc24870e4862b283963cd55c31885136",
+      "referencedBy": [
+        "usage/unified-namespace/topic-does-not-appear-in-the-topic-browser.md"
+      ]
+    }
+  ]
+}
