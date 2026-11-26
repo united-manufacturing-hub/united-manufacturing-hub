@@ -12,9 +12,9 @@ Use stand-alone flows for:
 - Custom processing that doesn't fit bridge patterns
 
 Use bridges instead for:
-- Industrial device connections
+- Reading from or writing to PLCs, MES and other external systems
 - Data that needs UNS organization
-- Connections requiring health monitoring
+- External systems that need a connection probe, which checks whether they are reachable
 
 ## UI Capabilities
 
@@ -46,10 +46,10 @@ The configuration interface has multiple sections:
 
 **Key sections:**
 - **General**: Name, instance, and state control (Active/Stopped)
-- **Input (YAML)**: Configure data source (see [Benthos-UMH inputs](https://docs.umh.app/benthos-umh/input))
+- **Input (YAML)**: What the flow reads (see [Benthos-UMH inputs](https://docs.umh.app/benthos-umh/input))
 - **Processing (YAML)**: Transform data with processors
-- **Output (YAML)**: Send to any destination (generic, not auto-generated like bridges)
-- **Examples**: Pre-built templates including database bridges
+- **Output (YAML)**: Where the flow writes, any Redpanda Connect output (generic, not auto-generated like bridges)
+- **Examples**: Pre-built templates, including ones that write to databases
 
 ### Step 3: Use Example Templates
 
@@ -180,6 +180,6 @@ The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manu
 
 ## Next Steps
 
-- Learn about [Bridges](bridges.md) for device connectivity
+- Learn about [Bridges](bridges.md) to read from and write to external systems
 - Explore [Stream Processors](stream-processor.md) for data transformation
 - See [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh) for all processors

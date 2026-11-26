@@ -39,6 +39,10 @@ func (s *StoppedState) Next(snapAny any) fsmv2.NextResult[any, any] {
 		return fsmv2.Transition(s, fsmv2.SignalNeedsRemoval, nil, "Shutdown requested, signaling removal", nil)
 	}
 
+	if snap.IsDisabled {
+		return fsmv2.Transition(s, fsmv2.SignalNone, nil, "disabled by supervisor, staying stopped", nil)
+	}
+
 	return fsmv2.Transition(&TryingToStartState{}, fsmv2.SignalNone, nil, "Starting worker", nil)
 }
 

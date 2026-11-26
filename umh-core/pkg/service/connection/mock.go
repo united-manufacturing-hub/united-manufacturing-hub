@@ -24,9 +24,8 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/connectionserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
-	nmapfsm "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/filesystem"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/serviceregistry"
 )
 
@@ -54,8 +53,6 @@ type MockConnectionService struct {
 	StopConnectionError                  error
 	ForceRemoveConnectionError           error
 	ReconcileManagerError                error
-
-	NmapService nmap.INmapService
 
 	ConnectionStates    map[string]*ServiceInfo
 	ExistingConnections map[string]bool
@@ -104,7 +101,6 @@ func NewMockConnectionService() *MockConnectionService {
 		ExistingConnections: make(map[string]bool),
 		NmapConfigs:         make([]config.NmapConfig, 0),
 		stateFlags:          make(map[string]*ConnectionStateFlags),
-		NmapService:         nmap.NewMockNmapService(),
 	}
 }
 
@@ -214,7 +210,7 @@ func (m *MockConnectionService) AddConnectionToNmapManager(ctx context.Context, 
 	nmapConfig := config.NmapConfig{
 		FSMInstanceConfig: config.FSMInstanceConfig{
 			Name:            nmapName,
-			DesiredFSMState: nmapfsm.OperationalStateOpen,
+			DesiredFSMState: fsmv2nmap.OperationalStateOpen,
 		},
 		NmapServiceConfig: m.GenerateNmapConfigForConnectionResult,
 	}
@@ -310,7 +306,7 @@ func (m *MockConnectionService) StartConnection(ctx context.Context, filesystemS
 	// Set the desired state to active for the given component
 	for i, nmapConfig := range m.NmapConfigs {
 		if nmapConfig.Name == nmapName {
-			m.NmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateOpen
+			m.NmapConfigs[i].DesiredFSMState = fsmv2nmap.OperationalStateOpen
 			found = true
 
 			break
@@ -338,7 +334,7 @@ func (m *MockConnectionService) StopConnection(ctx context.Context, filesystemSe
 	// Set the desired state to stopped for the given component
 	for i, nmapConfig := range m.NmapConfigs {
 		if nmapConfig.Name == nmapName {
-			m.NmapConfigs[i].DesiredFSMState = nmapfsm.OperationalStateStopped
+			m.NmapConfigs[i].DesiredFSMState = fsmv2nmap.OperationalStateStopped
 			found = true
 
 			break

@@ -8,13 +8,13 @@ If the tree stays empty while your instance is producing data, or a topic you ex
 
 A topic reaches the tree in three steps:
 
-1. A bridge or stream processor publishes a message for the topic to the Unified Namespace of its instance.
+1. A [bridge](../data-flows/bridges.md) or [stream processor](../data-flows/stream-processor.md) publishes a message for the topic to the [Unified Namespace](README.md) of its instance.
 2. The Topic Browser of that instance reads the message and keeps the latest value of every topic it has seen.
 3. The Topic Browser collects what it reads into batches and sends each batch to the Management Console as an update. Each batch carries at most one value per topic, the latest. While the instance is offline, no updates arrive.
 
-The Topic Browser aims for an interval of 1 to 15 seconds between two batches. It sets the interval from the size of recent batches and the CPU use of the Topic Browser process: large batches and low CPU use shorten it, small batches and high CPU use lengthen it. A new value can take longer than the interval to show: the Topic Browser checks the interval only when new messages arrive, and the update then still has to reach the Management Console.
+The Topic Browser aims for an interval of 1 to 15 seconds between two batches. It sets the interval from the amount of data it has recently read and the CPU use of the Topic Browser process: more data and low CPU use shorten it, less data and high CPU use lengthen it. A new value can take longer than the interval to show: the Topic Browser checks the interval only when new messages arrive, and the update then still has to reach the Management Console.
 
-The instance keeps a topic in its list while umh-core runs, even after the topic stops receiving messages. When umh-core restarts, the Topic Browser does not read older messages again, so topics show again as new messages for them arrive.
+While UMH Core runs, a topic stays in the tree even after it stops sending data. After UMH Core restarts, the instance reports each topic again once a message for it arrives, so a topic that sends data rarely can take a while to come back. A Management Console tab that stayed open during the restart can keep showing the older topics, with their age growing. To see only the topics reported since the restart, sign out of the Management Console and sign back in.
 
 ## The Topic Browser screen
 
@@ -39,7 +39,7 @@ The right panel opens with the full topic string and a button that copies it. Be
 | Field | Shows |
 |---|---|
 | **Current value** | The latest value, with how long ago it arrived beside it. |
-| **Instance** | The instances that reported the topic, as a dropdown. An instance is marked `(offline)` when it is not reachable, and `(not in the filter)` when the header filter excludes it. |
+| **Instance** | The instance that reported the topic, as a link. When several instances report it, a dropdown lists all of them. An instance is marked `(offline)` when it is not reachable, and `(not in the filter)` when the header filter excludes it. |
 | **Bridge** or **Stream** | What produced the topic. The row reads **Stream** when a stream processor produced it and **Bridge** when a protocol converter did. It is absent when neither did. |
 | **Data contract** | The contract applied to the data. |
 
@@ -97,11 +97,13 @@ Each instance runs its own Topic Browser and reports its own topics, and the Man
 
 ## The Topic Browser card
 
-The **Topic Browser** card on the instance's detail page shows one value. **Topics** counts the different topics the instance has seen since umh-core started. Once a topic stops receiving messages it stays in the count. When umh-core restarts, the count can start from zero again. The **Metrics** button on the card opens the counters of the [Benthos](../data-flows/bridges.md) process that consumes the Kafka topic `umh.messages` from [Redpanda](redpanda.md). The **Logs** button opens the log of the same process.
+The **Topic Browser** card on the instance's detail page shows one value. **Topics** counts the different topics the instance has seen since UMH Core started. Once a topic stops receiving messages it stays in the count. When UMH Core restarts, the count can start from zero again. The **Metrics** button on the card opens the counters of the [Benthos](../data-flows/bridges.md) process that consumes the Kafka topic `umh.messages` from [Redpanda](redpanda.md). The **Logs** button opens the log of the same process. Both buttons are unavailable when the instance's UMH Core version does not support them.
 
 While that process runs, the card's badge reads **Active**. The information icon beside the badge gives the state of the Topic Browser itself, for example `benthos degraded` when the Benthos process fails or `redpanda degraded` when Redpanda is degraded. The badge can read **Active** while Redpanda is degraded, so read the information icon too. The Redpanda card shows the cause of a Redpanda failure; see [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded).
 
-## Configuration
+## Reference
+
+### Configuration
 
 One key controls the Topic Browser, in the `config.yaml` of the instance. [Configuration reference](../../reference/configuration-reference.md) lists it with the rest of `internal` and warns not to edit that section without guidance from UMH support.
 
@@ -109,7 +111,7 @@ One key controls the Topic Browser, in the `config.yaml` of the instance. [Confi
 |---|---|---|
 | `internal.topicbrowser.desiredState` | `active` | `stopped` turns off the Topic Browser on this instance: it collects no topics, and both the tree and the [GraphQL API](#graphql-api) stop updating. The change takes effect without a restart. |
 
-## Metrics
+### Metrics
 
 The metrics show the state of the Topic Browser and of its Benthos process, so you can alert when either is degraded. The Topic Browser reports on port 8080 and runs on FSMv1, so it uses the standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains how to reach the endpoint. Its series carry these labels:
 
@@ -118,7 +120,7 @@ The metrics show the state of the Topic Browser and of its Benthos process, so y
 | The Topic Browser | `topic_browser_instance` | `topic-browser` |
 | Its Benthos process | `benthos_instance` | `topicbrowser-topic-browser` |
 
-Prometheus renames the `instance` label to `exported_instance` when it scrapes, unless the scrape job sets `honor_labels: true`. Queries therefore use `exported_instance`, as the alert below does.
+In Prometheus queries, the `instance` label becomes `exported_instance`, as [Read the metrics](../instances/agent/metrics.md#read-the-metrics) explains.
 
 To raise an alert while the Benthos process of the Topic Browser is degraded, use:
 
@@ -128,6 +130,6 @@ umh_core_service_current_state{component="benthos_instance", exported_instance="
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
-## GraphQL API
+### GraphQL API
 
 For the endpoint, the schema, example queries and every configuration option, see [Topic Browser GraphQL API](../../reference/http-api/topic-browser-graphql.md).

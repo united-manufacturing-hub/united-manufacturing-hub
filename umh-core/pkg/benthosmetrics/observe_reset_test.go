@@ -112,6 +112,33 @@ var _ = Describe("A dropped counter", func() {
 		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 5, 0.5))
 	})
 
+	It("clears a restart's errors without resetting the input throughput", func() {
+		t0 := time.Now().Truncate(time.Second)
+		tr := NewTracker(func() time.Time { return t0 })
+
+		// 10/s of input with 3 output errors, then Benthos restarts: every
+		// counter drops to almost 0. The errors from before the restart
+		// clear at once, and the input throughput keeps its window: it still
+		// reads the messages around the restart, never 0 and never the
+		// cumulative count.
+		scrape := func(input, outputErrors int64, at time.Time) Sample {
+			return tr.observe(testPort, Metrics{
+				Inputs:  map[string]InputMetrics{"root.input": {Received: input}},
+				Outputs: map[string]OutputMetrics{"root.output": {Sent: input, Error: outputErrors}},
+			}, at)
+		}
+
+		scrape(100, 0, t0)
+		Expect(failuresIn(*scrape(110, 3, t0.Add(time.Second)).Failures)).To(Equal(1),
+			"the output errors open a failure")
+
+		got := scrape(5, 0, t0.Add(2*time.Second))
+		ok, reason := got.Failures.ErrorFree()
+		Expect(ok).To(BeTrue(), "a restart clears the errors from before it: %s", reason)
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 7.5, 0.5),
+			"(5+110-100)/2: the restart folds into the series, not the window")
+	})
+
 	It("rebuilds on a port change", func() {
 		t0 := time.Now().Truncate(time.Second)
 		tr := NewTracker(func() time.Time { return t0 })
@@ -126,6 +153,23 @@ var _ = Describe("A dropped counter", func() {
 		got = tr.observe(4196, counts(157, 157), t0.Add(11*time.Second))
 		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 7, 0.5),
 			"150->157 over 1s; the old port's 100 is gone from the window")
+	})
+
+	It("rebuilds on a port change even when the counters read lower", func() {
+		t0 := time.Now().Truncate(time.Second)
+		tr := NewTracker(func() time.Time { return t0 })
+
+		// The new port's counters are below the old port's. A port change
+		// wins over a restart: the window starts over instead of folding the
+		// drop into the old series.
+		tr.observe(4195, counts(100, 100), t0)
+		got := tr.observe(4196, counts(10, 10), t0.Add(10*time.Second))
+		Expect(got.InputMessagesPerSecond).To(Equal(unmeasured),
+			"the first tick on the new port holds one sample")
+
+		got = tr.observe(4196, counts(17, 17), t0.Add(11*time.Second))
+		Expect(perSecond(got.InputMessagesPerSecond)).To(BeNumerically("~", 7, 0.5),
+			"10->17 over 1s on the new port alone")
 	})
 
 	It("ignores a scrape that is not newer", func() {

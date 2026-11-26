@@ -17,6 +17,7 @@ package container_monitor
 import (
 	"context"
 
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/cpuhealth"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
 )
 
@@ -80,12 +81,12 @@ func (m *MockService) GetHealth(ctx context.Context) (*models.Health, error) {
 
 // CreateDefaultContainerStatus returns a default container status with healthy metrics for testing.
 func CreateDefaultContainerStatus() *ServiceInfo {
-	usage := 350.0
-	cores := 4
 	return &ServiceInfo{
 		CPU: &models.CPU{
-			TotalUsageMCpu: &usage,
-			CoreCount:      &cores,
+			CPUHealth: &models.CPUHealth{
+				Verdict: cpuhealth.Verdict{State: cpuhealth.StateHealthy},
+				Details: cpuhealth.Details{AvgUsageCores: 0.35, LogicalCpus: 4, CapacityCores: 4, UsageRingActive: true},
+			},
 		},
 		Memory: &models.Memory{
 			CGroupUsedBytes:  1073741824, // 1 GB
@@ -106,12 +107,12 @@ func CreateDefaultContainerStatus() *ServiceInfo {
 
 // CreateDegradedContainerStatus creates a container status with degraded health.
 func CreateDegradedContainerStatus() *ServiceInfo {
-	usage := 950.0
-	cores := 4
 	return &ServiceInfo{
 		CPU: &models.CPU{
-			TotalUsageMCpu: &usage,
-			CoreCount:      &cores,
+			CPUHealth: &models.CPUHealth{
+				Verdict: cpuhealth.Verdict{State: cpuhealth.StateDegraded},
+				Details: cpuhealth.Details{AvgUsageCores: 0.95, LogicalCpus: 4, CapacityCores: 4, UsageRingActive: true},
+			},
 		},
 		Memory: &models.Memory{
 			CGroupUsedBytes:  4000000000, // Almost full memory

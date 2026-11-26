@@ -14,7 +14,7 @@ Wait a minute, then check again. See [How live updates work](topic-browser.md#ho
 
 Open the [Topic Browser card](topic-browser.md#the-topic-browser-card) on the detail page of the instance that should report the topic. Check the badge, and also read the reason in the information icon beside it: the badge can read **Active** while one of the reasons below applies.
 
-- **The reason starts with `starting`.** The Topic Browser is still starting, for example after a restart. Wait until the reason no longer starts with `starting`, then check again.
+- **The reason starts with `starting`, or is `benthos started` or `redpanda started`.** The Topic Browser is still starting, for example after a restart. Wait until the reason reads `started up`, `data activity detected` or `no data activity`, then check again.
 - **The reason is `redpanda degraded`.** The Topic Browser cannot read messages because Redpanda is degraded. See [When Redpanda is degraded](redpanda.md#when-redpanda-is-degraded). The Topic Browser recovers on its own once Redpanda does.
 - **The reason is `benthos degraded`.** The process that reads the messages for the Topic Browser fails. Open its log with the **Logs** button on the Topic Browser card. If the log does not show a cause you can fix, continue with [Restart the instance](#restart-the-instance).
 - **`internal.topicbrowser.desiredState` is `stopped` in the `config.yaml` of the instance.** The Topic Browser is turned off. See [When the Topic Browser is turned off](#when-the-topic-browser-is-turned-off).
@@ -49,7 +49,7 @@ If the topic is published and the Topic Browser reads it, the cause is in what t
 - **The search box holds text.** The search narrows the tree to matching topics. Clear it.
 - **The topic sits deeper than you expect.** The tree follows the [topic convention](topic-convention.md): location path, data contract, then any virtual path folders, then the tag. Search for the tag name to find it.
 - **The instance is offline.** See [When the instance is offline](#when-the-instance-is-offline).
-- **The instance has just restarted.** Topics show again as new messages for them arrive, as [Restart the instance](#restart-the-instance) describes.
+- **The instance has just restarted.** Topics show again as messages for them arrive, as [Restart the instance](#restart-the-instance) describes.
 
 If none of these applies, we know of no further step on the instance that brings the topic back. Collect the evidence that [Getting help](#getting-help) lists and contact us.
 
@@ -67,9 +67,9 @@ Restarting the instance requires deployment access and restart permissions; you 
 
 To restart the instance, follow [Restart an Instance](../../production/deployment/restart-an-instance.md). Read its warning first: a restart interrupts collection on this instance.
 
-After the restart, wait until the reason on the Topic Browser card no longer starts with `starting`. Its **Topics** count can start from zero again. Topics that send data infrequently may take longer to reappear in the Topic Browser after a UMH Core restart.
-
 The logs in `/data/logs` survive the restart, so you can send them to us later.
+
+After the restart, wait until the reason on the Topic Browser card reads `started up`, `data activity detected` or `no data activity`. Its **Topics** count starts from zero. Each topic shows again once a message for it arrives, so a topic that sends data rarely can take a while to come back. A Management Console tab that stayed open during the restart can keep showing the older topics, with their age growing. To see only the topics reported since the restart, sign out of the Management Console and sign back in.
 
 ## Getting help
 

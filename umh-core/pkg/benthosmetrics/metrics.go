@@ -26,28 +26,41 @@ type Metrics struct {
 	Inputs  map[string]InputMetrics  `json:"inputs,omitempty"`
 }
 
+// connectionCounters is how often one input or output connected, lost its
+// connection, and failed to connect.
+type connectionCounters struct {
+	ConnectionFailed int64 `json:"connection_failed"`
+	ConnectionLost   int64 `json:"connection_lost"`
+	ConnectionUp     int64 `json:"connection_up"`
+}
+
+// down reports whether the input or output these counters belong to is down:
+// ConnectionUp <= ConnectionLost (its last connect did not succeed) and
+// ConnectionFailed or ConnectionLost is above 0, so a first connect still in
+// progress counts as up. Benthos sets these counters in input/async_reader.go
+// and output/async_writer.go; names.go links both.
+func (c connectionCounters) down() bool {
+	return c.ConnectionUp <= c.ConnectionLost && (c.ConnectionFailed > 0 || c.ConnectionLost > 0)
+}
+
 // InputMetrics contains the metrics of one leaf input path.
 type InputMetrics struct {
-	Path             string  `json:"path"`
-	Label            string  `json:"label"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Received         int64   `json:"received"`
+	Path  string `json:"path"`
+	Label string `json:"label"`
+	connectionCounters
+	LatencyNS Latency `json:"latency_ns"`
+	Received  int64   `json:"received"`
 }
 
 // OutputMetrics contains the metrics of one leaf output path.
 type OutputMetrics struct {
-	Path             string  `json:"path"`
-	Label            string  `json:"label"`
-	BatchSent        int64   `json:"batch_sent"`
-	ConnectionFailed int64   `json:"connection_failed"`
-	ConnectionLost   int64   `json:"connection_lost"`
-	ConnectionUp     int64   `json:"connection_up"`
-	Error            int64   `json:"error"`
-	LatencyNS        Latency `json:"latency_ns"`
-	Sent             int64   `json:"sent"`
+	Path      string `json:"path"`
+	Label     string `json:"label"`
+	BatchSent int64  `json:"batch_sent"`
+	connectionCounters
+	Error     int64   `json:"error"`
+	LatencyNS Latency `json:"latency_ns"`
+	Sent      int64   `json:"sent"`
 }
 
 // ProcessMetrics holds one entry per processor, keyed by processor path.
@@ -94,6 +107,28 @@ func (m Metrics) OutputSentTotal() int64 {
 	var total int64
 	for _, out := range m.Outputs {
 		total += out.Sent
+	}
+
+	return total
+}
+
+// outputErrorTotal returns the sum of Error across every output instance,
+// so a switch/broker/fallback config reports the true total instead of only
+// the last route's error count.
+func (m Metrics) outputErrorTotal() int64 {
+	var total int64
+	for _, out := range m.Outputs {
+		total += out.Error
+	}
+
+	return total
+}
+
+// processorErrorTotal returns the sum of Error across every processor.
+func (m Metrics) processorErrorTotal() int64 {
+	var total int64
+	for _, proc := range m.Process.Processors {
+		total += proc.Error
 	}
 
 	return total

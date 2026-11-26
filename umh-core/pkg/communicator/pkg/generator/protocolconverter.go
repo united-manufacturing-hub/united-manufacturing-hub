@@ -24,10 +24,9 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/connection"
 	dataflowcomponent "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/dataflowcomponent"
-	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsm/protocolconverter"
+	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/models"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 	"go.uber.org/zap"
 )
 
@@ -329,23 +328,23 @@ func getProtocolConverterStatusMessage(state string, statusReason string, connec
 		nmapSuffix := ""
 
 		switch nmapState {
-		case nmap.OperationalStateOpen:
+		case fsmv2nmap.OperationalStateOpen:
 			nmapSuffix = " (port is open)"
-		case nmap.OperationalStateClosed:
+		case fsmv2nmap.OperationalStateClosed:
 			nmapSuffix = " (port is closed)"
-		case nmap.OperationalStateFiltered:
+		case fsmv2nmap.OperationalStateFiltered:
 			nmapSuffix = " (port is filtered by firewall)"
-		case nmap.OperationalStateUnfiltered:
+		case fsmv2nmap.OperationalStateUnfiltered:
 			nmapSuffix = " (port is unfiltered)"
-		case nmap.OperationalStateOpenFiltered:
+		case fsmv2nmap.OperationalStateOpenFiltered:
 			nmapSuffix = " (port is open or filtered)"
-		case nmap.OperationalStateClosedFiltered:
+		case fsmv2nmap.OperationalStateClosedFiltered:
 			nmapSuffix = " (port is closed or filtered)"
-		case nmap.OperationalStateStarting:
+		case fsmv2nmap.OperationalStateStarting:
 			nmapSuffix = " (nmap is starting)"
-		case nmap.OperationalStateStopped:
+		case fsmv2nmap.OperationalStateStopped:
 			nmapSuffix = " (nmap is stopped)"
-		case nmap.OperationalStateDegraded:
+		case fsmv2nmap.OperationalStateDegraded:
 			nmapSuffix = " (nmap execution failed)"
 		default:
 			nmapSuffix = fmt.Sprintf(" (unexpected nmap state: %s)", nmapState)
@@ -411,7 +410,7 @@ func getDFCHealthCategory(state string) models.HealthCategory {
 	}
 }
 
-func connectionHealthMessage(state string, target string, port string, lastScan *nmapservice.NmapScanResult) string {
+func connectionHealthMessage(state string, target string, port string, lastScan *fsmv2nmap.NmapScanResult) string {
 	connectionFailing := state == connection.OperationalStateDown || state == connection.OperationalStateDegraded
 	if !connectionFailing {
 		return state
@@ -428,17 +427,17 @@ func connectionHealthMessage(state string, target string, port string, lastScan 
 	return dialFailureMessage(*lastScan.DialFailure, target, port, lastScan.DialError)
 }
 
-func dialFailureMessage(failure nmapservice.DialFailure, target string, port string, dialError string) string {
+func dialFailureMessage(failure fsmv2nmap.DialFailure, target string, port string, dialError string) string {
 	switch failure {
-	case nmapservice.DialFailureDNSTimeout:
+	case fsmv2nmap.DialFailureDNSTimeout:
 		return fmt.Sprintf("The lookup of %s timed out. Check the DNS server this instance uses.", target)
-	case nmapservice.DialFailureDNSError:
+	case fsmv2nmap.DialFailureDNSError:
 		return target + " could not be found. Check the host name in the bridge's connection, or use the IP address."
-	case nmapservice.DialFailureRefused:
+	case fsmv2nmap.DialFailureRefused:
 		return fmt.Sprintf("The device at %s refused the connection on port %s. Check the port and that the device's server is running.", target, port)
-	case nmapservice.DialFailureUnreachable:
+	case fsmv2nmap.DialFailureUnreachable:
 		return fmt.Sprintf("The device at %s can't be reached from this instance. Check the network route and the firewall.", target)
-	case nmapservice.DialFailureConnectTimeout:
+	case fsmv2nmap.DialFailureConnectTimeout:
 		return fmt.Sprintf("The device at %s isn't responding on port %s. Check if it's powered on and connected to the network.", target, port)
 	default:
 		return fmt.Sprintf("The connection check to %s:%s failed: %s", target, port, dialError)

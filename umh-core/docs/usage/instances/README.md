@@ -1,91 +1,62 @@
 # Instances
 
-## What is an Instance?
+An instance is a running UMH Core container: a single Docker container that hosts your Unified Namespace, your bridges and your flows. Each instance has a location path like `enterprise.site.area.line`, which decides where its data appears in the Unified Namespace. The Instance UUID identifies the instance.
 
-An instance is a running UMH Core container - a single Docker container that hosts your entire Unified Namespace. Each instance has a location path like `enterprise.site.area.line`. The location path determines where data is organized in your industrial data infrastructure. An instance is also uniquely identified by its Instance UUID.
+## The instance list
 
-## How an instance connects
+**Instances** lists every instance you can access, one row each:
 
-An instance authenticates with an `AUTH_TOKEN`, not with a user account. The Management Console generates the token while you create the instance and shows it once. Copy it then and pass it to the container as the `AUTH_TOKEN` environment variable on the first start.
+![The instance list with one UMH Core instance](./images/instance-list.png)
 
-The token does two things:
+The Management Console receives data only from the instances in the **instance filter**. Open it with the **Filter instances** button in the top bar. The button shows the name of the selected instance, or how many instances are selected. Select instances one by one, or select all. The **All** menu next to the search field is a different control: it only hides rows of the list.
 
-- It proves the instance's identity. The Management Console accepts the instance's status and hands it the configuration meant for it.
-- It locks the instance's access to the Management Console. Only the instance can unlock it, because only the instance has the token. The Management Console cannot.
+| Column | Shows |
+|---|---|
+| Status | **Active**, **Neutral**, **Degraded** or **Offline**. Hover over it to see why an instance is not active. An instance outside the instance filter shows **Not in the filter** and no other values. |
+| Instance name | The name of the instance. Click it to open the instance details page. For an instance in the instance filter, this works only while it is online. For an instance outside it, a dialog offers **Filter only this instance** or **Add to the current filter**. |
+| Type | **Core** for UMH Core, **Classic** for UMH Classic. `n/a` while the instance is offline. |
+| Version | The UMH Core version, or for UMH Classic the version of the companion. A marker shows when a newer version is available, or that the version is no longer supported and needs an upgrade. |
+| Data flows | The number of bridges, stand-alone flows and stream processors. It links to the Data Flows list, filtered to this instance. |
+| Topics | The number of topics in the instance's Unified Namespace. It links to the Topic Browser, or to the Tag Browser for UMH Classic. |
+| Read throughput (msg/sec) | The messages per second of all data flows on the instance, input and output added together, as a one-minute average. |
 
-Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
+The row menu has these entries:
 
-## Instance Overview Page
-<!-- TODO: Needs Instance Filtering explanation -->
+- **Instance details**, disabled while an instance in the instance filter is offline.
+- **Config file**, only for a UMH Core instance that is online and whose UMH Core version supports it.
+- **Upgrade**, only for a UMH Classic instance whose companion is not up to date.
+- **Audit logs**, only for a UMH Classic instance with companion 0.6.19 or later, and only with an active license and audit logs enabled for your organization.
+- **Delete**.
 
-<!-- TODO: Needs new screenshot, UI outdated -->
-![Instance Overview](./images/instance-overview.png)
+![The row menu of an online UMH Core instance](./images/instance-list-row-menu.png)
 
-The instance overview shows all your UMH instances at a glance:
+## The instance details page
 
-- **Instance Name**: Your chosen identifier for the instance
-- **Type**: 
-  - **Core**: Single container deployment (UMH Core)
-  - **Classic**: Kubernetes-based deployment (legacy)
-- **Version**: Container version identifier (e.g., `9e22396`)
-- **Data Flows**: Number of configured bridges and stand-alone flows
-- **Topics**: Total data points in your Unified Namespace
-- **Latency**: Network response time in milliseconds
-- **Throughput**: Messages per second flowing through the system
+The instance details page has two tabs. **Core** shows one card per component of UMH Core. **Plugins** shows the plugins added to the instance. See [Plugins](plugins.md).
 
-**Status indicators:**
-- Green dot: Instance is online and reachable
-- Gray dot: Instance is offline or unreachable
+![The Core tab of the instance details page](./images/instance-details-core-tab.png)
 
-**Quick actions:** Click the context menu (⋮) on any instance for:
-- Instance Details
-- Config File
-- Delete
+Each card has a status badge: **Active**, **Neutral**, **Degraded**, or **Stopped** for a component that is meant to be stopped. When the instance sent a reason, an info button next to the badge shows it. The cards show the status that the instance sent last. After 15 seconds without a message from the instance, the Management Console shows a red alert, "Instance Offline", above the tabs, and the cards keep showing the last status.
 
-## Instance Details Page
-<!-- TODO: Needs new screenshot, UI outdated -->
-![Instance Details](./images/instance-detail.png)
+Each card is explained on the page of its component:
 
-The instance details page provides comprehensive monitoring and management:
+| Card | Page |
+|---|---|
+| Agent | [Agent](agent/README.md#the-agent-card) |
+| Container | [Container](container/README.md#the-container-card) |
+| Communicator | [Communicator](communicator/README.md#the-communicator-card) |
+| Data Flows | [Data Flows](../data-flows/README.md#the-data-flows-card) |
+| Redpanda | [Redpanda](../unified-namespace/redpanda.md#redpanda-card) |
+| Topic Browser | [Topic Browser](../unified-namespace/topic-browser.md#the-topic-browser-card) |
 
-### Agent Card
-The Agent card shows the identity and the version of the instance: its name, location path, UMH Core version and release channel. See [Agent](agent/README.md).
+**View Instance Config** opens the instance's `config.yaml`. It appears when the instance's UMH Core version supports it. See [Edit the Config File](edit-the-config-file.md).
 
-### Container Card
-The Container card shows the CPU, memory and disk of the container, its architecture and its Hardware ID. See [Container](container/README.md).
+## Reference
 
-### Communicator Card
-The Communicator card shows the connection to the Management Console: its health, how full the outbound queue is, and how many Management Console sessions watch the instance. See [Communicator](communicator/README.md).
+### Configuration
 
-### Data Flows Card
-The Data Flows card groups bridges and stand-alone flows by their state. The states come from the [state machines](../../reference/state-machines.md) reference:
-- **Active**: Currently processing data (messages flowing)
-- **Neutral**: Includes:
-  - `idle`: Healthy but no data for 30+ seconds
-  - `stopped`: Intentionally disabled
-  - `starting`: Initialization in progress
-  - Various transition states
+`AUTH_TOKEN` and `API_URL`, which connect the instance to the Management Console, are explained in [Communicator: Configuration](communicator/README.md#configuration). Every other setting is a key in `config.yaml` or an environment variable of the container. See the [Configuration Reference](../../reference/configuration-reference.md) and [Environment Variables](../../reference/environment-variables.md).
 
-Example states:
-- `starting_dfc (port is open)`: Connection verified, waiting for Benthos, the stream processor that runs the flow, to start
-- `starting: stopping: stopping`: Complex state transition in progress
+### Metrics
 
-**Bridges count**: Total configured with active/neutral breakdown
-
-### Redpanda Card
-The Redpanda card shows the message broker that stores your [Unified Namespace](../unified-namespace/README.md):
-- **Incoming Throughput**: Data rate into the broker, per second, in B, KiB, MiB or a larger binary unit, depending on the value
-- **Outgoing Throughput**: Data rate from the broker, per second, in B, KiB, MiB or a larger binary unit, depending on the value
-- **Logs/Metrics buttons**: Direct access to Redpanda diagnostics
-
-### Topic Browser Card
-The Topic Browser card summarizes the data in the instance's Unified Namespace:
-- **Topics count**: Total number of data topics
-- Quick access to the [Topic Browser](../unified-namespace/topic-browser.md) for data exploration
-
-## Next Steps
-
-- **Configure your instance**: [Edit the config file](config-file.md)
-- **Connect devices**: [Create bridges](../data-flows/bridges.md)
-- **View your data**: [Topic Browser](../unified-namespace/topic-browser.md)
-- **Understand states**: [State Machines reference](../../reference/state-machines.md)
+Every instance serves Prometheus metrics on port 8080. [Read the metrics](agent/metrics.md#read-the-metrics) explains how to reach them, and each component page explains its own metrics.

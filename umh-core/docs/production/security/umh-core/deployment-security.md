@@ -133,7 +133,7 @@ This model aligns with industry-standard edge gateway security - we secure our s
 
 ## Deployment Model: Edge-Only Architecture
 
-umh-core is designed for edge-only deployment with a specific network architecture. The system requires outbound HTTPS connections to management.umh.app for configuration synchronization and supports outbound connections to data sources including MQTT brokers, OPC UA servers, Modbus devices, and APIs. No services are designed for inbound internet connections.
+umh-core is designed for edge-only deployment with a specific network architecture. The system requires outbound HTTPS connections to management.umh.app for configuration synchronization and supports outbound connections to external systems such as MQTT brokers, OPC UA servers, Modbus devices and APIs. No services are designed for inbound internet connections.
 
 The typical deployment location is on the factory floor, behind corporate firewall, on-premises at customer sites. This architecture reduces the attack surface by eliminating services that listen for inbound internet connections. The ManagementConsole queues configuration changes that umh-core instances pull on their own schedule for execution. This aligns with network segmentation best practices where umh-core sits between OT networks and IT infrastructure at the boundary layer.
 
@@ -174,7 +174,7 @@ sudo chown -R 1000:1000 /path/to/data
 
 See [Network Configuration](./network-configuration.md) for details on proxy settings and TLS inspection.
 
-**Data source connections**: Customer-defined connections to industrial devices and data sources.
+**External system connections**: Customer-defined bridge connections to PLCs, MES and other external systems.
 
 **Inbound**: No services designed for internet exposure (edge-only deployment).
 

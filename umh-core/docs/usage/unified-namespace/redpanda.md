@@ -28,7 +28,7 @@ The badge tooltip starts with `degraded:`, a space and the reason. umh-core runs
 | `s6 is not running, current state: <state>` | The Redpanda process is not running. umh-core restarts it, and the reason changes to `degraded: restarting service`. | Select **Logs** on the Redpanda card to see why the process stopped. |
 | `healthchecks did not pass, live: false, ready: false` | Redpanda does not report itself as ready. Both values come from the same readiness check. They are therefore always equal. | Read the Redpanda logs. |
 | `found error (clears in <time>): <log line>` with `Address already in use` | Another process holds a port that Redpanda needs, such as 9092 or 9644. | Stop the other process. If the container shares the host network, check which host process uses the port. |
-| `found error (clears in <time>): <log line>` with `Reactor stalled for <n> ms` | Redpanda was blocked for more than 500 milliseconds and processed nothing in that time. | Check [CPU Health](../instances/container/cpu-health/README.md). Give the container more CPU or a faster disk. |
+| `found error (clears in <time>): <log line>` with `Reactor stalled for <n> ms` | Redpanda was blocked for more than 500 milliseconds and processed nothing in that time. | Check the CPU on the [Container card](../instances/container/README.md). Give the container more CPU or a faster disk. |
 | `Redpanda storage free space alert: <free> free bytes (total: <total> bytes)` | Redpanda reports that its disk is nearly full. | Free disk space, enlarge the disk, or shorten the retention. See [Disk](../../production/sizing-guide.md#disk). |
 | `Redpanda unavailable topics: <n>` | Redpanda cannot serve `<n>` partitions. A partition is one part of a Kafka topic. | Read the Redpanda logs to find the cause. |
 | `unexpected restarts within the last hour: [<exit codes>]` | The Redpanda process exited with an error at least once in the last hour. The reason stays for one hour after the last exit. | Read the Redpanda logs around the time of the exit. |
@@ -37,7 +37,7 @@ A `found error` reason stays for 10 minutes after the log line. The `clears in` 
 
 ## Redpanda card
 
-The Redpanda card on the instance details page shows the state badge, the throughput, and two buttons.
+The Redpanda card on the instance details page shows the state badge, the throughput, and two buttons. The **Logs** and **Metrics** buttons are unavailable when the instance's UMH Core version does not support them.
 
 | Field | Shows |
 |---|---|
@@ -61,9 +61,11 @@ The Redpanda Metrics page shows a table with the columns Path, Name and Value. S
 
 `request_bytes_in` and `request_bytes_out` are totals. umh-core computes the throughput on the card from the same totals.
 
-## Settings
+## Reference
 
-Redpanda's settings are under `internal.redpanda` in the [config file](../instances/config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk](../../production/sizing-guide.md#disk) in the sizing guide.
+### Configuration
+
+Redpanda's settings are under `internal.redpanda` in the [config file](../instances/edit-the-config-file.md). The [configuration reference](../../reference/configuration-reference.md) lists them. To change how long Redpanda keeps messages, follow [Disk](../../production/sizing-guide.md#disk) in the sizing guide.
 
 When umh-core starts without a config file, it creates one with the two settings in this table. Both are under `internal.redpanda.redpandaServiceConfig.topic`.
 
@@ -72,9 +74,11 @@ When umh-core starts without a config file, it creates one with the two settings
 | `defaultTopicRetentionMs` | `604800000` | Redpanda keeps messages for seven days. |
 | `defaultTopicCleanupPolicy` | `delete` | Redpanda deletes messages older than the retention time. |
 
+umh-core applies a change to either setting to the running Redpanda. Neither needs a restart.
+
 If your config file was created before umh-core started to write `defaultTopicCleanupPolicy`, it has no such setting, and Redpanda uses `compact`. Under `compact`, Redpanda keeps only the latest message per key once a segment of the topic closes. A segment closes after one hour by default. You cannot replay the older history of a topic then.
 
-## Metrics
+### Metrics
 
 Redpanda serves its own metrics on its admin port 9644 at `/public_metrics`, which is inside the container and not published by default. Port 8080 has no series that Redpanda reports itself. It carries umh-core's own view of Redpanda, as standard [FSMv1 metrics](../instances/agent/metrics.md#fsmv1-metrics). [Metrics](../instances/agent/metrics.md) explains how to read them.
 

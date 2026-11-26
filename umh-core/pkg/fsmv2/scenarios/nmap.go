@@ -27,7 +27,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/scenariorunner"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 // mockDialer is the target port. Run sets open while the collector goroutine dials.
@@ -47,9 +46,9 @@ func (m *mockDialer) DialContext(_ context.Context, _, _ string) (net.Conn, erro
 	return local, nil
 }
 
-// NmapScenario opens and then closes the port one nmap worker dials. Like the
-// fsmv1 nmap worker it replaces, nmap stays running when the port closes. The
-// fsmv1 connection worker decides that means down
+// NmapScenario opens and then closes the port one nmap worker dials. The nmap
+// worker stays running when the port closes. The fsmv1 connection worker
+// decides that means down
 // (ConnectionInstance.IsConnectionNmapDown in pkg/fsm/connection). So the
 // scenario waits for port_state, not for degraded.
 var NmapScenario = scenariorunner.Scenario{
@@ -119,13 +118,13 @@ var NmapScenario = scenariorunner.Scenario{
 				})
 		}
 
-		if err := waitForPortState(string(nmapservice.PortStateOpen)); err != nil {
+		if err := waitForPortState(string(fsmv2nmap.PortStateOpen)); err != nil {
 			return err
 		}
 
 		env.Step("close the port and wait for port_state closed")
 		mock.open.Store(false)
 
-		return waitForPortState(string(nmapservice.PortStateClosed))
+		return waitForPortState(string(fsmv2nmap.PortStateClosed))
 	},
 }
