@@ -37,12 +37,13 @@ The release ships the commit the release PR was generated from (the PR descripti
 
 ### Maintenance release
 
-A release needs at least one changelog fragment. To release changes that are not user-visible, such as dependency updates or CI fixes, open a small PR to `staging` that only adds a maintenance fragment. The team decided on this entry for releases without user-visible changes. The handbook update is tracked in ENG-7942. Run this in `umh-core/`:
+A release needs at least one changelog fragment. To release changes that are not user-visible, such as dependency updates or CI fixes, open a small PR to `staging` that only adds a maintenance fragment. The team decided on this entry for releases without user-visible changes. The [engineering handbook](https://engineering.umh.app/engineering/development-process/how-to-ship/changelog#releases-without-user-visible-changes) describes it. Run this in `umh-core/`:
 
 ```bash
-make changelog  # once, to install changie
 ./.tools/changie new --kind improvements --body "Maintenance release: internal changes only, no user-visible changes."
 ```
+
+If `.tools/changie` does not exist yet, run `make changelog` instead, and enter the kind `improvements` and the same text.
 
 Once it is merged, the bot opens the release PR.
 
