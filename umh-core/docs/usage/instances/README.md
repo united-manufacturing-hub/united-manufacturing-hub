@@ -53,16 +53,7 @@ Each card is explained on the page of its component:
 
 ### Configuration
 
-An instance authenticates with an `AUTH_TOKEN`, not with a user account. You create an instance with **Add instance** on the **Instances** page, as [Step 1: Install](../../getting-started/README.md) shows. The Management Console then generates the token and shows it once. Copy it and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. `AUTH_TOKEN` has no default. umh-core reads it once at startup and stores it in `config.yaml` as `agent.communicator.authToken`. Without a token in either place, the instance runs without a connection to the Management Console. To change the token, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
-
-The token does two things:
-
-- It proves the instance's identity. The Management Console accepts the instance's status and hands it the configuration meant for it.
-- It locks the instance's access to the Management Console. Only the instance can unlock it, because only the instance has the token.
-
-Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
-
-Every other setting is a key in `config.yaml` or an environment variable of the container. See the [Configuration Reference](../../reference/configuration-reference.md) and [Environment Variables](../../reference/environment-variables.md).
+`AUTH_TOKEN` and `API_URL`, which connect the instance to the Management Console, are explained in [Communicator: Configuration](communicator/README.md#configuration). Every other setting is a key in `config.yaml` or an environment variable of the container. See the [Configuration Reference](../../reference/configuration-reference.md) and [Environment Variables](../../reference/environment-variables.md).
 
 ### Metrics
 

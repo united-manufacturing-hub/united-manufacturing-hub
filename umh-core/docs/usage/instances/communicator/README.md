@@ -44,6 +44,17 @@ Each queue figure that rose above its mark must fall below its own lower mark be
 
 ## Reference
 
+### Configuration
+
+The communicator logs in with an `AUTH_TOKEN`, not with a user account. You create an instance with **Add instance** on the **Instances** page, as [Step 1: Install](../../../getting-started/README.md) shows. The Management Console then generates the token and shows it once. Copy it and pass it to the container as the `AUTH_TOKEN` environment variable on the first start. The token proves the instance's identity: the Management Console accepts the instance's status and hands it the configuration meant for it. Keep the token somewhere you can find it again, such as your password manager. For storage and rotation on the instance, see [AUTH_TOKEN in Environment Variable](../../../production/security/umh-core/deployment-security.md#auth_token-in-environment-variable).
+
+| Environment variable | `config.yaml` key | Default | Sets |
+|---|---|---|---|
+| `AUTH_TOKEN` | `agent.communicator.authToken` | none | The token the communicator logs in with. |
+| `API_URL` | `agent.communicator.apiUrl` | none | The address of the Management Console. The install commands set it to `https://management.umh.app/api`. |
+
+umh-core reads both variables once at startup and stores them in `config.yaml`. A variable that is set overrides the key. Without both values, the instance runs without a connection to the Management Console. To change either, remove the container and start it again with the same `docker run` command and the new value. `docker restart` keeps the old environment.
+
 ### Metrics
 
 The communicator reports these series on port 8080. All are FSMv2 component series, so each carries the label `hierarchy_path`, which names the part of the communicator that reports it: `(pull)` fetches messages from the Management Console, `(push)` sends them, `(transport)` logs in, and `(communicator)` is the part above them. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to reach the endpoint, and [FSMv2 metrics](../agent/metrics.md#fsmv2-metrics) explains the `hierarchy_path` label and the standard series every FSMv2 component reports. A counter appears only after its first count.

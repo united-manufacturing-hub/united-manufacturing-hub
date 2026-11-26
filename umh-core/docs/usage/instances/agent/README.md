@@ -18,7 +18,12 @@ The **Logs** button opens the logs of the agent. The agent writes them to `/data
 
 ## Agent states
 
-The Agent shows Degraded while the emergency setting *Turn off bridge admission* is on. The badge reason then starts with `Bridge admission is off (agent.enableResourceLimitBlocking: false).` New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit. [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission) explains how to turn bridge admission back on.
+| Badge | Reason | What it means |
+|---|---|---|
+| Active | `Agent operating normally` | The agent runs and manages the components. |
+| Degraded | `Bridge admission is off (agent.enableResourceLimitBlocking: false). …` | The emergency setting *Turn off bridge admission* is on. New bridges start without waiting for healthy CPU, memory and disk, and without the bridge limit. [Emergency settings: Turn off bridge admission](../../data-flows/bridges-do-not-start.md#emergency-settings-turn-off-bridge-admission) explains how to turn it back on. |
+| Degraded | `Agent degraded` | The config file has no `agent.location`. |
+| Neutral | `Agent status unknown` | umh-core has no status of the agent yet, for example in the first seconds after a start. |
 
 A degraded Agent also marks the whole instance as degraded. In the instance list, hover over the status dot of the instance to see the line `Agent: <reason>`.
 

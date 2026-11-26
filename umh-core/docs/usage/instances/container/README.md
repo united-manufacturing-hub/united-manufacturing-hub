@@ -31,13 +31,16 @@ The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details
 
 ### Container status
 
-The container shows Degraded when the CPU, the memory or the disk is degraded. The badge reason lists one line per degraded resource. [Container thresholds](#container-thresholds) gives the values.
+The container shows Degraded when the CPU, the memory or the disk is degraded. The badge reason then lists one line per degraded resource. [Container thresholds](#container-thresholds) gives the values.
 
-| Resource | Reason line |
-|---|---|
-| Memory | `Memory degraded: Memory utilization critical`. With the memory monitor preview, the line names the cause, see [Memory with the memory monitor preview](#memory-with-the-memory-monitor-preview). |
-| Disk | `Disk degraded: Disk utilization critical` |
-| CPU | `CPU degraded: …`, followed by the [CPU status](#cpu-status) |
+| Badge | Reason | What it means |
+|---|---|---|
+| Active | The [CPU status](#cpu-status), for example `CPU healthy. …` | CPU, memory and disk are healthy. Without a CPU status, the reason is `Container operating normally`. |
+| Degraded | `Memory degraded: Memory utilization critical` | The memory is above its threshold. With the memory monitor preview, the line names the cause, see [Memory with the memory monitor preview](#memory-with-the-memory-monitor-preview). |
+| Degraded | `Disk degraded: Disk utilization critical` | The `/data` volume is above its threshold. |
+| Degraded | `CPU degraded: …`, followed by the [CPU status](#cpu-status) | CPU health is degraded. |
+| Degraded | `Container degraded` | A resource is degraded but gave no reason. |
+| Neutral | `Container status unknown` | umh-core has no reading of the container yet, for example in the first seconds after a start. |
 
 ### CPU status
 
