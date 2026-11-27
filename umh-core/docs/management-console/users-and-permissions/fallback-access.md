@@ -12,7 +12,7 @@ If you already run break-glass accounts in other systems, the Management Console
 
 ### The Account Owner is your break-glass account
 
-In the Management Console, the **Account Owner** is the account that created the company. It has Admin access everywhere in the company, and it cannot be transferred or demoted. That is deliberate: it guarantees one account always has full control, whatever happens to the others. Not every company has one. Ask your account executive if you are not sure whether yours does.
+In the Management Console, the **Account Owner** is the account that created the company. It has Admin access everywhere in the company, and it cannot be transferred or demoted. That is deliberate: it guarantees one account always has full control, whatever happens to the others. Not every company has one. If you are not sure whether yours does, see [Get Help](../../get-help.md).
 
 The Account Owner cannot be recovered either, so decide before you register which account it will be, and treat it as a break-glass account from day one:
 

@@ -42,7 +42,7 @@ The instance opens outbound HTTPS to `management.umh.app`, and by default nothin
 | Roles, locations, emergency access | [Users and Permissions](users-and-permissions/README.md) |
 | Threat model, responsibilities, compliance | [Security](security/README.md) |
 
-Companies, membership, licences and editions are not documented yet. Ask your account executive in the meantime.
+Companies, membership, licences and editions are not documented yet. For questions about them in the meantime, see [Get Help](../get-help.md).
 
 Everything you build with the console is documented under [Usage](../usage/README.md), because it works the same whether you configure it in the console or by editing the instance's config file.
 
