@@ -5,7 +5,7 @@ Restarting an instance stops its container and starts it again with the same ima
 Restarting an instance requires access to the system used to manage the UMH Core deployment and permission to restart it. This may be a container runtime (such as [Docker](docker/README.md) or [Docker Compose](docker-compose/README.md)), an orchestrator (such as Kubernetes), or a management interface (such as Portainer). If IT manages the deployment, ask them to perform the restart.
 
 {% hint style="warning" %}
-A restart stops every bridge and flow this instance runs. It collects nothing until its bridges and flows have recovered, and values your devices send in that time may be lost. The devices keep running, and other instances keep collecting. Only [Redundant Data Collection](../architecture-patterns/redundant-data-collection.md) keeps collection running, and it needs redundant PLCs. Plan a maintenance window.
+A restart stops every bridge and flow this instance runs. It collects nothing until its bridges and flows have recovered, and values your devices send in that time may be lost. The devices keep running, and other instances keep collecting. To keep collecting through a hardware failure, you need redundant PLCs; see [Redundant Data Collection](../architecture-patterns/redundant-data-collection.md). For a planned restart, that page says a single PLC with multiple addresses may avoid the gap, but it does not describe how. Plan a maintenance window.
 {% endhint %}
 
 ## Restart the instance
