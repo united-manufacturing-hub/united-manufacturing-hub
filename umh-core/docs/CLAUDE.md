@@ -80,6 +80,19 @@ The words in the table that are wrong in every context, and the direction words,
 - "Connection" also keeps its network meaning, for example a TCP connection, a database connection or the connection to the Management Console. Only the thing at the other end of it is the external system.
 - "Device model" is a data modeling term and stays.
 
+### Data modeling
+
+<!-- vale off -->
+
+| Concept | Use | Instead of |
+|---|---|---|
+| A data contract created from a data model, such as `_pump_v1` | **user-defined data contract** | custom data contract, custom contract |
+| `_raw` and `_historian` | **built-in data contract** | default contract, system contract |
+
+<!-- vale on -->
+
+"Custom data contract" is kept free for the contracts for relational data that ENG-4982 plans, so a page does not describe that feature as available today.
+
 ### Access
 
 - **Permission grant**: what the Management Console issues so that a user or an instance can access instances. Never call it a certificate. "Certificate" means TLS only. Describe what the user sees on screen: "permission grant" or "unlocks access to your X".
