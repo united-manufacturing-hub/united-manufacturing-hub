@@ -121,6 +121,10 @@ dataFlow:
 | `pipeline.processors` | Standard Benthos processors **plus** `tag_processor` & `nodered_js`.           |
 | `output.*`            | Usually `uns: {}` for Unified Namespace. MQTT, HTTP, SQL, etc. also available. |
 
+umh-core passes only these top-level keys of `benthos` to Benthos: `input`, `pipeline`, `output`, `buffer`, `cache_resources` and `rate_limit_resources`. It drops any other key without an error, for example `processor_resources`, even when it reads the file strictly. Define processors inline under `pipeline.processors` instead. The same holds for the `benthos` of a bridge's read flow, except that umh-core always sets its output to `uns`. See [Read Flow](../usage/data-flows/read-flow.md#umh-core-sets-the-output).
+
+A bridge's write flow has no `benthos` key. Its processor comes from `processing.type` and `processing.code`, and its `extra.code` passes only `buffer`, `cache_resources` and `rate_limit_resources`. umh-core drops any other key in `extra.code` without an error.
+
 _For complete input/output syntax see [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh)_
 
 ### Bridge

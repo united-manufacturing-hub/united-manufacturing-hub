@@ -134,6 +134,16 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
 | **Stand-alone Flows** | Custom processing | Any input | Any output |
 
+## When a stream processor is degraded
+
+A stream processor's status shows only its state, for example `Stream processor degraded_dfc`. It does not show the reason or an error count. The state tells you where to look:
+
+| State | Cause | Where to look |
+|---|---|---|
+| `degraded_dfc` | A check on its internal flow failed. | [Data Flow Shows Degraded](data-flow-shows-degraded.md) explains the checks, how to find the cause and how the flow recovers. |
+| `degraded_redpanda` | Redpanda is not idle or active. | [When Redpanda is degraded](../unified-namespace/redpanda.md#when-redpanda-is-degraded) |
+| `degraded_other` | The internal flow is active while Redpanda is idle, or Redpanda runs but the flow's output has no connection to it. | The log of its internal flow, `/data/logs/benthos-dataflow-dfc-streamprocessor-<name>/current`, for errors of its Kafka connection. |
+
 ## Metrics
 
 The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts. It carries the stream processor's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stream processors and what the labels and the state values mean.
