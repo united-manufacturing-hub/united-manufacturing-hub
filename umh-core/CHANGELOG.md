@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.45.7]
+
+### Fixes
+
+- Bridges and stand-alone flows in degraded status now show the total number of processor errors. Before, when several processors reported errors, the status showed the count of only one of them, so the number jumped between values such as 6 and 6478 although the error counters had not changed
+
 ## [0.45.6]
 
 ### Fixes
