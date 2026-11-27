@@ -2,7 +2,7 @@
 
 > This article assumes you've completed the [Getting Started guide](../../getting-started/) and understand the [data modeling concepts](README.md).
 
-Payload shapes define the structure and validation rules for message payloads. While built-in shapes handle most time-series data, custom shapes enable relational data modeling for complex business records.
+Payload shapes define the structure and validation rules for message payloads. The built-in shapes cover time-series data. Custom shapes describe relational records, but data contracts for relational data are not supported yet. [Time-series and relational data](data-contracts.md#time-series-and-relational-data) explains the supported path.
 
 ## Overview
 
@@ -85,6 +85,10 @@ Custom shapes are specifically for **relational data** - business records with m
 | Complex business records | Custom shape | Work orders, quality inspections |
 
 Learn more: [Payload Formats](../unified-namespace/payload-formats.md)
+
+{% hint style="info" %}
+Data contracts for relational data are not supported yet. A data model with custom shapes, and the examples on this page, describe the structure of relational records, but the supported path for relational data is the built-in `_raw` contract. See [Time-series and relational data](data-contracts.md#time-series-and-relational-data).
+{% endhint %}
 
 ## Configuration
 

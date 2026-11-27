@@ -116,6 +116,18 @@ After the data contract, a topic pattern can match every tag or only some of the
 
 A new version of a data contract does not reach the write flow on its own. Add the version to the topic pattern, for example by changing `_pump_v1` to `_pump_v[1-2]`.
 
+## Relational data
+
+A write flow subscribes to relational data, such as production orders, in the built-in `_raw` contract. [Data Contracts: Time-series and relational data](../data-modeling/data-contracts.md#time-series-and-relational-data) explains why, and which contracts a write flow cannot subscribe to.
+
+This topic pattern subscribes to the production orders at the bridge location:
+
+```text
+^umh\.v1\.{{ .location_path }}\._raw\.mes\.order$
+```
+
+Nothing validates the data in `_raw`, so check in **Processing** that each record has the fields the external system needs. [Set up a write flow](set-up-a-write-flow.md#step-3-pick-the-topics) shows how to pick `_raw` topics.
+
 ## Reference
 
 ### Configuration

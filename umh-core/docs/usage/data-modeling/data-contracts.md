@@ -111,7 +111,7 @@ msg.meta.data_contract = "_raw";
 
 - Accepts any structure
 - No validation performed
-- Use for exploration and development
+- Use for exploration and development, and for [relational data](#time-series-and-relational-data)
 - Bridge never goes degraded from data issues
 
 ### Model-Based Contracts
@@ -129,13 +129,27 @@ dataContracts:
 - Rejects non-conforming messages
 - Use for production systems
 
-### Relationship to Data Types
+## Time-series and relational data
 
-| Data Type | Common Contracts | Validation |
-|-----------|------------------|------------|
-| Raw/Exploration | `_raw` | No validation |
-| Device Models | `_pump_v1`, `_sensor_v1`, `_cnc_v1` | Model-based validation |
-| Business Models | `_workorder_v1`, `_maintenance_v1` | Always strict |
+Data contracts are supported for time-series data, where each tag holds one value, such as a temperature. Data contracts for relational data, such as a production order with several fields in one message, are not supported yet. [Payload Formats](../unified-namespace/payload-formats.md) explains both formats.
+
+| Data contract | Data | Validated | A write flow can subscribe to it |
+|---|---|---|---|
+| A contract of a data model, such as `_pump_v1` | Time-series | Yes | Yes |
+| `_raw` | Any JSON object, time-series or relational | No | Yes |
+| A contract not declared under `dataContracts:`, such as `_mes_order` | Any | No | No |
+
+### Relational data in `_raw`
+
+The supported path for relational data is the built-in `_raw` contract. `_raw` accepts any JSON object and does not validate it. A read flow or a stand-alone flow publishes the records in `_raw`, for example at `umh.v1.acme.cologne.packaging._raw.mes.order`.
+
+Because nothing validates the data in `_raw`, every consumer checks the fields it needs. A [write flow](../data-flows/write-flow.md#relational-data) does this in **Processing**.
+
+### Contracts that are not declared
+
+A stand-alone flow can publish relational data with a data contract that is not declared under `dataContracts:` in `config.yaml`, such as `_mes_order`. This is a provisional path. UMH Core publishes these messages without validation.
+
+A write flow cannot subscribe to such a contract. The Management Console does not offer it on the **UMH Topics** card, and [topic validation](../data-flows/write-flow.md#topic-validation) rejects a topic pattern that names it. To write this data to an external system, publish it in `_raw` as well.
 
 ## Examples
 

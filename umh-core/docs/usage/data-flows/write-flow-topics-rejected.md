@@ -28,7 +28,7 @@ Each problem quotes the topic pattern as written. Some problems end with `availa
   - The topic pattern has a plain separator dot, such as `umh.v1.` instead of `umh\.v1\.`. A plain dot matches any character. Write every separator dot as `\.`. Leave `.*` as it is, because `\.*` matches repeated dots instead.
 - **can match topics outside the UNS**: the bridge has no bridge location, and the topic pattern does not start with `^umh\.v1\.`. Start it with the prefix the message names.
 - **must name a data contract beneath the location, followed by `\.`**: the topic pattern has no data contract. Add a contract from the `available:` list, for example `\._pump_v1\.`.
-- **names a data contract that is not declared in dataContracts:**: the contract or its version does not exist on this instance. Create the data model as described in [Data Contracts](../data-modeling/data-contracts.md), or pick a contract from the `available:` list.
+- **names a data contract that is not declared in dataContracts:**: the contract or its version does not exist on this instance. Create the data model as described in [Data Contracts](../data-modeling/data-contracts.md), or pick a contract from the `available:` list. For relational data that a stand-alone flow publishes with such a contract, see [Contracts that are not declared](../data-modeling/data-contracts.md#contracts-that-are-not-declared).
 - **can match more than one data contract**: the topic pattern can match topics of more than one data contract. Name one contract and list its versions, like `_pump_v[1-2]\.`. Common causes:
   - The contract part is a wildcard, such as `_.*` or `_pump_v\d+`, or it lists two contracts.
   - The contract is not followed by `\.`, such as `...\._pump_v1`. It then also matches longer names such as `_pump_v10`.
@@ -78,7 +78,7 @@ Turning it on or off recreates the container, which stops every bridge on the in
 
 Add `-e BYPASS_WRITE_FLOW_VALIDATION=true` to the `docker run` command and recreate the container, as described in [Updating](../../production/deployment/docker/updating.md). `true`, `1`, `yes`, `y` and `on` turn the setting on, in any case. Unset or any other value leaves it off, which is the default. UMH Core reads the value once at startup, and `docker restart` keeps the old value.
 
-Each topic pattern must still start with `^umh\.v1\.` and name one data contract, written out in full and followed by `\.`, such as `\._mes_order\.`. A wildcard in place of the contract stays rejected.
+Each topic pattern must still start with `^umh\.v1\.` and name one data contract, written out in full and followed by `\.`, such as `\._pump_v1\.`. A wildcard in place of the contract stays rejected.
 
 A bridge whose topic patterns need the setting shows as degraded, with a status that starts with "flow degraded: BYPASS_WRITE_FLOW_VALIDATION is set". For an existing bridge, **Save & Deploy** waits for a healthy bridge, so it rolls this change back. Select **Save Anyway** instead.
 

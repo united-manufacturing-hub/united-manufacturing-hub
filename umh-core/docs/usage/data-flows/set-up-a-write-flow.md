@@ -4,7 +4,7 @@ This guide adds a [write flow](write-flow.md) to a bridge in the Management Cons
 
 Before you start you need:
 
-- A data contract on the instance, such as `_pump_v1`, or the built-in `_raw`. The Management Console creates one when you create a data model. See [Data Contracts](../data-modeling/data-contracts.md).
+- A data contract on the instance, such as `_pump_v1`, or the built-in `_raw`. The Management Console creates one when you create a data model. See [Data Contracts](../data-modeling/data-contracts.md). For relational data, such as production orders, use `_raw`, as described in [Time-series and relational data](../data-modeling/data-contracts.md#time-series-and-relational-data).
 - Data arriving in the UNS for that contract at the bridge location. Check it in the [Topic Browser](../unified-namespace/topic-browser.md).
 - A test system that accepts the data, not your production MES.
 
@@ -35,6 +35,8 @@ The **UMH Topics** card builds the topic patterns for you in **Visual** mode. Ea
 5. In **Tags**, keep **All tags**, or type tag names and press Enter to subscribe to only those tags.
 
 ![The UMH Topics card in Visual mode](images/write-flows-topics-visual.png)
+
+For relational data, pick `_raw` in **Data contract** and type the tag name of the records in **Tags**, such as `order`. [Time-series and relational data](../data-modeling/data-contracts.md#time-series-and-relational-data) explains why relational data goes through `_raw`.
 
 To subscribe to only one level below the bridge location, such as one line, try these options in this order:
 
