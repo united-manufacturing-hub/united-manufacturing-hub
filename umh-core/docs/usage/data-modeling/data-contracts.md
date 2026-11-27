@@ -16,19 +16,7 @@ flowchart LR
 
 When you specify a data contract in a bridge, the UNS output plugin validates every message against the associated model.
 
-## UI Capabilities
-
 The Management Console provides read-only access to contracts:
-
-| Feature | Available | Notes |
-|---------|-----------|-------|
-| View contract list | ✅ | Shows all contracts with their models |
-| Filter/search | ✅ | Filter by name, instance, or model |
-| View associations | ✅ | See which model version each contract enforces |
-| View usage | ✅ | Shows count of stream processors using contract |
-| Create contracts | ❌ | Auto-created when creating models in UI |
-| Edit contracts | ❌ | Immutable once created |
-| Delete contracts | ❌ | Must be done via config.yaml |
 
 ![Contracts List](./images/data-contracts.png)
 
@@ -38,9 +26,11 @@ The Management Console provides read-only access to contracts:
 - **Model**: The model and version being enforced (e.g., `cnc (v1)`)
 - **Stream Processors**: Count of processors using this contract
 
+Search the list to find a contract by name, instance or model.
+
 ### Auto-Creation via UI
 
-When you create a model in the UI, it automatically generates a matching contract:
+Contracts cannot be created directly in the Management Console. When you create a model in the UI, it automatically generates a matching contract:
 
 1. Create model `pump` version `v1` in UI
 2. System auto-creates contract `_pump_v1`
@@ -49,6 +39,8 @@ When you create a model in the UI, it automatically generates a matching contrac
 ## Configuration
 
 Access configuration via: Instances → Select instance → `...` → Config File
+
+Contracts are immutable once created. Deletion is done through `config.yaml`.
 
 ### Basic Structure
 

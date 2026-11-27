@@ -6,23 +6,6 @@ A bridge (UI: "Bridges", YAML: `protocolConverter:`) connects the Unified Namesp
 
 It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle. [Connection Probe](connection-probe.md) and [Read Flow](read-flow.md) describe the parts. To create a bridge, see [Create a bridge](create-a-bridge.md).
 
-## UI Capabilities
-
-| Action | Available | Notes |
-|--------|-----------|-------|
-| Create bridges | ✅ | Visual protocol configuration |
-| Create from existing bridge | ✅ | Copy a healthy bridge's configuration |
-| Start from a template | ✅ | 84 pre-configured templates, filtered by vendor and protocol |
-| Select protocols | ✅ | OPC UA, Modbus, S7, MQTT, 50+ more |
-| Configure location path | ✅ | ISA-95 levels (0-4) |
-| Map addresses to topics | ✅ | Dropdown of data model fields for custom data contracts |
-| Monitor connection health | ✅ | Real-time status |
-| View logs | ✅ | Live log streaming |
-| View metrics | ✅ | Throughput monitoring |
-| Edit bridges | ✅ | Modify and redeploy |
-| Delete bridges | ✅ | Clean removal |
-| Advanced mode | ✅ | Direct YAML editing |
-
 ## Managing Bridges
 
 ### View Status

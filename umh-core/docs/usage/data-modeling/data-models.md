@@ -19,19 +19,7 @@ When you create a data model, you're defining:
 - Fields - data endpoints with specific types (e.g., `temperature`, `pressure`)
 - Relationships - how components nest and reference each other
 
-## UI Capabilities
-
 The Management Console provides full control over data models:
-
-| Feature | Available | Notes |
-|---------|-----------|-------|
-| View model list | ✅ | Shows all models with versions |
-| Create models | ✅ | Visual editor with YAML preview |
-| View model details | ✅ | Inspect structure and configuration |
-| Create new versions | ✅ | Models are immutable, edit by versioning |
-| Reference sub-models | ✅ | Link to other models via `_refModel` |
-| Delete models | ✅ | Remove unused model versions |
-| Direct editing | ❌ | Use "New Version" to modify |
 
 ![Data Models List](./images/data-models.png)
 
@@ -42,6 +30,8 @@ The Management Console provides full control over data models:
 - **Latest**: Current version number (v1, v2, etc.)
 
 ### Model Actions
+
+Models cannot be edited directly. Use **New Version** to modify one.
 
 Click the three-dot menu (⋮) on any model to access actions:
 
