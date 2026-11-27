@@ -72,6 +72,8 @@ A read flow whose pipeline holds exactly one processor, a `tag_processor`, gets 
 
 A write flow never gets one, and neither does a [stand-alone flow](stand-alone-flow.md) or a [stream processor](stream-processor.md).
 
+In the Management Console, the **Data Type** of a read flow is either **Time-Series**, a single `tag_processor`, or **Relational**, a single `nodered_js`. A read flow you build there therefore holds one processor, and a time-series one gets the downsampler. The other pipelines in the table need `config.yaml`. The Management Console shows such a read flow as the YAML of its pipeline, without the address table.
+
 A pipeline that umh-core leaves alone can still have a downsampler. Write one into the pipeline yourself, with the options you want, and umh-core keeps it as you wrote it. This also holds for a pipeline of a `tag_processor` and your own `downsampler`: those are two processors, so umh-core appends nothing and your options are the ones that run.
 
 The appended `downsampler` carries no configuration of its own. It publishes the first value of a tag, and after that publishes a value only when it differs from the last value it published, for numbers, booleans and strings alike. A tag that holds its value therefore publishes once and stays quiet until the value changes, however often the read flow reads it, and the age beside it in the Topic Browser grows meanwhile. [Values are not updating at regular intervals](../unified-namespace/values-are-not-updating-at-regular-intervals.md) covers that symptom, and [Downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) describes what the processor does with a message and which options it takes.
