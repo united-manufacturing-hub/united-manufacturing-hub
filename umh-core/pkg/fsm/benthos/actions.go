@@ -778,7 +778,7 @@ func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow tim
 	// run, so errors logged before a restart do not count.
 	scanWindow := min(logWindow, b.processLifetime(currentTime))
 
-	logsFine, logEntry := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, scanWindow)
+	logsFine, logEntry, lastAt := b.service.IsLogsFine(b.ObservedState.ServiceInfo.BenthosStatus.BenthosLogs, currentTime, scanWindow)
 	if !logsFine {
 		reportPluginErrorAsync(
 			dataflowcomponentserviceconfig.BenthosPluginID(b.config.Input),
@@ -790,9 +790,10 @@ func (b *BenthosInstance) IsBenthosLogsFine(currentTime time.Time, logWindow tim
 			b.baseFSMInstance.GetLogger(),
 		)
 
-		// The line stays in the window until it is older than logWindow,
-		// because the process lifetime only grows.
-		timeUntilClear := logEntry.Timestamp.Add(logWindow).Sub(currentTime)
+		// The flow recovers once the last offending line is older than
+		// logWindow, because the process lifetime only grows. The message
+		// names the first one, because that one started it.
+		timeUntilClear := lastAt.Add(logWindow).Sub(currentTime)
 		if timeUntilClear > 0 {
 			return false, fmt.Sprintf("found error (clears in %v): %s",
 				timeUntilClear.Round(time.Second),

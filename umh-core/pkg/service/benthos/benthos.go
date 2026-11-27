@@ -112,14 +112,11 @@ type IBenthosService interface {
 	// ReconcileManager reconciles the Benthos manager
 	// Expects snapshot (fsm.SystemSnapshot) containing current state and timestamp
 	ReconcileManager(ctx context.Context, services serviceregistry.Provider, snapshot fsm.SystemSnapshot) (error, bool)
-	// IsLogsFine reports true when recent Benthos logs (within the supplied
-	// window) contain no critical errors or warnings.
-	//
-	// It returns:
-	//
-	//	ok    – true when logs look clean, false otherwise.
-	//	entry – zero value when ok is true; otherwise the first offending log line.
-	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (bool, s6service.LogEntry)
+	// IsLogsFine reports whether the logs within logWindow before currentTime
+	// contain no critical errors or warnings. If they do, first is the first
+	// offending line, and lastAt is the newest offending timestamp: the window
+	// is clean again once lastAt is older than logWindow.
+	IsLogsFine(logs []s6service.LogEntry, currentTime time.Time, logWindow time.Duration) (ok bool, first s6service.LogEntry, lastAt time.Time)
 	// IsMetricsErrorFree reports true when Benthos metrics contain no error
 	// counters.
 	//
@@ -263,7 +260,7 @@ type configCacheEntry struct {
 // hash is a helper function for configCacheEntry.hash.
 func hash(buf []byte) uint64 { return xxhash.Sum64(buf) }
 
-// benthosLogRe is a helper function for BenthosService.IsLogsFine.
+// benthosLogRe captures the level and message of a Benthos error or warning line.
 // no ^ anchor since redpanda-connect logs may start with time= prefix.
 var benthosLogRe = regexp.MustCompile(`level=(error|warning)\s+msg=(.+)`)
 
@@ -1030,59 +1027,65 @@ func (s *BenthosService) ReconcileManager(ctx context.Context, services servicer
 	return nil, s6Reconciled || monitorReconciled
 }
 
-// IsLogsFine reports true when recent Benthos logs (within the supplied
-// window) contain no critical errors or warnings.
-//
-// It returns:
-//
-//	ok    – true when logs look clean, false otherwise.
-//	entry – zero value when ok is true; otherwise the first offending log line.
+// IsLogsFine implements [IBenthosService.IsLogsFine]. It scans the whole
+// window, because the window is clean only once its last offending line has
+// aged out.
 func (s *BenthosService) IsLogsFine(
 	logs []s6service.LogEntry,
 	now time.Time,
 	window time.Duration,
-) (bool, s6service.LogEntry) {
-	if len(logs) == 0 {
-		return true, s6service.LogEntry{}
-	}
-
-	cutoff := now.Add(-window)         // pre-compute once
-	critWarnSubstrings := [...]string{ // small, fixed slice
-		"failed to", "connection lost", "unable to",
-	}
+) (ok bool, first s6service.LogEntry, lastAt time.Time) {
+	cutoff := now.Add(-window)
+	ok = true
 
 	for _, l := range logs {
-		if l.Timestamp.Before(cutoff) {
-			continue // outside the window
+		if l.Timestamp.Before(cutoff) || !isOffendingLogLine(l.Content) {
+			continue
 		}
 
-		// Very cheap checks first — just bytes/prefix matches.
-		switch {
-		case strings.HasPrefix(l.Content, "configuration file read error:"),
-			strings.HasPrefix(l.Content, "failed to create logger:"),
-			strings.HasPrefix(l.Content, "Config lint error:"):
-			return false, l
+		if ok {
+			ok = false
+			first = l
 		}
 
-		// Only one regexp call per line.
-		if m := benthosLogRe.FindStringSubmatch(l.Content); m != nil {
-			level, msg := m[1], m[2]
-
-			if level == "error" {
-				return false, l
-			}
-
-			if level == "warning" {
-				for _, sub := range critWarnSubstrings {
-					if strings.Contains(msg, sub) {
-						return false, l
-					}
-				}
-			}
+		if l.Timestamp.After(lastAt) {
+			lastAt = l.Timestamp
 		}
 	}
 
-	return true, s6service.LogEntry{}
+	return ok, first, lastAt
+}
+
+// critWarnSubstrings mark a warning that is as serious as an error.
+var critWarnSubstrings = [...]string{"failed to", "connection lost", "unable to"}
+
+// isOffendingLogLine reports whether a Benthos log line is a critical error
+// or warning.
+func isOffendingLogLine(content string) bool {
+	// Very cheap checks first — just bytes/prefix matches.
+	if strings.HasPrefix(content, "configuration file read error:") ||
+		strings.HasPrefix(content, "failed to create logger:") ||
+		strings.HasPrefix(content, "Config lint error:") {
+		return true
+	}
+
+	m := benthosLogRe.FindStringSubmatch(content)
+	if m == nil {
+		return false
+	}
+
+	level, msg := m[1], m[2]
+	if level == "error" {
+		return true
+	}
+
+	for _, sub := range critWarnSubstrings {
+		if strings.Contains(msg, sub) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // IsMetricsErrorFree reports true when Benthos metrics contain no error

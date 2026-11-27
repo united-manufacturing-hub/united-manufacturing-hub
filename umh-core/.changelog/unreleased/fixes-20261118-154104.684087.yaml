@@ -1,0 +1,3 @@
+kind: fixes
+body: 'Bridges and stand-alone flows: when a flow was degraded by an error in its logs, the status `found error (clears in …)` could count down to 0s while the flow stayed degraded. The countdown now ends when the flow recovers'
+time: 2026-11-18T15:41:04.684087+01:00
