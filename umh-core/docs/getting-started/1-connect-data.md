@@ -130,9 +130,9 @@ Exactly as we configured it! Click on `my_data` to see details.
 
 > 💡 **Only seeing one `hello world` row in your topics?** 
 > 
-> That's intended. Put simply, your data is processed by benthos-umh, which drops repeated, unchanged values. This is called **downsampling**.
+> That's intended. umh-core adds a downsampler to the read flow of your bridge, and it drops repeated, unchanged values. This is called **downsampling**.
 > 
-> [Learn more about our benthos-umh downsampler here.](https://docs.umh.app/benthos-umh/processing/downsampler)
+> [umh-core adds a downsampler](../usage/data-flows/read-flow.md#umh-core-adds-a-downsampler) explains which read flows have one and how to change it.
 
 ## Understanding What You Built
 
@@ -179,7 +179,7 @@ Building on the location path from Step 1, you now understand:
 - **Topic** - Complete data address: `location_path.data_contract.tag_name` ([topic convention](../usage/unified-namespace/topic-convention.md))
 - **data_contract** - Data validation rules (`_raw` = no validation)
 - **Topic Browser** - UI for viewing all data in the UNS
-- **Downsampler** - Drops repeated unchanged values so the UNS stays clean
+- **Downsampler** - Drops repeated unchanged values so the UNS stays clean. umh-core [adds it](../usage/data-flows/read-flow.md#umh-core-adds-a-downsampler) to time-series read flows
 - **Throughput** - Tag updates per second for time-series data
 
 ---

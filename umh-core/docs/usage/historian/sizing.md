@@ -1,6 +1,6 @@
 # Historian Sizing
 
-This page tells you what to add to a machine for the Historian and how much disk it needs per year. The figures assume the Historian output's standard settings. Count the values that reach the Unified Namespace, not the values a bridge reads from its device: [umh-core adds a downsampler](../data-flows/read-flow.md#umh-core-adds-a-downsampler) to a read flow whose pipeline is a single `tag_processor`.
+This page tells you what to add to a machine for the Historian and how much disk it needs per year. The figures assume the Historian output's standard settings. Count the values that reach the Unified Namespace, not the values a bridge reads from its device, because a time-series read flow drops unchanged values, as [umh-core adds a downsampler](../data-flows/read-flow.md#umh-core-adds-a-downsampler) describes.
 
 {% hint style="info" %}
 **Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
@@ -36,6 +36,6 @@ By default the Historian deletes nothing, so its disk grows until it is full. Wi
 
 ## Reduce the volume
 
-The [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) stores fewer values and so needs less disk, at the cost of some detail. A read flow whose pipeline is a single `tag_processor` already has one. Add one yourself to a flow that has none, or to set the options.
+The [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) stores fewer values and so needs less disk, at the cost of some detail. A time-series read flow already has one, as [umh-core adds a downsampler](../data-flows/read-flow.md#umh-core-adds-a-downsampler) describes, along with how to change its options. Add one yourself to a flow that has none.
 
 [^1]: Measured with the Historian output's own tables on TimescaleDB 2.24 and PostgreSQL 17, 17.3 million values per data shape. Compressed, a value took 3 bytes for counters, states and short text, 6 bytes for smooth analog signals and 11 bytes for noisy ones, against about 100 bytes before compression.
