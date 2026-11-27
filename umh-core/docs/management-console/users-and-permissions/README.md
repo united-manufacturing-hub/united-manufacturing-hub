@@ -19,7 +19,7 @@ Permission models differ between accounts, so the roles you have are not necessa
 
 Role capabilities for both setups are in the [Roles Reference](roles-reference.md). Locations, roles and how permissions inherit are covered in [Location-Based Permissions](location-based-permissions.md), and inviting, changing and removing people in [Managing Access](managing-access.md).
 
-Not every company is on the same setup, and moving between them is something we arrange rather than something you switch on. Ask your account executive which setup you are on and what moving would involve.
+Not every company is on the same setup, and moving between them is something we arrange rather than something you switch on. The permission setup you are on shows in **Settings**, as described above. To ask about moving to the other one, see [Get Help](../../get-help.md).
 
 ### Where these roles apply
 
