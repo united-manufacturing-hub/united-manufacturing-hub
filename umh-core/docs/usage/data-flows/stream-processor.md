@@ -154,7 +154,7 @@ umh_core_service_current_state{component="stream_processor_instance"} != 3 != 4 
 
 The rule does not fire for a stream processor that is stopped (0) or idle (4). A stopped one is one you stopped on purpose, and an idle one has no data to process.
 
-When you delete a stream processor, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name, for example by adding `exported_instance!="<deleted stream processor>"` to the selector, or restart the container.
+When you delete a stream processor, umh-core keeps its last state series at -1 until the container restarts, so the rule keeps firing for it. Exclude the deleted name, for example by adding `exported_instance!="<deleted stream processor>"` to the selector, or [restart the instance](../../production/deployment/restart-an-instance.md), which interrupts this instance's collection.
 
 The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manufacturing-hub/united-manufacturing-hub/blob/staging/umh-core/pkg/metrics/metrics.go).
 
