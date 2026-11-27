@@ -4,6 +4,10 @@
 
 Stand-alone flows provide raw Benthos access for custom data processing when bridges or stream processors aren't sufficient. They're the fallback mechanism for write flows, external integrations, and specialized transformations.
 
+{% hint style="info" %}
+**Supported path.** Stand-alone flows are not a product feature. We keep them working, and we build nothing new on them: the data flow features we build on are bridges and stream processors. See [Product Features and Supported Paths](../../product-features-and-supported-paths.md).
+{% endhint %}
+
 ## When to Use
 
 Use stand-alone flows for:
