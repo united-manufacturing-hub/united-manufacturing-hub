@@ -134,9 +134,15 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
 | **Stand-alone Flows** | Custom processing | Any input | Any output |
 
-## Degraded status
+## When a stream processor is degraded
 
-A stream processor shows degraded when its internal flow or Redpanda is degraded, or its parts are in inconsistent states. The status shows only the state, for example `Stream processor degraded_dfc`. It does not show the reason or the error count of the internal flow. [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the checks, how to find the cause and how the flow recovers.
+A stream processor's status shows only its state, for example `Stream processor degraded_dfc`. It does not show the reason or an error count. The state tells you where to look:
+
+| State | Cause | Where to look |
+|---|---|---|
+| `degraded_dfc` | A check on its internal flow failed. | [Data Flow Shows Degraded](data-flow-shows-degraded.md) explains the checks, how to find the cause and how the flow recovers. |
+| `degraded_redpanda` | Redpanda is not idle or active. | [When Redpanda is degraded](../unified-namespace/redpanda.md#when-redpanda-is-degraded) |
+| `degraded_other` | The internal flow is active while Redpanda is idle, or Redpanda runs but the flow's output has no connection to it. | The log of its internal flow, `/data/logs/benthos-dataflow-dfc-streamprocessor-<name>/current`, for errors of its Kafka connection. |
 
 ## Metrics
 

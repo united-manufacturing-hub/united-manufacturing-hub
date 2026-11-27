@@ -97,7 +97,7 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 
 > **Idle/Active timeout:** default 30 s (`BRIDGE_IDLE_WINDOW`).
 
-The **degraded** reason is the first failing check, so output errors show before processor errors, and each error count is the sum over all paths. Stream processors show only their state, not this reason. [Why a Data Flow Is Degraded](../usage/data-flows/why-a-flow-is-degraded.md) explains the checks, the counts and recovery.
+The **degraded** reason is the first failing check, so output errors show before processor errors, and each error count is the sum over all paths. [Data Flow Shows Degraded](../usage/data-flows/data-flow-shows-degraded.md) explains the checks, the counts and recovery.
 
 ---
 

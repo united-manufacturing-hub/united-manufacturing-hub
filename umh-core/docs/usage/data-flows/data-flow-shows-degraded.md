@@ -1,8 +1,8 @@
-# Why a Data Flow Is Degraded
+# Data Flow Shows Degraded
 
 A data flow shows degraded in the Management Console when umh-core finds a failure in the Benthos process that runs it. This page explains which checks find the failure, which reason the status shows, what the error counts in that reason mean and how the flow recovers. It applies to bridges, stand-alone flows and stream processors, because each of them runs its flow in a Benthos process.
 
-A bridge can also be degraded because of its connection, Redpanda or inconsistent states of its parts. Its reason then starts with `connection degraded:`, `redpanda degraded:` or `other degraded:`. A stream processor can likewise show `degraded_redpanda` or `degraded_other`. This page does not cover these cases. A degraded container is a different status: see [Container Shows Degraded](../instances/container/container-shows-degraded.md).
+A bridge can also be degraded because of its connection, Redpanda or inconsistent states of its parts. Its status then contains `connection degraded:`, `redpanda degraded:` or `other degraded:`. See [Connection Probe](connection-probe.md#how-the-connection-affects-the-bridge) and [When Redpanda is degraded](../unified-namespace/redpanda.md#when-redpanda-is-degraded). A stream processor can likewise show `degraded_redpanda` or `degraded_other`, as described in [Stream Processors](stream-processor.md#when-a-stream-processor-is-degraded). This page does not cover these cases. A degraded container is a different status: see [Container Shows Degraded](../instances/container/container-shows-degraded.md).
 
 ## Where the reason shows
 
@@ -14,11 +14,11 @@ A bridge can also be degraded because of its connection, Redpanda or inconsisten
 
 ## The checks
 
-umh-core runs these checks on the flow's Benthos process, in this order. The status shows the reason of the first check that fails. A later check's failure shows only once the checks before it pass.
+umh-core runs these checks on the flow's Benthos process, in this order. The status shows `degraded:`, a space and the reason of the first check that fails. A later check's failure shows only once the checks before it pass.
 
 | Check | Fails when | Example reason |
 |---|---|---|
-| Process | The Benthos process is not running. umh-core starts it again. | `restarting service` |
+| Process | The Benthos process is not running. umh-core starts it again, and the reason changes to `restarting service`. | `s6 is not running, current state: <state>` |
 | Uptime | The process has run for less than 10 seconds, for example right after a restart. | `uptime 4 s (< 10 s threshold)` |
 | Logs | In the last 10 minutes of the current process, Benthos logged an `error` line, a `warning` line that contains "failed to", "connection lost" or "unable to", or a configuration or start-up error. | `found error (clears in 4m12s): <the log line>` |
 | Output errors | The flow's outputs counted at least one error. | `benthos reported 3 output errors` |
@@ -52,8 +52,8 @@ The Benthos process of a flow restarts when you save a change to that flow's con
 
 ## What to do
 
-1. Read the reason on the flow's status. For a stream processor, the status shows only the state. Continue with step 3.
-2. If the reason quotes a log line, find it in the flow's logs and fix what it names.
-3. If the reason counts errors, open the flow's **Metrics**. For a stand-alone flow, it shows the errors of the input, the processors and the output, so you can see which part counted them. The flow's logs usually show the error behind the count. For a stand-alone flow, [`debug_level: true`](stand-alone-flow.md#enable-debug-logging) logs more detail.
+1. Read the reason on the flow's status. A stream processor's status shows only the state, so for a stream processor do both step 2 and step 3.
+2. If the reason quotes a log line, find it in the flow's logs and fix what it names. A stream processor's internal flow logs to `/data/logs/benthos-dataflow-dfc-streamprocessor-<name>/current` in the container. Look there for the lines the log check flags, from the last 10 minutes.
+3. If the reason counts errors, open the flow's **Metrics**. For a stand-alone flow and a read flow, it shows the errors of the input, the processors and the output, so you can see which part counted them. For a stream processor, errors at the processors or the output mean that the error checks fail. Input errors do not count. The flow's logs usually show the error behind the count. For a stand-alone flow, [`debug_level: true`](stand-alone-flow.md#enable-debug-logging) logs more detail.
 4. Fix the configuration or the external system. Saving the changed configuration restarts the flow's Benthos process and resets its counts. If you fixed something outside the flow, stop and start the flow to reset them.
 5. Watch the status. If the flow goes back to degraded, the cause is still there, and the new count shows how many errors happened since the restart.

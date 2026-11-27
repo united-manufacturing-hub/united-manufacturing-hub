@@ -166,4 +166,4 @@ For the bridge itself, `umh_core_service_current_state` reads 3 when active, 4 w
 - Explore [Metadata and Tracing](../unified-namespace/metadata-and-tracing.md) for debugging
 - Use [Stand-alone Flows](stand-alone-flow.md) for custom processing
 - Configure [Stream Processors](stream-processor.md) to transform data
-- Read [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) when a bridge shows degraded
+- Read [Data Flow Shows Degraded](data-flow-shows-degraded.md) when a bridge shows `degraded_dfc`, and [Connection Probe](connection-probe.md#how-the-connection-affects-the-bridge) when it shows `degraded_connection`
