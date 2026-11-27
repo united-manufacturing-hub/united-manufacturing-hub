@@ -2,13 +2,13 @@
 
 For some jobs, UMH Core offers more than one way to get them done. This page says which way we intend you to use, and what we promise about each of the others, so that you can tell a route we will keep working from one you will have to leave later.
 
-Three kinds of thing appear in this documentation. Each page says which kind it describes, near the top, so you do not have to come back here to find out.
+Three kinds of thing appear in this documentation. Every page that names a component or a part of one says which kind it is, so you do not have to come back here to find out. A guide or a troubleshooting page below it is the same kind as the component it belongs to.
 
 ## Product features
 
 A product feature is the intended way to do something. It has its place in the Management Console, UMH Core checks what you give it, we keep building on it, and you can ask us to change it.
 
-Most of this documentation describes product features. Where a page says nothing about status, it describes a product feature.
+Most of this documentation describes product features.
 
 ## Supported paths
 

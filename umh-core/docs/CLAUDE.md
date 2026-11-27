@@ -84,7 +84,15 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 
 <!-- vale on -->
 
-[Product Features and Supported Paths](product-features-and-supported-paths.md) defines all three for readers, and is the only page that does. Name the kind on the page that describes a path, and link there. "Fallback" has no rule: it is right in Emergency Access and in "the FSMv1 fallback is gone", and wrong only where it names a path.
+[Product Features and Supported Paths](product-features-and-supported-paths.md) defines all three for readers, and is the only page that does. "Fallback" has no rule: it is right in Emergency Access and in "the FSMv1 fallback is gone", and wrong only where it names a path.
+
+Every page that names a component or a part of one says which kind it is, because a reader cannot tell an unlabelled page from one nobody has got to yet. A guide or a troubleshooting page below it inherits the component's kind and stays silent.
+
+How to write it depends on whether the reader has to do something about it.
+
+- **A product feature** gets one plain sentence after the opening prose, such as "Bridges are a [product feature](../../product-features-and-supported-paths.md)." No hint block: there is nothing to warn about, and eighteen hint blocks saying so is noise.
+- **A supported path, a provisional path or an early access feature** gets a `{% hint style="info" %}` block with a bold lead, because each one changes what a reader should build on. Follow the shape `usage/historian/sizing.md` already uses.
+- **An early access notice repeats on every page of that feature**, including guides and troubleshooting pages, because a reader reaching one from search never passes the parent. It is the one kind that does not inherit.
 
 The words in the table that are wrong in every context, and the direction words, are also [Vale](https://vale.sh) rules in `.vale/styles/UMH/`. Change the table and the rules together. To check your pages, run `make docs-lint` from `umh-core`. It runs Vale in Docker. CI adds the same warnings to a pull request, on the lines it adds. Vale flags the direction words, such as sends or receives, only right after a bridge or a flow. Words that are right in some contexts, such as device, endpoint or connection, have no rule. Check them in review.
 
