@@ -72,6 +72,20 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 
 <!-- vale on -->
 
+### Product features and paths
+
+<!-- vale off -->
+
+| Concept | Use | Instead of |
+|---|---|---|
+| A documented way to do a job that no product feature covers, which we keep working | **supported path** | workaround |
+| A documented way that works now and may need a migration later | **provisional path** | workaround, temporary solution |
+| A setting that lets a user past a check umh-core makes | **escape hatch** | emergency fallback, emergency setting |
+
+<!-- vale on -->
+
+[Product Features and Supported Paths](product-features-and-supported-paths.md) defines all three for readers, and is the only page that does. Name the kind on the page that describes a path, and link there. "Fallback" has no rule: it is right in Emergency Access and in "the FSMv1 fallback is gone", and wrong only where it names a path.
+
 The words in the table that are wrong in every context, and the direction words, are also [Vale](https://vale.sh) rules in `.vale/styles/UMH/`. Change the table and the rules together. To check your pages, run `make docs-lint` from `umh-core`. It runs Vale in Docker. CI adds the same warnings to a pull request, on the lines it adds. Vale flags the direction words, such as sends or receives, only right after a bridge or a flow. Words that are right in some contexts, such as device, endpoint or connection, have no rule. Check them in review.
 
 - The read flow publishes what it reads to the UNS, and the write flow writes to the external system what it subscribed to. "Reads from the PLC" and "writes to the MES" need no direction words.

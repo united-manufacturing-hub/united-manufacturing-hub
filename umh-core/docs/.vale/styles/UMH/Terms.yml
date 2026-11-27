@@ -21,6 +21,7 @@ message: "Use '%s' instead of '%s'. See the terminology table in umh-core/docs/C
 level: warning
 ignorecase: true
 swap:
+  'work[- ]?arounds?': supported path or provisional path
   'topic regex(?:es)?': topic pattern
   'agent location': instance location or bridge location
   'connection checks?': connection probe

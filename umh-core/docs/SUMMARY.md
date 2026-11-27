@@ -97,6 +97,7 @@
   * [HTTP API Reference](reference/http-api/README.md)
     * [Topic Browser GraphQL API](reference/http-api/topic-browser-graphql.md)
 * [UMH Core vs UMH Classic](umh-core-vs-classic-faq.md)
+* [Product Features and Supported Paths](product-features-and-supported-paths.md)
 * [Get Help](get-help.md)
 
 ## UMH Classic
