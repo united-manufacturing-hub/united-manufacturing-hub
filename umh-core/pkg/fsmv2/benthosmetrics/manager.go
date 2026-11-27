@@ -15,9 +15,12 @@
 package fsmv2benthosmetrics
 
 import (
+	"context"
 	"time"
 
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/deps"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/dynamicchildren"
+	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/fsmv2client"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/logger"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/fsmv2/simple"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/benthosmetrics"
@@ -72,6 +75,9 @@ func mapFresh(_ config.BenthosMonitorConfig, _ simple.Status[Scrape]) string {
 // mapObserved converts a stored Scrape into FSMv1's observed state, with
 // every pointer non-nil even for a zero Scrape: GetHealthCheckAndMetrics
 // dereferences LastScan.BenthosMetrics unchecked.
+//
+// Failures are not copied; FSMv1 has no field for them (see Failures).
+// The worker's health ignores them for now (ENG-6596).
 func mapObserved(cfg config.BenthosMonitorConfig, s simple.Status[Scrape]) publicfsm.ObservedState {
 	probes, sample := s.Result.Probes, s.Result.Sample
 	fresh := isFresh(probes.At, scrapeClock())
@@ -201,4 +207,31 @@ const staleAfter = 3 * benthosmetrics.ScrapeInterval
 // liveness at now. A zero takenAt means no scrape has succeeded.
 func isFresh(takenAt, now time.Time) bool {
 	return !takenAt.IsZero() && now.Sub(takenAt) <= staleAfter
+}
+
+// Failures returns the failures the worker last stored for the Benthos
+// instance named s6ServiceName ("benthos-<name>"), whatever their age. It
+// returns false when there is nothing to return: no client, no worker under
+// that name, no sample stored yet, or a store read that failed. The caller
+// then reports "no Benthos metrics yet".
+func Failures(ctx context.Context, s6ServiceName string) (*benthosmetrics.FailureReport, bool) {
+	c := fsmv2client.GetClient()
+	if c == nil {
+		return nil, false
+	}
+
+	obs, err := fsmv2client.Get[simple.Status[Scrape]](
+		ctx, c,
+		dynamicchildren.Ref{WorkerType: WorkerType, Name: s6ServiceName},
+	)
+	if err != nil {
+		return nil, false
+	}
+
+	f := obs.Status.Result.Sample.Failures
+	if f == nil {
+		return nil, false
+	}
+
+	return f, true
 }

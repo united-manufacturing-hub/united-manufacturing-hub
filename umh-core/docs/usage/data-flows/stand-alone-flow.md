@@ -183,3 +183,4 @@ The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manu
 - Learn about [Bridges](bridges.md) to read from and write to external systems
 - Explore [Stream Processors](stream-processor.md) for data transformation
 - See [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh) for all processors
+- Read [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) when a flow shows degraded

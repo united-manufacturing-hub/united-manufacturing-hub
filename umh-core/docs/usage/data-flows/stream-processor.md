@@ -161,3 +161,5 @@ The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manu
 ## Learn More
 
 For comprehensive stream processor configuration and examples, see the [Stream Processors guide](../data-modeling/stream-processors.md) in Data Modeling documentation.
+
+When a stream processor shows degraded, [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the reason.
