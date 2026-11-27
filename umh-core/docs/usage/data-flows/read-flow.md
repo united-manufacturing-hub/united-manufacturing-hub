@@ -27,7 +27,7 @@ flowchart LR
     subgraph rf["Read flow"]
         direction LR
         input["Input<br/>for example s7comm"]
-        proc["Processors<br/>tag_processor builds the UNS topic"]
+        proc["Processors<br/>tag_processor builds the UNS topic,<br/>downsampler usually appended by umh-core"]
         output["uns output<br/>set by umh-core"]
         input --> proc --> output
     end
@@ -59,6 +59,23 @@ The `uns` output checks each message against its data contract. [Data Contracts]
 
 The output of a read flow is always the `uns` output, which publishes to the UNS. umh-core replaces any `output` you set in `dataflowcomponent_read` with it. To write data to a system other than the UNS, use a [write flow](bridges.md) or a [stand-alone flow](stand-alone-flow.md).
 
+### umh-core adds a downsampler
+
+A read flow whose pipeline holds exactly one processor, a `tag_processor`, gets a second one: umh-core appends a [`downsampler`](https://docs.umh.app/benthos-umh/processing/downsampler) after it. umh-core appends it to no other pipeline.
+
+| The pipeline of the read flow | What umh-core appends |
+|---|---|
+| One `tag_processor` | A `downsampler` |
+| One `nodered_js` | Nothing. umh-core reads a `nodered_js` pipeline as relational data |
+| One processor of another type | Nothing |
+| Two or more processors, whichever they are | Nothing |
+
+A write flow never gets one, and neither does a [stand-alone flow](stand-alone-flow.md) or a [stream processor](stream-processor.md).
+
+A pipeline that umh-core leaves alone can still have a downsampler. Write one into the pipeline yourself, with the options you want, and umh-core keeps it as you wrote it. This also holds for a pipeline of a `tag_processor` and your own `downsampler`: those are two processors, so umh-core appends nothing and your options are the ones that run.
+
+The appended `downsampler` carries no configuration of its own. It publishes the first value of a tag, and after that publishes a value only when it differs from the last value it published, for numbers, booleans and strings alike. A tag that holds its value therefore publishes once and stays quiet until the value changes, however often the read flow reads it, and the age beside it in the Topic Browser grows meanwhile. [Values are not updating at regular intervals](../unified-namespace/values-are-not-updating-at-regular-intervals.md) covers that symptom, and [Downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) describes what the processor does with a message and which options it takes.
+
 ## Reference
 
 ### Configuration
@@ -73,7 +90,7 @@ With `templateRef`, umh-core uses the template and ignores a `config` key under 
 | Key | Default | Description |
 |---|---|---|
 | `dataflowcomponent_read.benthos.input` | none, required | The Benthos input that reads from the external system, such as `s7comm` or `opcua`. The [Benthos-UMH input documentation](https://docs.umh.app/benthos-umh/input) lists the inputs. Without an input, the read flow does not start. |
-| `dataflowcomponent_read.benthos.pipeline` | none | The processors that run on every message, usually one `tag_processor`. |
+| `dataflowcomponent_read.benthos.pipeline` | none | The processors that run on every message, usually one `tag_processor`. umh-core appends a `downsampler` to a pipeline of one `tag_processor`, as [umh-core adds a downsampler](#umh-core-adds-a-downsampler) describes. |
 | `dataflowcomponent_read.benthos.buffer`, `cache_resources`, `rate_limit_resources` | none | Benthos settings for buffering, caching and rate limits. See the [Benthos-UMH documentation](https://docs.umh.app/benthos-umh). |
 | `dataflowcomponent_read.benthos.output` | the `uns` output | Ignored. umh-core always sets the `uns` output. |
 | `readDFCDesiredState` | the bridge's `desiredState` | `active` or `stopped`. It sits in `protocolConverterServiceConfig`, next to `location`. `stopped` stops only the read flow, and the write flow keeps running. A bridge with `desiredState: stopped` always stops its read flow. |

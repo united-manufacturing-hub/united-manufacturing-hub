@@ -70,7 +70,7 @@ To use less disk:
 
 - Set retention during install with `internal.redpanda.redpandaServiceConfig.topic.defaultTopicRetentionMs`, or later per topic with `rpk`.
 - Cap the topic with `defaultTopicRetentionBytes`. Under heavy load a cap can cut the replay window below seven days.
-- Drop unchanged values with the [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) before they reach the Unified Namespace.
+- Drop unchanged values with the [downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) before they reach the Unified Namespace. A bridge read flow whose pipeline is a single `tag_processor` already has one, as [umh-core adds a downsampler](../usage/data-flows/read-flow.md#umh-core-adds-a-downsampler) describes.
 
 ## Headroom and resizing
 

@@ -15,8 +15,8 @@ The Topic Browser can only show values that reach the Unified Namespace. How oft
 
 A source can publish less often than you expect for one of these reasons:
 
-- **Downsampling can suppress unchanged values.** A tag’s age can increase even while the bridge continues reading its device. See [Downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) for details.
-- **The bridge reads only on change.** An OPC UA bridge with `subscribeEnabled: true` in its input, for example, gets a value from the server only when the value changes. To read at fixed times instead, set `subscribeEnabled: false` in the OPC UA input of the bridge. The bridge then reads every `pollRate` milliseconds, 1,000 by default, and the downsampler still drops unchanged values.
+- **Downsampling can suppress unchanged values.** A tag’s age can increase even while the bridge continues reading its device. [umh-core adds a downsampler](../data-flows/read-flow.md#umh-core-adds-a-downsampler) says which read flows have one, and [Downsampler](https://docs.umh.app/benthos-umh/processing/downsampler) describes what it does.
+- **The bridge reads only on change.** An OPC UA bridge with `subscribeEnabled: true` in its input, for example, gets a value from the server only when the value changes. To read at fixed times instead, set `subscribeEnabled: false` in the OPC UA input of the bridge. The bridge then reads every `pollRate` milliseconds, 1,000 by default, and a downsampler in its read flow still drops unchanged values.
 
 ### Compare the measured and arrival times
 
@@ -27,7 +27,7 @@ Open the **Details** tab and compare **Measured** with **Arrived in UMH**. A lar
 If the source publishes as often as you expect, the gaps you see come from how the Topic Browser sends updates. These are normal:
 
 - **The gaps between values change over time.** The Topic Browser adapts the interval between its batches to the amount of data it has recently read and to the CPU use of its own process. Less data lengthens the gaps, and so does high CPU use.
-- **The History tab shows fewer values than the source publishes.** Each batch carries at most one value per topic, the latest. A source that publishes every 100 milliseconds still shows one value per batch, so the History tab is a sample. To keep every reading, save the data contract with a Historian bridge, as [Save data to the Historian](../historian/save-to-historian.md) describes.
+- **The History tab shows fewer values than the source publishes.** Each batch carries at most one value per topic, the latest. A source that publishes every 100 milliseconds still shows one value per batch, so the History tab is a sample. To keep every reading that reaches the Unified Namespace, save the data contract with a Historian bridge, as [Save data to the Historian](../historian/save-to-historian.md) describes. A reading that a downsampler drops never reaches the Unified Namespace, so no Historian bridge stores it.
 - **Values on a quiet instance wait longer.** The Topic Browser decides whether a batch is due only when it reads a new message from the Unified Namespace. On an instance that publishes little, a value can wait until the next message of any topic arrives.
 
 No action is needed for these. The interval of the Topic Browser cannot be configured.
