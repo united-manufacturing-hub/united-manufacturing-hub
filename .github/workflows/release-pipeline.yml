@@ -1,0 +1,259 @@
+# Copyright 2025 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Ships a umh-core release: resolve -> build -> tag -> {notify the Management
+# Console, changelog.umh.app -> release notes, Linear}. Called only by
+# release.yml, which holds the release lock while this runs; the header of
+# release.yml says how to release.
+#
+# A release ships only the version its release PR adds. An older version file
+# without a tag belongs to a release that failed and is superseded: it gets no
+# tag, image, GitHub Release, changelog.umh.app entry or Linear release.
+#
+# With the version input, the pipeline resumes the release of a version that is
+# already tagged: it skips resolve and build, because a tag exists only for a
+# verified image, and runs everything from the tag job on. An existing tag or
+# GitHub Release is kept. This is the way out when re-running the failed jobs is
+# not possible.
+#
+# A called workflow sees the caller's github context, so github.event is the
+# push to staging that release.yml was triggered by.
+
+name: Release Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Tagged version (vX.Y.Z) whose release to resume. Empty for a release PR merge."
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  resolve:
+    name: Resolve release
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      release: ${{ steps.resolve.outputs.release || steps.resume.outputs.release }}
+      base: ${{ steps.resolve.outputs.base || steps.resume.outputs.base }}
+      version: ${{ steps.resolve.outputs.version || steps.resume.outputs.version }}
+    steps:
+      - name: Checkout
+        if: inputs.version == ''
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          # The full history is too big to fetch. The script deepens this
+          # one-commit clone only as far as it needs, without file contents.
+          filter: blob:none
+
+      # Runs under the release lock, so the tags it reads include every
+      # release that finished before this one.
+      - name: Resolve release commit and version
+        if: inputs.version == ''
+        id: resolve
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/resolve-release.sh
+
+      - name: Find the commit of the tagged version
+        if: inputs.version != ''
+        id: resume
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::${VERSION} is not a stable vX.Y.Z version."
+            exit 1
+          fi
+          if ! base=$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/tags/v${version}" --jq .sha); then
+            echo "::error::v${version} is not tagged. Only the release of a tagged version can be resumed."
+            exit 1
+          fi
+          {
+            echo "release=true"
+            echo "base=${base}"
+            echo "version=${version}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build v${{ needs.resolve.outputs.version }}
+    needs: resolve
+    if: needs.resolve.outputs.release == 'true' && inputs.version == ''
+    permissions:
+      contents: read
+      packages: write
+    secrets: inherit
+    uses: ./.github/workflows/build-umh-core.yml
+    with:
+      ref: ${{ needs.resolve.outputs.base }}
+      version: v${{ needs.resolve.outputs.version }}
+
+  # The jobs from here on state their conditions, because the build is skipped
+  # when a release is resumed.
+  tag:
+    name: Tag and publish the release
+    needs: [resolve, build]
+    if: >-
+      !cancelled() && needs.resolve.outputs.release == 'true' &&
+      (needs.build.result == 'success' || (needs.build.result == 'skipped' && inputs.version != ''))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      TAG: v${{ needs.resolve.outputs.version }}
+      IMAGE: ghcr.io/united-manufacturing-hub/umh-core
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A resumed release skips the build, so nothing else checks that the
+      # tagged version has an image. Without it, the release and the MC
+      # notification would point to nothing.
+      - name: Check that the image exists
+        run: docker buildx imagetools inspect "${IMAGE}:${TAG}" >/dev/null
+
+      # The tag is created first and the release on top of it. A release created
+      # with a target commit whose workflow files differ from the default branch
+      # needs a token that may change workflows, which GITHUB_TOKEN never may.
+      # The release base is usually behind staging, so its workflow files can
+      # differ. A release for an existing tag has no target commit.
+      # A re-run after a partial failure skips what exists. resolve-release.sh
+      # stops later releases while the tag exists without its release.
+      # The notes are filled in by the release-notes job.
+      - name: Create the tag and the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BASE: ${{ needs.resolve.outputs.base }}
+        run: |
+          set -euo pipefail
+          rc=0
+          .github/scripts/github-release-exists.sh "$TAG" || rc=$?
+          case "$rc" in
+            0) echo "The GitHub Release ${TAG} exists; skipping."; exit 0 ;;
+            1) ;;
+            3) echo "::error::${TAG} has a draft GitHub Release. Publish or delete it, then re-run this job."; exit 1 ;;
+            *) echo "::error::Could not check whether ${TAG} has a GitHub Release."; exit 1 ;;
+          esac
+          # The release is the latest unless a newer release is tagged. This is
+          # worked out before the tag is created, so that only the release
+          # creation follows the tag. On a re-run the tag can exist already.
+          latest_tag=$(.github/scripts/latest-release-tag.sh)
+          latest=false
+          if [ "$(printf '%s\n%s\n' "$latest_tag" "$TAG" | sort -V | tail -1)" = "$TAG" ]; then
+            latest=true
+          fi
+          if ! gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${TAG}" -f sha="$BASE" >/dev/null
+          fi
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes "" --latest="$latest"
+
+      # latest is the newest published release. It moves only here, after the
+      # image is verified and the release is published. imagetools copies the
+      # whole multi-arch image index; a re-run copies the same index again.
+      - name: Tag the image as latest
+        run: |
+          set -euo pipefail
+          latest_tag=$(.github/scripts/latest-release-tag.sh)
+          if [ "$latest_tag" != "$TAG" ]; then
+            echo "::warning::${latest_tag} is the newest release. ${TAG} is not tagged as latest."
+            exit 0
+          fi
+          docker buildx imagetools create -t "${IMAGE}:latest" "${IMAGE}:${TAG}"
+
+  notify-management-console:
+    name: Notify the Management Console
+    needs: [resolve, tag]
+    if: ${{ !cancelled() && needs.tag.result == 'success' }}
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      # A re-run of an older release can come after a newer release was
+      # published. Notifying it would move the stable channel back.
+      - name: Check that no newer release is tagged
+        env:
+          VERSION: v${{ needs.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          latest_tag=$(.github/scripts/latest-release-tag.sh)
+          if [ "$latest_tag" != "$VERSION" ]; then
+            echo "::error::${latest_tag} is the newest release. Notifying ${VERSION} would move the stable channel back."
+            exit 1
+          fi
+
+      - name: Notify management console
+        env:
+          UMH_MC_WEBHOOK_SECRET: ${{ secrets.UMH_MC_WEBHOOK_SECRET }}
+          VERSION: v${{ needs.resolve.outputs.version }}
+        run: .github/scripts/notify-management-console.sh
+
+  # Links the release to its changelog.umh.app entry, so it runs after the sync.
+  release-notes:
+    name: Release notes
+    needs: [resolve, sync-changelog]
+    if: ${{ !cancelled() && needs.sync-changelog.result == 'success' }}
+    permissions:
+      contents: write
+    secrets: inherit
+    uses: ./.github/workflows/update-github-release.yml
+    with:
+      version: v${{ needs.resolve.outputs.version }}
+
+  sync-changelog:
+    name: Sync changelog.umh.app
+    needs: [resolve, tag]
+    if: ${{ !cancelled() && needs.tag.result == 'success' }}
+    permissions:
+      contents: read
+    secrets: inherit
+    uses: ./.github/workflows/sync-changelog.yml
+    with:
+      version: v${{ needs.resolve.outputs.version }}
+
+  sync-linear:
+    name: Sync Linear release
+    needs: [resolve, tag]
+    if: ${{ !cancelled() && needs.tag.result == 'success' }}
+    permissions:
+      contents: read
+    secrets: inherit
+    uses: ./.github/workflows/linear-release.yml
+    with:
+      tag: v${{ needs.resolve.outputs.version }}

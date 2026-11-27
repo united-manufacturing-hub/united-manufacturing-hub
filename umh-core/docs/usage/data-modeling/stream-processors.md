@@ -153,6 +153,6 @@ Stream processors work with:
 
 ## Next Steps
 
-- **Create device data**: [Bridges](../data-flows/bridges.md) - Connect devices first
+- **Create device data**: [Bridges](../data-flows/bridges.md) - Read from your PLCs and sensors first
 - **Define structures**: [Data Models](data-models.md) - Create output models
 - **Learn concepts**: [README](README.md) - Understand data modeling approach

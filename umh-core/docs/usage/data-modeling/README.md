@@ -163,7 +163,7 @@ See [Payload Formats](../unified-namespace/payload-formats.md) for details.
 
 ## Choosing Your Data Flow
 
-Based on your data source, choose the appropriate path:
+Based on the external system the bridge reads from, choose the appropriate path:
 
 | Source | Output | Bridge Processor | Path |
 |--------|--------|-----------------|------|
@@ -270,5 +270,5 @@ _pump_v1.diagnostics.vibration
 ## Learn More
 
 - [Getting Started Guide](../../getting-started/) - See data modeling in action
-- [Bridges](../data-flows/bridges.md) - Apply models during ingestion
+- [Bridges](../data-flows/bridges.md) - Apply models in the read flow
 - [Topic Convention](../unified-namespace/topic-convention.md) - Understand topic structure

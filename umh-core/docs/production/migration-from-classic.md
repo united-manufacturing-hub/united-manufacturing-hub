@@ -26,7 +26,8 @@ pipeline:
           msg.meta.data_contract = "_historian";
 
 # Consumer patterns  
-topics: ["umh.v1.+.+.+.+._historian.+"]
+topics:   # regex patterns
+  - 'umh\.v1\.acme\.cologne\.(.*\.)?_historian\..*'
 ```
 
 **UMH Core (Current):**
@@ -41,8 +42,9 @@ pipeline:
 # Consumer patterns
 input:
   uns:
-    topics: ["umh.v1.+.+.+.+._raw.+"]        # For simple sensor data
-    topics: ["umh.v1.+.+.+.+._temperature.+"]  # For structured temperature data
+    umh_topics:   # regex patterns
+      - 'umh\.v1\.acme\.cologne\.(.*\.)?_raw\..*'              # For simple sensor data
+      - 'umh\.v1\.acme\.cologne\.(.*\.)?_temperature_v1\..*'   # For structured temperature data
 ```
 
 ### Configuration Changes
@@ -110,7 +112,7 @@ pipeline:
   processors:
     - tag_processor:
         defaults: |
-          msg.meta.data_contract = "_historian";  # Auto-saved to database
+          msg.meta.data_contract = "_historian";  // Auto-saved to database
 ```
 
 **UMH Core:**
@@ -120,7 +122,7 @@ pipeline:
   processors:
     - tag_processor:
         defaults: |
-          msg.meta.data_contract = "_raw";  # NOT saved to database automatically
+          msg.meta.data_contract = "_raw";  // NOT saved to database automatically
 
 # Database integration requires explicit configuration
 dataFlow:
@@ -129,7 +131,8 @@ dataFlow:
       benthos:
         input:
           uns:
-            topics: ["umh.v1.+.+.+.+._raw.+"]
+            umh_topics:   # regex patterns
+              - 'umh\.v1\.acme\.cologne\.(.*\.)?_raw\..*'
         pipeline:
           processors:
             - mapping: |
@@ -138,9 +141,9 @@ dataFlow:
                 root.value = this.value
                 # Extract location from topic
                 let parts = metadata("umh_topic").split(".")
-                root.enterprise = parts.1
-                root.site = parts.2
-                root.tag_name = parts.7
+                root.enterprise = $parts.index(2)
+                root.site = $parts.index(3)
+                root.tag_name = $parts.index(-1)
         output:
           sql_insert:
             driver: "postgres"
@@ -170,7 +173,7 @@ Extract the Benthos pipeline section and paste it into Core's `config.yaml → d
 | **Benthos pipelines** | Individual pods | `config.yaml → dataFlow` | Export configs from ConfigMaps |
 | **Node-RED flows** | Node-RED pod | External container | Run separately, connect via MQTT/HTTP |
 | **Grafana dashboards** | Bundled Grafana | External Grafana | Point at TimescaleDB |
-| **TimescaleDB** | TimescaleDB pod | External database | Use Bridge to forward data |
+| **TimescaleDB** | TimescaleDB pod | External database | Write to it with a bridge's write flow |
 
 ### 3. Verify Migration
 
@@ -195,7 +198,7 @@ protocolConverter:
             input:
               kafka:
                 addresses: ["classic-kafka:9092"]
-                topics: ["umh.v1.+.+.+.+._historian.+"]
+                topics: ["umh.v1.acme.cologne.packaging.line1._historian.temperature"]
             pipeline:
               processors:
                 - mapping: |
@@ -228,7 +231,7 @@ pipeline:
     - tag_processor:
         defaults: |
           msg.meta.data_contract = "_historian";
-          msg.meta.tag_name = "head";  # Groups appear inside payload
+          msg.meta.tag_name = "head";  // Groups appear inside payload
 
 # Classic payload with tag groups
 {
@@ -249,40 +252,64 @@ pipeline:
 **UMH Core (Virtual Paths in Topics):**
 ```yaml
 # Core data model with virtual paths
-datamodels:
-  - name: CNCHead
-    version: v1
-    structure:
-      pos:
-        x: { type: timeseries }
-        y: { type: timeseries }
-        z: { type: timeseries }
-      temperature: { type: timeseries }
-      collision: { type: timeseries }
+dataModels:
+  - name: cnc-head
+    version:
+      v1:
+        structure:
+          pos:
+            x:
+              _payloadshape: timeseries-number
+            y:
+              _payloadshape: timeseries-number
+            z:
+              _payloadshape: timeseries-number
+          temperature:
+            _payloadshape: timeseries-number
+          collision:
+            _payloadshape: timeseries-boolean
+
+# Core data contract, validates the stream processor's output
+dataContracts:
+  - name: _cnc-head_v1
+    model:
+      name: cnc-head
+      version: v1
 
 # Core stream processor
-streamprocessors:
-  - name: cnc_head_sp
-    contract: _cnc_head:v1
-    sources:
-      x_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_x"
-      y_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_y"
-      z_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_z"
-      temp_raw: "umh.v1.corp.plant.line.cnc._raw.head_temperature"
-      collision_raw: "umh.v1.corp.plant.line.cnc._raw.head_collision"
-    mapping:
-      pos.x: "x_raw"
-      pos.y: "y_raw"  
-      pos.z: "z_raw"
-      temperature: "temp_raw"
-      collision: "collision_raw"
+streamProcessor:
+  - name: cnc-head-sp
+    desiredState: active
+    streamProcessorServiceConfig:
+      location:
+        0: corp
+        1: plant
+        2: line
+        3: cnc
+      config:
+        model:
+          name: cnc-head
+          version: v1
+        sources:
+          x_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_x"
+          y_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_y"
+          z_raw: "umh.v1.corp.plant.line.cnc._raw.head_pos_z"
+          temp_raw: "umh.v1.corp.plant.line.cnc._raw.head_temperature"
+          collision_raw: "umh.v1.corp.plant.line.cnc._raw.head_collision"
+        mapping:
+          pos:
+            x: "x_raw"
+            y: "y_raw"
+            z: "z_raw"
+          temperature: "temp_raw"
+          collision: "collision_raw"
 
 # Result: Individual topics with virtual paths
-# umh.v1.corp.plant.line.cnc._cnc_head.pos.x
-# umh.v1.corp.plant.line.cnc._cnc_head.pos.y
-# umh.v1.corp.plant.line.cnc._cnc_head.pos.z
-# umh.v1.corp.plant.line.cnc._cnc_head.temperature
-# umh.v1.corp.plant.line.cnc._cnc_head.collision
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.pos.x
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.pos.y
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.pos.z
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.temperature
+# umh.v1.corp.plant.line.cnc._cnc-head_v1.collision
 ```
 
 **Migration Benefits:**

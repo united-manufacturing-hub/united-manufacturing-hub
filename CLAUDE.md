@@ -49,7 +49,8 @@ Run these from `umh-core/` (targets are in `umh-core/Makefile`).
 Every PR with user-visible changes adds a changelog fragment with `make changelog`, run from `umh-core/`. It asks for the kind and the entry text and writes a file to `umh-core/.changelog/unreleased/`. Without prompts: `./.tools/changie new --kind fixes --body "..."` (run `make changelog` once first to install changie). For format and voice, follow the `changelog-writing` skill (`/changelog-entry` drafts an entry).
 
 - **Kinds**: `new`, `improvements`, `fixes`. They render as `### New Features`, `### Improvements` and `### Fixes`. No Linear IDs in the entry text.
-- **Do not edit `umh-core/CHANGELOG.md`**: changie generates it from one `.changelog/<version>.md` per release, and CI fails if they differ. `umh-core/RELEASING.md` describes the release cut.
+- **Do not edit `umh-core/CHANGELOG.md`**: changie generates it from one `.changelog/<version>.md` per release, and CI fails if they differ.
+- **Releases**: a bot keeps a release PR ("Release umh-core vX.Y.Z") open against `staging`. Approving and merging it releases. `umh-core/RELEASING.md` describes the process.
 - **Fixing a released entry**: edit `umh-core/.changelog/<version>.md`, run `make rebuild-changelog`, commit both files and add the `skip-changelog-guard` label.
 - **Images and multi-line entries**: indent continuation lines by two spaces, e.g. `--body $'Text\n  ![alt](./changelog-images/name.png)'`.
 

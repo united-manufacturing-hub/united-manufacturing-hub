@@ -40,7 +40,7 @@ UMH Core supports both **direct YAML editing** and **Management Console UI** for
 
 | Current Term (UMH Core) | Legacy Term (UMH Classic) | YAML Key | Description |
 |------------------------|---------------------------|-----------|-------------|
-| Bridge | Protocol Converter | `protocolConverter:` | Connects external devices to UNS with health monitoring |
+| Bridge | Protocol Converter | `protocolConverter:` | Reads from and writes to an external system, with a connection probe |
 | Stand-alone Flow | Data Flow Component (DFC) | `dataFlow:` | Point-to-point data processing pipelines |
 | Stream Processor | Stream Processor | `streamProcessor:` | Processes data within UNS |
 
@@ -123,61 +123,9 @@ dataFlow:
 
 _For complete input/output syntax see [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh)_
 
-### Bridge – Bridge from Device to UNS
+### Bridge
 
-> 🚧 **Roadmap Item**: Bridges are under active development. Current functionality includes connection monitoring and basic read/write flows.
-
-A [**bridge**](../usage/data-flows/bridges.md) (UI: "Bridges", YAML: `protocolConverter:`) ingests data from a field device (e.g. OPC UA server, Siemens S7, Modbus controller) and pushes it into the Unified Namespace (UNS), and vice versa.\
-
-It combines a **connection probe** and two **stand-alone data flows (one for reading and one for writing)** under a single name and lifecycle.
-
-```yaml
-protocolConverter:
-- name: press-opcua
-  desiredState: active
-  debug_level: false  # Set to true for detailed logging while troubleshooting
-  protocolConverterServiceConfig:
-    location:
-      2: press1
-    config:
-      connection:
-        nmap:
-          target: "{{ .IP }}"
-          port: "{{ .PORT }}"
-      dataflowcomponent_read:
-        benthos:
-          input:
-            opcua:
-              endpoint: "opc.tcp://{{ .IP }}:{{ .PORT }}"
-              nodeIDs: ["ns=2;s=MachineFolder"]
-          pipeline:
-            processors:
-              - tag_processor:
-                  defaults: |
-                    msg.meta.location_path = "{{ .location_path }}"
-                    msg.meta.data_contract = "_raw"
-                    msg.meta.tag_name      = msg.meta.opcua_tag_name
-                    return msg;
-          output:
-            uns: {}
-    variables:
-      # Optional templating support
-      IP: "192.168.0.50"
-      PORT: "4840"
-```
-
-#### Key fields
-
-| Field                                      | Description                                                                                 |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `name`                                     | Unique ID for this converter instance                                                       |
-| `desiredState`                             | `active` to run immediately, or `stopped` to keep it defined but off.                       |
-| `debug_level` | Enable verbose logging for troubleshooting. When `true`, enables DEBUG log level and protocol-specific debugging (e.g., general OPC UA debug logging via the `OPC_DEBUG=debug` environment variable, detailed connection diagnostics). When `false` (default), uses INFO log level. **Use only for troubleshooting** - debug logging generates significantly more log data and may impact performance. Disable after resolving issues. |
-| `protocolConverterServiceConfig.location`  | Appended to the global `agent.location`. Optional, but useful to identify per-machine data. |
-| `protocolConverterServiceConfig.config.connection.nmap` | TCP liveness check to decide if the device is reachable.                                    |
-| `protocolConverterServiceConfig.config.dataflowcomponent_read.benthos` | Benthos pipeline to pull and forward data.                                                  |
-| `protocolConverterServiceConfig.config.dataflowcomponent_write` | Write flow that pushes data from the UNS to the device, set with `source`, `processing` and `destination`. |
-| `protocolConverterServiceConfig.variables` | Optional Go-template variables, referenced via `{{ .VARNAME }}` in the template. See [Template Variables Reference](variables.md#variables) for details. |
+Bridges (YAML: `protocolConverter:`) are configured on the [Bridges](../usage/data-flows/bridges.md#configuration) page.
 
 ### Benthos-UMH Processors
 
@@ -332,7 +280,7 @@ Records that compaction already collapsed cannot be recovered.
 
 ## Related Documentation
 
-- **[Bridges](../usage/data-flows/bridges.md)** - Device connectivity patterns
+- **[Bridges](../usage/data-flows/bridges.md)** - Read from and write to external systems
 - **[Stand-alone Flows](../usage/data-flows/stand-alone-flow.md)** - Custom data processing
 - **[Data Modeling](../usage/data-modeling/README.md)** - Structure your industrial data
 - **[State Machines](state-machines.md)** - Component lifecycle management

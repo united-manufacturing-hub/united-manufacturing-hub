@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # --- Build Stage ---
-ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 # Global, so that FROM managementconsole-${MANAGEMENTCONSOLE} resolves. false builds
 # the open-source image, true the official image, local a development image.
 ARG MANAGEMENTCONSOLE=false
@@ -33,7 +32,6 @@ RUN apk add --no-cache bash curl jq tzdata ca-certificates xz bc
 ARG S6_OVERLAY_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG BENTHOS_UMH_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG REDPANDA_VERSION=MUST_BE_SET_BY_MAKEFILE
-ARG NMAP_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG DLV_VERSION=MUST_BE_SET_BY_MAKEFILE
 ARG TARGETARCH
 
@@ -69,13 +67,10 @@ RUN case "${TARGETARCH}" in \
 COPY --from=cache /redpanda/${TARGETARCH}/ /opt/
 RUN chmod +x /opt/redpanda/bin/redpanda
 
-# Install nmap
-RUN apk add --no-cache nmap=${NMAP_VERSION}
-
 # Cleanup all the files we don't need
 RUN rm -rf /s6-overlay /benthos /redpanda
 
-FROM golang:1.27.4-alpine@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build-base
+FROM golang:1.27.4-alpine@sha256:70bd7ddea8b6cbe5d6943cde279d6b67feb10cc924fb9100d1d8757c1575b280 AS build-base
 RUN apk add --no-cache gcc musl-dev
 WORKDIR /go/src/github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core
 # Copy dependency manifests first — only invalidated when deps change
@@ -189,10 +184,10 @@ COPY --from=build /go/bin/umh-core /usr/local/bin/umh-core
 # Install coreutils (this allows date resolution beyond seconds)
 RUN apk add --no-cache coreutils
 
-# Added manually for Aikido findings: the alpine base image still ships openssl 3.5.7-r0
-# and zlib 1.3.2-r1 (CVE-2026-4738). The zlib floor fails the build rather than shipping an older one.
+# Added manually for Aikido findings: the alpine base image ships openssl 3.5.9-r0 and
+# zlib 1.3.2-r1 (CVE-2026-4738). The floors fail the build rather than ship an older version.
 # Must stay after the COPY --from=downloader, which replaces this stage's root.
-RUN apk add --no-cache --upgrade libcrypto3 libssl3 'zlib>=1.4-r0'
+RUN apk add --no-cache --upgrade 'libcrypto3>=3.5.9-r1' 'libssl3>=3.5.9-r1' 'zlib>=1.4-r0'
 
 # Create non-root user and set ownership at build-time
 RUN adduser -D -u 1000 -s /bin/sh umhuser && \

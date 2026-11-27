@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -518,10 +519,16 @@ func NewChildSpec[T any](name, workerType string, cfg T, enabled bool) (ChildSpe
 		return ChildSpec{}, fmt.Errorf("NewChildSpec: marshal %q/%q: %w", name, workerType, err)
 	}
 
+	// WorkerBase.DeriveDesiredState renders UserSpec.Config as a Go template.
+	// Escape each "{{" so a value such as a password containing "{{" renders
+	// back to the literal text instead of failing on every tick.
+	// A worker that calls ParseUserSpec without rendering sees the escaped form.
+	// TODO(ENG-7951): remove this escape once FSMv2 passes typed child config
+	// without template-rendering it.
 	return ChildSpec{
 		Name:       name,
 		WorkerType: workerType,
-		UserSpec:   UserSpec{Config: string(data)},
+		UserSpec:   UserSpec{Config: strings.ReplaceAll(string(data), "{{", `{{"{{"}}`)},
 		Enabled:    enabled,
 	}, nil
 }

@@ -2,24 +2,24 @@
 
 This page explains how to find out why an instance behind a corporate firewall never shows as online in the Management Console, and how to fix it. The steps need access to the Docker host, to the firewall and proxy settings, and to the corporate CA certificate, so you may need your IT department.
 
-The cause is usually one of three. The firewall blocks the connection, the network requires a proxy, or the firewall inspects TLS. A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
+The cause is usually one of three:
+
+1. The firewall blocks the connection.
+2. The network requires a proxy.
+3. The firewall inspects TLS.
+
+A firewall that inspects TLS decrypts HTTPS traffic. It replaces the certificate of each server with one that your company's own certificate authority signs, the corporate CA.
 
 ## Which error the instance reports
 
-The Management Console does not show why the connection fails (see [Communicator](README.md#the-communicator-card)). The error counters of the communicator do. [Metrics](../agent/metrics.md#read-the-metrics) explains how to collect them with Prometheus, and [Communicator](README.md#errors) explains each counter. To read them once, run this on the Docker host, wait a minute and run it again. A counter that rose between the two runs is the cause. The `-Y off` keeps `wget` from sending the request through the proxy of the container, which cannot reach `localhost`:
+The Management Console does not show why the connection fails. The error counters of the communicator do. [Read the metrics](../agent/metrics.md#read-the-metrics) explains how to read them, and [Communicator Shows Degraded: Error counters](communicator-shows-degraded.md#error-counters) says what to do for each. Continue with [Find the cause](#find-the-cause) when `umh_fsmv2_worker_network_errors_total` rises. A firewall, a proxy or Cloudflare that answers with status 403 also raises `umh_fsmv2_worker_auth_failures_total`. If that counter rises and the `AUTH_TOKEN` is correct, find out who answers with 403. Run this on the Docker host. If the host uses a proxy, add `--proxy <proxy address>`:
 
 ```bash
-docker exec <container name> wget -qO- -Y off http://localhost:8080/metrics | grep -E 'network_errors_total|proxy_block_errors_total|auth_failures_total|instance_deleted_total|server_errors_total|rate_limit_errors_total|cloudflare_errors_total'
+curl -sI https://management.umh.app
 ```
 
-| Counter that rises | What to do |
-|---|---|
-| `umh_fsmv2_worker_network_errors_total` | Continue with [Find the cause](#find-the-cause). |
-| `umh_fsmv2_worker_proxy_block_errors_total` | Ask your IT department to allow `management.umh.app` on the proxy. |
-| `umh_fsmv2_worker_auth_failures_total` | Check the `AUTH_TOKEN` of your `docker run` command. If the token is correct, continue with [Find the cause](#find-the-cause). |
-| Any other counter | See [Communicator](README.md#errors). |
-
-If no counter rises, read the full `/metrics` output.
+- If the answer is `403` and contains the line `server: cloudflare`, Cloudflare blocked the request. Contact UMH support and include the `cf-ray` line of the answer.
+- If the answer is `403` without that line, a firewall or proxy in your network answered. Ask your IT department whether a rule blocks `management.umh.app`, and check its log for the requests of the instance.
 
 ## Find the cause
 
@@ -63,7 +63,7 @@ umh-core trusts only public certificate authorities. It rejects the certificate 
 
 3. Check where the container keeps its `/data` volume, then stop and remove the container. `docker restart` is not enough, because it keeps the flags the container was created with.
 
-   If your original command mounted `/data` with `-v <path or volume name>:/data`, the data stays there and you can go on. If it did not, Docker created an anonymous volume. A new container would get an empty one, and so would not see your configuration and data. Print the name of the volume before you remove the container, and write it down:
+   If your original command mounted `/data` with `-v <path or volume name>:/data`, the data stays there and you can go on. If it did not, Docker created an anonymous volume. A new container would get a new, empty volume without your configuration and data. Print the name of the volume before you remove the container, and write it down:
 
    ```bash
    docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}' <container name>
@@ -72,7 +72,7 @@ umh-core trusts only public certificate authorities. It rejects the certificate 
    If you started the container with `--rm`, removing it also deletes an anonymous volume. Copy the data out first with `docker cp <container name>:/data /opt/umh/data-backup`. Make the copy readable for user ID 1000 with `sudo chown -R 1000:1000 /opt/umh/data-backup`, then mount that directory at `/data` in the next step (`-v /opt/umh/data-backup:/data:z`).
 
    {% hint style="warning" %}
-   Removing the container stops umh-core and every bridge in it until you start it again in the next step. A bridge is a connection that reads data from a machine. Values the bridges would read during this time are not collected. The configuration and data in the `/data` volume stay. Plan this for a maintenance window.
+   Removing the container stops umh-core and every bridge in it until you start it again in the next step. A bridge reads from an external system, such as a PLC, and can write to one. Values the bridges would read during this time are not collected, and nothing is written. The configuration and data in the `/data` volume stay. Plan this for a maintenance window.
    {% endhint %}
 
    ```bash

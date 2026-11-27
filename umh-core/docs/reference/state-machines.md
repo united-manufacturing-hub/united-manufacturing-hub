@@ -9,7 +9,7 @@ UMH Core uses hierarchical state machines where components build upon each other
 - **Bridge** = Connection + Read Flow + Write Flow
 - **Flow** = Benthos instance with lifecycle management  
 - **Benthos Flow** = Individual Benthos process with detailed startup phases
-- **Connection** = Network probe service (typically nmap-based)
+- **Connection** = Connection probe that checks whether the external system is reachable
 
 Each component inherits lifecycle states (`to_be_created`, `creating`, `removing`, `removed`) and adds operational states specific to its function. The Agent continuously reconciles desired vs actual state, triggering appropriate transitions based on observed conditions.
 
@@ -57,14 +57,14 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | State                              | Meaning                                                      | Status Reason Examples                                           | Enter                                            | Exit                                                                                           |
 | ---------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | **stopped**                        | All sub‑services stopped.                                    | `"stopped"`                                                      | *stop\_done* or after create.                    | *start* → **starting\_connection**                                                             |
-| *starting\_connection*             | Waiting for connection to establish.                         | `"starting: waiting for connection"`                            | *start*                                          | *start\_connection\_up* → **starting\_redpanda**                                               |
-| *starting\_redpanda*                | Connection up, waiting for message broker.                   | `"starting: redpanda not healthy"`                              | *start\_connection\_up*                          | *start\_redpanda\_up* → **starting\_dfc**                                                      |
-| *starting\_dfc*                     | Connection + Redpanda up, waiting for flow.                  | `"starting: flow not running"`                                  | *start\_redpanda\_up*                            | *start\_dfc\_up* → **idle**<br>*start\_failed\_dfc\_missing* → **starting\_failed\_dfc\_missing** |
+| *starting\_connection*             | Waiting for the connection probe to reach the external system. | `"starting: waiting for connection"`                            | *start*                                          | *start\_connection\_up* → **starting\_redpanda**                                               |
+| *starting\_redpanda*                | External system reachable, waiting for message broker. | `"starting: redpanda not healthy"`                              | *start\_connection\_up*                          | *start\_redpanda\_up* → **starting\_dfc**                                                      |
+| *starting\_dfc*                     | External system reachable and Redpanda up, waiting for flow. | `"starting: flow not running"`                                  | *start\_redpanda\_up*                            | *start\_dfc\_up* → **idle**<br>*start\_failed\_dfc\_missing* → **starting\_failed\_dfc\_missing** |
 | **starting\_failed\_dfc**           | Flow component failed to start.                              | `"starting failed: flow in error state"`                        | *start\_failed\_dfc*                             | Manual retry or removal                                                                       |
 | **starting\_failed\_dfc\_missing**   | No flow configured.                                          | `"starting failed: no flows configured"`                        | *start\_failed\_dfc\_missing*                    | *start\_retry* (when flow added) or removal                                                   |
 | **idle**                           | All healthy, **no data for 30 s**.                           | `"idling: no messages processed in 60s"`                        | *start\_dfc\_up*, *no\_data\_timeout*, *recovered* | *data\_received* → **active**<br>*degraded* events → **degraded\_***<br>*stop* → **stopping**   |
 | **active**                         | Processing data through flows.                               | `""` (empty when fully healthy)                                 | *data\_received*                                 | *no\_data\_timeout* → **idle**<br>*degraded* events → **degraded\_***<br>*stop* → **stopping**   |
-| ⚠️ **degraded\_connection**        | Connection lost/flaky after successful start.                | `"connection degraded: probe timeout after 30s"`                | *connection\_unhealthy*                          | *recovered* → **idle**<br>*stop* → **stopping**                                               |
+| ⚠️ **degraded\_connection**        | External system unreachable after a successful start. | `"connection degraded: probe timeout after 30s"`                | *connection\_unhealthy*                          | *recovered* → **idle**<br>*stop* → **stopping**                                               |
 | ⚠️ **degraded\_redpanda**          | Message broker issues after successful start.                | `"redpanda degraded: not responding"`                           | *redpanda\_degraded*                             | *recovered* → **idle**<br>*stop* → **stopping**                                               |
 | ⚠️ **degraded\_dfc**               | Flow component issues after successful start.                | `"flow degraded: benthos service not running"`                  | *dfc\_degraded*                                  | *recovered* → **idle**<br>*stop* → **stopping**                                               |
 | ⚠️ **degraded\_other**             | Inconsistent component states detected.                      | `"other degraded: inconsistent states"`                         | *degraded\_other*                                | *recovered* → **idle**<br>*stop* → **stopping**                                               |
@@ -75,8 +75,8 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | State           | Meaning                         |
 | --------------- | ------------------------------- |
 | *starting*      | Probe service launching.        |
-| **up**          | Target reachable.               |
-| **down**        | Target unreachable.             |
+| **up**          | External system reachable.      |
+| **down**        | External system unreachable.    |
 | ⚠️ **degraded** | Flaky / intermittent responses. |
 | *stopping*      | Probe shutting down.            |
 | **stopped**     | Probe disabled.                 |
@@ -92,7 +92,7 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | *starting\_waiting\_for\_service\_to\_remain\_running* | Stability grace period.                                |
 | **idle**                                               | Flow running, no msgs for idle window.                 |
 | **active**                                             | Processing messages.                                   |
-| ⚠️ **degraded**                                        | Flow running but error state (e.g., endpoint retries). |
+| ⚠️ **degraded**                                        | Flow running but in an error state (e.g., retries to reach the external system). |
 | *stopping*                                             | Graceful SIGTERM underway.                             |
 
 > **Idle/Active timeout:** default 30 s (`BRIDGE_IDLE_WINDOW`).

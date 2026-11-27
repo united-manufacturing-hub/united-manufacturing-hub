@@ -272,6 +272,8 @@ flowchart LR
 - **virtual_path**: HOW you organize (folders for grouping)
 - **tag_name**: WHAT you're reading (automatic from S7 address!)
 
+[Topic Convention](../usage/unified-namespace/topic-convention.md) explains every part of a topic.
+
 ## What You've Learned
 
 ✅ **Protocol addresses become tag names** - No manual mapping needed!

@@ -2,7 +2,7 @@
 
 > **Prerequisite:** Understand [Data Flow concepts](README.md) and complete the [Getting Started guide](../../getting-started/).
 
-Stream processors transform data already inside the Unified Namespace, aggregating multiple device streams into business KPIs and metrics. They're the third type of data flow, specialized for transforming device models into business models.
+Stream processors transform data already inside the Unified Namespace, aggregating data from several devices into business KPIs and metrics. They're the third type of data flow, specialized for transforming device models into business models.
 
 ## When to Use
 
@@ -13,9 +13,9 @@ Use stream processors for:
 - Reducing data volume for cloud transmission
 
 Use bridges instead for:
-- Getting data into the UNS initially
-- Single device to model mapping
-- Direct protocol connections
+- Reading from PLCs and other external systems and publishing to the UNS
+- Mapping one external system's addresses to a data model
+- Writing to external systems
 
 ## Creating a Stream Processor
 
@@ -75,7 +75,7 @@ You can switch between UI and Code Mode anytime to fine-tune configurations.
 
 ## How It Works
 
-Stream processors subscribe to multiple UNS topics and output to a single model-based topic:
+Stream processors subscribe to several UNS topics and publish to a single model-based topic:
 
 ```mermaid
 flowchart LR
@@ -117,9 +117,9 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 
 | Data Flow Type | Purpose | Input Source | Output |
 |----------------|---------|--------------|--------|
-| **Bridges** | Get data INTO the UNS | External devices (PLCs, sensors) | UNS topics |
+| **Bridges** | Read from and write to external systems | External systems (PLCs, sensors, MES) and UNS topics | UNS topics and external systems |
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
-| **Stand-alone Flows** | Custom processing | Any source | Any destination |
+| **Stand-alone Flows** | Custom processing | Any input | Any output |
 
 ## Metrics
 

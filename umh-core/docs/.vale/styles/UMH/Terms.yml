@@ -1,0 +1,27 @@
+# Copyright 2026 UMH Systems GmbH
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The words of the terminology table in umh-core/docs/CLAUDE.md that are wrong
+# in every context. Direction words are in Direction.yml. Words that are right
+# in some contexts, such as device, endpoint or connection, stay with the
+# review. Change this file and the table together.
+extends: substitution
+message: "Use '%s' instead of '%s'. See the terminology table in umh-core/docs/CLAUDE.md."
+level: warning
+ignorecase: true
+swap:
+  'topic regex(?:es)?': topic pattern
+  'agent location': instance location or bridge location
+  'connection checks?': connection probe
+  'network probe': connection probe

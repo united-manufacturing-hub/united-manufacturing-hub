@@ -3,8 +3,8 @@
 A Historian bridge subscribes to the Unified Namespace and writes one data contract into
 TimescaleDB. You create one bridge per contract you want to keep.
 
-The bridge is a write flow only: it has no read flow, because its source is the UNS rather than a
-device.
+The bridge has only a write flow: it subscribes to UNS topics and writes their messages to TimescaleDB, so it
+has no read flow.
 
 ## Before you start
 
@@ -17,13 +17,13 @@ bridge has nothing to connect to and deployment fails with an error saying so.
 2. In the template list, pick **TimescaleDB (PostgreSQL, auto-connect) — Historian**. The **Vendor**
    filter narrows the list to the TimescaleDB templates.
 3. Select the instance. The connection host and port are prefilled read-only from that instance's
-   Historian connection, so the bridge's health check always targets the configured database.
+   Historian connection, so the bridge's connection probe always checks the configured database.
 4. In the write flow's output, set `data_contract_name` to the contract you want to store, written
    **without the version suffix**: `pump`, not `pump_v1`.
 5. Deploy.
 
 There is no read flow to configure and no address table to map, so the protocol and address steps of
-the general [bridge walkthrough](../data-flows/bridges.md) don't apply.
+the general [bridge walkthrough](../data-flows/create-a-bridge.md) don't apply.
 
 {% hint style="warning" %}
 **Drop the version, and no dashes.** `data_contract_name` is the bare contract name: no leading
@@ -62,7 +62,7 @@ Tag identity lives in the shared dimension tables `umh.topic`, `umh.tag`, and `u
 [Query the Historian](querying.md) for the layout and how to read it back.
 
 The bridge subscribes to the whole UNS by default and drops messages whose contract doesn't match
-`data_contract_name`, so there is no topic regex to keep in sync. Narrow the source topics only if
+`data_contract_name`, so there is no topic pattern to keep in sync. Narrow the source topics only if
 you want to stop unrelated messages from reaching the output at all.
 
 ## Connecting to a different database

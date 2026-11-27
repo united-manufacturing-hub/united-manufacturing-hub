@@ -41,6 +41,9 @@ help: ## Display available make targets and usage information
 	@echo "   make release-changelog VERSION=X.Y.Z    # Batch the fragments into a release (release PRs only)"
 	@echo "   make rebuild-changelog                  # Regenerate CHANGELOG.md after editing .changelog/X.Y.Z.md"
 	@echo ""
+	@echo "📖 DOCS COMMANDS:"
+	@echo "   make docs-lint      # Check the docs terminology with Vale (in Docker)"
+	@echo ""
 	@echo "🛠️  UTILITY COMMANDS:"
 	@echo "   make pod-shell      # Shell into running container"
 	@echo "   make stop-all-pods  # Stop all UMH Core containers"
@@ -69,14 +72,15 @@ GOLANGCI_LINT_VERSION = v2.5.0
 GOTESTSUM_VERSION = v1.13.0
 DLV_VERSION = v1.25.1
 CHANGIE_VERSION = v1.26.0
+# Keep in step with the version in .github/workflows/docs-lint.yml.
+VALE_VERSION = v3.28.1
 
 # Default values for build arguments
-NMAP_VERSION = 7.99-r0
 S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
 ## Each benthos-umh release opens a PR (author umh-cross-repo-automation) that bumps this value. Review that PR instead of bumping by hand, and add a changelog fragment to it.
-BENTHOS_UMH_VERSION = 0.16.2
+BENTHOS_UMH_VERSION = 0.17.0
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
@@ -125,6 +129,13 @@ endif
 # Regenerates CHANGELOG.md from .changelog/ after a released .changelog/<version>.md was edited.
 rebuild-changelog: $(CHANGIE)
 	@$(CHANGIE) merge
+
+# Checks the docs terminology with the Vale rules in docs/.vale/. Runs Vale in
+# Docker, so it needs no local install.
+.PHONY: docs-lint
+
+docs-lint:
+	docker run --rm -v "$(CURDIR)/docs:/docs" -w /docs jdkato/vale:$(VALE_VERSION) .
 
 download-docker-binaries:
 	@mkdir -p .docker-cache/s6-overlay .docker-cache/benthos .docker-cache/redpanda
@@ -235,7 +246,6 @@ benthosmetrics-fixture:
 # ============== SHARED BUILD ARGS (single source of truth) ==============
 # Used by both local builds (make build) and CI builds (make build-depot)
 VERSION_ARGS = \
-	--build-arg NMAP_VERSION=$(NMAP_VERSION) \
 	--build-arg S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION) \
 	--build-arg BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION) \
 	--build-arg REDPANDA_VERSION=$(REDPANDA_VERSION) \
@@ -530,7 +540,6 @@ bump-managementconsole:
 
 # Print version variables for use in other scripts/tools
 print-versions:
-	@echo "NMAP_VERSION=$(NMAP_VERSION)"
 	@echo "S6_OVERLAY_VERSION=$(S6_OVERLAY_VERSION)"
 	@echo "BENTHOS_UMH_VERSION=$(BENTHOS_UMH_VERSION)"
 	@echo "REDPANDA_VERSION=$(REDPANDA_VERSION)"

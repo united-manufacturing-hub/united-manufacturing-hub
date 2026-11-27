@@ -31,7 +31,6 @@ import (
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config"
 	"github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/config/nmapserviceconfig"
 	fsmv2nmap "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/fsmv2/nmap"
-	nmapservice "github.com/united-manufacturing-hub/united-manufacturing-hub/umh-core/pkg/service/nmap"
 )
 
 const unresolvableHost = "connection-check.invalid"
@@ -353,7 +352,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureRefused)))
+		Expect(status.DialFailure).To(HaveValue(Equal(fsmv2nmap.DialFailureRefused)))
 	})
 
 	It("records a deadline hit while connecting to an IP address as a connect timeout", func() {
@@ -362,7 +361,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig("127.0.0.1", 1))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureConnectTimeout)))
+		Expect(status.DialFailure).To(HaveValue(Equal(fsmv2nmap.DialFailureConnectTimeout)))
 	})
 
 	It("records a deadline hit while looking up a hostname as a DNS timeout", func() {
@@ -371,7 +370,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSTimeout)))
+		Expect(status.DialFailure).To(HaveValue(Equal(fsmv2nmap.DialFailureDNSTimeout)))
 	})
 
 	It("records a hostname that does not resolve as a DNS error", func() {
@@ -380,7 +379,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, nopDeps(), newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSError)))
+		Expect(status.DialFailure).To(HaveValue(Equal(fsmv2nmap.DialFailureDNSError)))
 	})
 
 	It("reports an unclassified dial failure to Sentry under the nmap feature", func() {
@@ -393,7 +392,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, recordingDeps, newNmapConfig("[malformed", 80))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureUnknown)))
+		Expect(status.DialFailure).To(HaveValue(Equal(fsmv2nmap.DialFailureUnknown)))
 		Expect(events).To(HaveLen(1))
 		Expect(events[0].feature).To(Equal(deps.FeatureForWorker(fsmv2nmap.WorkerType)))
 	})
@@ -408,7 +407,7 @@ var _ = Describe("Nmap Poll", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, recordingDeps, newNmapConfig(unresolvableHost, 80))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.DialFailure).To(HaveValue(Equal(nmapservice.DialFailureDNSError)))
+		Expect(status.DialFailure).To(HaveValue(Equal(fsmv2nmap.DialFailureDNSError)))
 		Expect(events).To(BeEmpty())
 	})
 
@@ -446,7 +445,7 @@ var _ = Describe("Nmap Poll dependencies", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, newPollDeps(m), newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.PortState).To(Equal(string(nmapservice.PortStateOpen)),
+		Expect(status.PortState).To(Equal(string(fsmv2nmap.PortStateOpen)),
 			"Poll must dial through the dialer from the dependency map, which answers")
 		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort(host, strconv.Itoa(int(port)))}),
 			"Poll must hand the map's dialer exactly the target address")
@@ -466,7 +465,7 @@ var _ = Describe("Nmap Poll dependencies", func() {
 		status, err := fsmv2nmap.Poll(ctx, newPollDeps(m), newNmapConfig("10.0.0.1", 502))
 		Expect(err).NotTo(HaveOccurred(),
 			"a failed dial is a scan outcome, not a poll failure")
-		Expect(status.PortState).To(Equal(string(nmapservice.PortStateClosed)))
+		Expect(status.PortState).To(Equal(string(fsmv2nmap.PortStateClosed)))
 		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort("10.0.0.1", "502")}),
 			"Poll must hand the map's dialer exactly the target address")
 	})
@@ -505,7 +504,7 @@ var _ = Describe("the registered nmap worker type", func() {
 
 		status, err := fsmv2nmap.Poll(ctx, bound, newNmapConfig(host, port))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(status.PortState).To(Equal(string(nmapservice.PortStateOpen)),
+		Expect(status.PortState).To(Equal(string(fsmv2nmap.PortStateOpen)),
 			"Poll must dial through the dialer NewDeps read from the map the worker was built with")
 		Expect(fake.addresses).To(Equal([]string{net.JoinHostPort(host, strconv.Itoa(int(port)))}),
 			"the map's dialer must receive exactly the target address")

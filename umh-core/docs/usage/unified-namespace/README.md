@@ -36,6 +36,8 @@ Every piece of data has an address that answers three questions:
 
 Result: `umh.v1.enterprise.site.area.line._pump_v1.inlet_temperature`
 
+[Topic Convention](topic-convention.md) explains every part of a topic.
+
 ### Bridges Handle All Data Flow
 Data enters and exits the UNS exclusively through [bridges](../data-flows/bridges.md). This ensures every message gets proper context, validation, and organization.
 
@@ -57,6 +59,6 @@ The progression: Use `_raw` temporarily to understand your data, then apply devi
 ## Next Steps
 
 1. **Explore your data**: Open the [Topic Browser](topic-browser.md)
-2. **Connect devices**: Create [bridges](../data-flows/bridges.md)
+2. **Connect external systems**: Create [bridges](../data-flows/bridges.md)
 3. **Model your data**: Define [data models](../data-modeling/data-models.md)
 4. **Create KPIs**: Build [stream processors](../data-modeling/stream-processors.md)
