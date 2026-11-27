@@ -2,14 +2,14 @@
 
 A data flow shows degraded in the Management Console when umh-core finds a failure in the Benthos process that runs it. This page explains which checks find the failure, which reason the status shows, what the error counts in that reason mean and how the flow recovers. It applies to bridges, stand-alone flows and stream processors, because each of them runs its flow in a Benthos process.
 
-A bridge can also be degraded because of its connection or Redpanda, and a stream processor because of Redpanda. The reason then starts with `connection degraded:` or `redpanda degraded:`, and this page does not cover it. A degraded container is a different status: see [Container Shows Degraded](../instances/container/container-shows-degraded.md).
+A bridge can also be degraded because of its connection, Redpanda or inconsistent states of its parts. Its reason then starts with `connection degraded:`, `redpanda degraded:` or `other degraded:`. A stream processor can likewise show `degraded_redpanda` or `degraded_other`. This page does not cover these cases. A degraded container is a different status: see [Container Shows Degraded](../instances/container/container-shows-degraded.md).
 
 ## Where the reason shows
 
 | Data flow | What the status shows |
 |---|---|
 | Stand-alone flow | The reason of the check that failed, for example a message that ends in `benthos reported 6484 processor errors`. |
-| Bridge | `Bridge data flow component is degraded`, then `flow degraded:` and the reason of the read flow. The reason of the write flow shows when the read flow is healthy. |
+| Bridge | A message that contains `flow degraded:` and the reason of the read flow, for example `Bridge data flow component is degraded (port is open) - flow degraded: degraded: benthos reported 6484 processor errors`. The reason of the write flow shows when the read flow is healthy. |
 | Stream processor | Only the state, for example `Stream processor degraded_dfc`. The status does not show the reason or the error count. Find the cause in the stream processor's **Metrics** and logs, as described in [What to do](#what-to-do). |
 
 ## The checks
@@ -18,9 +18,9 @@ umh-core runs these checks on the flow's Benthos process, in this order. The sta
 
 | Check | Fails when | Example reason |
 |---|---|---|
-| Process | The Benthos process is not running. umh-core starts it again. | `s6 is not running, current state: <state>` |
+| Process | The Benthos process is not running. umh-core starts it again. | `restarting service` |
 | Uptime | The process has run for less than 10 seconds, for example right after a restart. | `uptime 4 s (< 10 s threshold)` |
-| Logs | In the last 10 minutes of the current process, Benthos logged an `error` line, a `warning` line that contains "failed to", "connection lost" or "unable to", or a configuration error. | `found error (clears in 4m12s): <the log line>` |
+| Logs | In the last 10 minutes of the current process, Benthos logged an `error` line, a `warning` line that contains "failed to", "connection lost" or "unable to", or a configuration or start-up error. | `found error (clears in 4m12s): <the log line>` |
 | Output errors | The flow's outputs counted at least one error. | `benthos reported 3 output errors` |
 | Processor errors | The flow's processors counted at least one error. | `benthos reported 6484 processor errors` |
 | Health checks | Benthos does not report itself live and ready, or has reported it for less than 5 seconds. | `healthchecks did not pass: live=true, ready=false` |
@@ -48,12 +48,12 @@ The flow leaves degraded once every check passes. It then shows idle until it pr
 - **Logs:** a log line stops counting 10 minutes after Benthos logged it. The reason shows the time until then, for example `clears in 4m12s`.
 - **Output and processor errors:** messages that succeed later do not clear the counts. A flow with one counted error stays degraded until its Benthos process restarts.
 
-The Benthos process restarts when you save a change to the flow's configuration, when you stop and start the flow, and when the container restarts. The counts then start again at 0, and log lines from before the restart no longer count.
+The Benthos process of a flow restarts when you save a change to that flow's configuration, when you stop and start the flow, when the process exits and umh-core starts it again, and when the container restarts. A bridge runs one process for its read flow and one for its write flow, so a change to one of them resets only its own counts. The counts then start again at 0, and log lines from before the restart no longer count.
 
 ## What to do
 
 1. Read the reason on the flow's status. For a stream processor, the status shows only the state. Continue with step 3.
 2. If the reason quotes a log line, find it in the flow's logs and fix what it names.
 3. If the reason counts errors, open the flow's **Metrics**. For a stand-alone flow, it shows the errors of the input, the processors and the output, so you can see which part counted them. The flow's logs usually show the error behind the count. For a stand-alone flow, [`debug_level: true`](stand-alone-flow.md#enable-debug-logging) logs more detail.
-4. Fix the configuration or the external system. Saving the changed configuration restarts the Benthos process and resets the counts. If you fixed something outside the flow, stop and start the flow to reset them.
+4. Fix the configuration or the external system. Saving the changed configuration restarts the flow's Benthos process and resets its counts. If you fixed something outside the flow, stop and start the flow to reset them.
 5. Watch the status. If the flow goes back to degraded, the cause is still there, and the new count shows how many errors happened since the restart.

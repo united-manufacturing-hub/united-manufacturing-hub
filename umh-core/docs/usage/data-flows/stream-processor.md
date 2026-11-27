@@ -136,7 +136,7 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 
 ## Degraded status
 
-A stream processor shows degraded when its internal flow or Redpanda is degraded. The status shows only the state, for example `Stream processor degraded_dfc`. It does not show the reason or the error count of the internal flow. To find the cause, open **Metrics** and the logs. [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the checks and how the flow recovers.
+A stream processor shows degraded when its internal flow or Redpanda is degraded, or its parts are in inconsistent states. The status shows only the state, for example `Stream processor degraded_dfc`. It does not show the reason or the error count of the internal flow. [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the checks, how to find the cause and how the flow recovers.
 
 ## Metrics
 

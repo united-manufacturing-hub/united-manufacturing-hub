@@ -12,7 +12,7 @@ The bridge's overview page shows the read flow as its own card, next to the conn
 |---|---|---|
 | `active` | Active | The read flow reads messages from the external system. |
 | `idle` | Active | The read flow runs, but has read no messages recently. |
-| `degraded` | Degraded | The read flow has hit errors, its Benthos process is not running, or its input cannot connect. The log shows why. |
+| `degraded` | Degraded | The read flow has hit errors, its Benthos process is not running, or its input cannot connect. The log shows why. See [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md). |
 | `starting` | Neutral | The read flow is starting. If it stays in this state, the log shows why. |
 | `stopping` | Neutral | The read flow is stopping. |
 | `stopped` | Neutral | The read flow is stopped with `readDFCDesiredState: stopped`, the bridge is stopped, or the bridge waits for its connection or, during start-up, for Redpanda. |
