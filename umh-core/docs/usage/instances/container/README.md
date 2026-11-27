@@ -10,7 +10,7 @@ The Container card on the instance details page shows the CPU, memory and disk o
 |---|---|
 | Status badge | The health of the container. See [Container status](#container-status). |
 | CPU | The CPU usage. See [The CPU row](#the-cpu-row). |
-| Memory | The memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the machine. With the [memory monitor](#memory-with-the-memory-monitor), the row shows 60-second means. With a memory limit, it shows the container's memory against the limit, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. Without a limit, it shows the used memory of the whole machine against the machine's memory. |
+| Memory | The memory usage. See [The Memory row](#the-memory-row). |
 | Disk | The used and total space of the `/data` volume, and the percentage. |
 | Architecture | The CPU architecture UMH Core runs on, `amd64` or `arm64`. |
 | Hardware ID | The ID of this installation. UMH Core creates it on the first start and stores it in `/data/hwid`. It stays the same as long as the `/data` volume is kept. See [Container Layout](../../../reference/container-layout.md#hwid). |
@@ -27,6 +27,20 @@ The [CPU status](#cpu-status) and its [Technical Details](#cpu-technical-details
 
 ![The badge reason of an Active Container card with the CPU status and its Technical Details](../images/container-badge-reason.png)
 
+### The Memory row
+
+The Memory row shows the memory the container uses, the memory it may use, and the percentage. The total is the memory limit of the container. Without a limit, it is the memory of the machine.
+
+With the [memory monitor](memory-health.md) on, the row shows 60-second means. With a memory limit, it shows the container's memory against the limit, for example `670.6 MiB / 680.0 MiB (99% of limit, 60s avg)`. Without a limit, it shows the used memory of the whole machine against the machine's memory, for example `9.8 GiB / 15.6 GiB (63% of host, 60s avg)`. The row reads `N/A` during the first minute after a start, and while the total cannot be read.
+
+With the memory monitor on, the info button next to the row shows the readings of the container and the machine, which [Memory thresholds](#memory-thresholds) describes. A reading turns red while it degrades the memory. It reads `not yet measured` while its window fills after a start, and `n/a` or `unavailable` when it cannot be measured.
+
+![The memory info button of the Container card on an instance with a 4 GiB memory limit and the memory monitor on](../images/container-memory-info.png)
+
+While the memory is degraded, the [Memory status](#memory-status) and its [Technical Details](#memory-technical-details) appear in the badge reason of the Container card, after `Memory degraded:`. While the memory is healthy, the badge reason does not show the memory.
+
+![The badge reason of a Degraded Container card with the memory status Memory running near its limit and its Technical Details](../images/container-memory-badge-reason.png)
+
 ## Container states
 
 ### Container status
@@ -36,9 +50,9 @@ The container shows Degraded when the CPU, the memory or the disk is degraded. T
 | Badge | Reason | What it means |
 |---|---|---|
 | Active | The [CPU status](#cpu-status), for example `CPU healthy. …` | CPU, memory and disk are healthy. Without a CPU status, the reason is `Container operating normally`. |
-| Degraded | `Memory degraded: Memory utilization critical` | The memory is above its threshold. With the memory monitor, the line names the cause, see [Memory with the memory monitor](#memory-with-the-memory-monitor). |
-| Degraded | `Disk degraded: Disk utilization critical` | The `/data` volume is above its threshold. |
 | Degraded | `CPU degraded: …`, followed by the [CPU status](#cpu-status) | CPU health is degraded. |
+| Degraded | `Memory degraded: Memory utilization critical` | The memory is above its threshold. With the memory monitor, the line gives the [Memory status](#memory-status) instead. |
+| Degraded | `Disk degraded: Disk utilization critical` | The `/data` volume is above its threshold. |
 | Degraded | `Container degraded` | A resource is degraded but gave no reason. |
 | Neutral | `Container status unknown` | umh-core has no reading of the container yet, for example in the first seconds after a start. |
 
@@ -78,20 +92,44 @@ The headroom lines depend on the machine. A machine whose core count is readable
 
 A signal that is already past its threshold shows what would clear it instead, for example `Throttling 12% (recovers below 3%)`. A signal this machine cannot measure reads `not measured` with its reason, as the Steal line above does.
 
-### Memory with the memory monitor
+### Memory status
 
-With the [memory monitor](memory-health.md) on, memory degrades for one of four causes. The reason line on the Container card names the cause, for example `Memory degraded: Memory running near its limit` for `container-limit-full` or `Memory degraded: Memory ran out` for `oom-kill`. [Memory Health](memory-health.md) explains the causes, and [Memory monitor thresholds](#memory-monitor-thresholds) gives their values.
+With the [memory monitor](memory-health.md) on, the badge reason names why the memory is degraded, for example `Memory degraded: Memory running near its limit`. Each status belongs to one reading in [Memory thresholds](#memory-thresholds).
+
+| Status | Reading | What it means |
+|---|---|---|
+| **Memory running near its limit** | Instance memory | The container is close to its own memory limit. |
+| **Machine memory running near full** | Machine memory | The whole machine is close to full, including the memory that software outside UMH Core uses. |
+| **Memory contention** | Memory pressure | Processes in the container are waiting for memory. |
+| **Memory ran out** | OOM kills | The kernel stopped a process in the container because memory ran out. |
+
+When several readings degrade the memory, the status names the most urgent one: **Memory ran out** first, then **Memory contention**, then the other two. Below the status, one paragraph per reading gives its value. When the container and the machine are both close to full, one paragraph covers both.
+
+Any other text after `Memory degraded:` means umh-core has had no memory reading for three seconds. New bridges wait until it has one.
+
+### Memory Technical Details
+
+Below the paragraphs, a Technical Details section lists the four readings, each next to the threshold that would change it:
+
+```text
+Memory degraded: Memory running near its limit
+This instance averaged 86% of its 2.0 GiB memory limit over the last minute and has little headroom left. Raise its memory limit, or reduce the load on it.
+Technical Details:
+Instance memory 86% of 2.0 GiB limit (recovers below 75%).
+Machine memory 41% of 16.0 GiB (degrades at 80%).
+Memory pressure 3% (degrades above 20%).
+OOM kills 0 in the last hour, 0 since container start (degrades at 1).
+```
+
+A reading that degrades the memory shows what would clear it, as the Instance memory line above does. Any other reading shows the value at which it would degrade the memory. A line can also read:
+
+| Line ends in | Means |
+|---|---|
+| `not measured (…)` | This machine cannot measure the reading. The parentheses give the reason, for example `Instance memory not measured (this instance has no memory limit set, so the machine's memory is its limit).` |
+| `not available (measuring).` | The reading's window is still filling, for example in the first minute after a start. |
+| `not available (held).` | The reading degraded the memory and is now missing. It keeps degrading the memory until it is back, for at most one minute. |
 
 ## Container thresholds
-
-### Memory and disk
-
-| Resource | Degrades | Recovers |
-|---|---|---|
-| Memory | above 80% of the total | at or below 80% |
-| Disk | above 85% of the `/data` volume | at or below 85% |
-
-With the memory monitor, [Memory monitor thresholds](#memory-monitor-thresholds) replaces the memory row.
 
 ### CPU thresholds
 
@@ -108,22 +146,28 @@ Each CPU signal degrades at one value and recovers at another. The two are held 
 
 Steal uses the 95th percentile once 20 samples are in, and the mean before that, so a newly started container gets a steal reading within seconds. Bare metal reports no steal, so on a physical machine the Steal line reads `not measured` with its reason.
 
-### Memory monitor thresholds
+### Memory thresholds
 
-With the [memory monitor](memory-health.md) on, each cause degrades at one value and recovers at a lower one.
+Without the [memory monitor](memory-health.md), the memory degrades above 80% of the total and recovers at or below 80%.
 
-| Cause | Degrades | Recovers |
-|---|---|---|
-| `container-limit-full` | at 80% of the container's own memory limit, as a 60-second mean. Judged only when the container has a limit. | below 75% |
-| `host-memory-full` | at 80% of the machine's memory, as a 60-second mean | below 75% |
-| `memory-pressure` | above 20%: processes in the container waited for memory for more than 20% of the last minute | below 12% |
-| `oom-kill` | at 1 OOM kill in the container within the last hour | at 0 for a whole hour |
+With the [memory monitor](memory-health.md) on, each reading degrades at one value and recovers at a lower one. The first column is the reading's name in Technical Details, the second its row in the info button of the Memory row. [Memory Health](memory-health.md) explains how the readings combine into the memory status.
+
+| Reading | Info button row | Measures | Degrades | Recovers | Measured only when |
+|---|---|---|---|---|---|
+| **Instance memory** | Container: avg usage | The memory the container uses, as a share of its own memory limit, as a 60-second mean. | at 80% | below 75% | a memory limit is set |
+| **Machine memory** | Host: used | The used memory of the whole machine, including software outside UMH Core, as a 60-second mean. | at 80% | below 75% | the machine's memory is readable |
+| **Memory pressure** | Container: pressure | The share of the last minute in which processes in the container waited for memory, from Linux Pressure Stall Information (PSI, `some avg60`). | above 20% | below 12% | the container runs with cgroup v2 and PSI, the same as for CPU pressure (see [Enable CPU pressure stats](enable-cpu-pressure-stats.md)) |
+| **OOM kills** | Container: OOM kills | The processes in the container that the kernel stopped in the last hour because memory ran out (out of memory, OOM). Only the kills after umh-core started count, so a kill that restarted umh-core itself does not. The count since the container started is shown for context and includes those kills. | at 1 | at 0 for a whole hour | the kernel's OOM kill counter is readable |
+
+### Disk thresholds
+
+The disk degrades above 85% of the `/data` volume and recovers at or below 85%.
 
 ## While the container is degraded
 
 A new bridge waits to start while CPU, memory or disk is degraded. Bridges that already run keep running. The reason of the waiting bridge starts with the same line as the reason on the Container card. See [Bridges do not start](../../data-flows/bridges-do-not-start.md).
 
-[Container Shows Degraded](container-shows-degraded.md) lists what to do for each resource and each CPU status.
+[Container Shows Degraded](container-shows-degraded.md) lists what to do for each resource, each memory status and each CPU status.
 
 ## Reference
 
@@ -133,8 +177,8 @@ The environment variable `USE_FSMV2_MEMORY_MONITOR` changes how umh-core judges 
 
 | Variable | Default | Effect |
 |---|---|---|
-| `USE_FSMV2_MEMORY_MONITOR` | `false` | `true` turns on the early access memory monitor, which [Memory Health](memory-health.md) explains. |
 | `USE_FSMV2_CPU` | none | Ignored from v0.45.4. The CPU status always comes from the CPU health check. On v0.44.46 to v0.45.3, `USE_FSMV2_CPU=false` turns the check off and applies the 70% CPU usage rule instead. Remove the variable from your `docker run` command. |
+| `USE_FSMV2_MEMORY_MONITOR` | `false` | `true` turns on the early access memory monitor, which [Memory Health](memory-health.md) explains. |
 
 The CPU health check also runs on an instance started without `AUTH_TOKEN` and `API_URL`.
 
@@ -186,7 +230,7 @@ A gauge whose flag reads 0 is not worth acting on. `cpu_host_headroom_cores` is 
 
 #### Memory monitor gauges
 
-With the [memory monitor](#memory-with-the-memory-monitor) on, it reports these series, with a `hierarchy_path` that ends in `(memory)`. Without it, they do not exist. Each gauge keeps its last value until the next successful measurement.
+With the [memory monitor](memory-health.md) on, it reports these series, with a `hierarchy_path` that ends in `(memory)`. Without it, they do not exist. Each gauge keeps its last value until the next successful measurement.
 
 | Name | Type | Reports |
 |---|---|---|

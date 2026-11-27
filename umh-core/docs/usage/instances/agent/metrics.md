@@ -29,11 +29,11 @@ The agent is the umh-core process. A framework is the part of the agent that sta
 | Historian (the connection to TimescaleDB) | FSMv2 | none |
 | Bridge connection probe | FSMv2 | none. `NMAP_BACKEND` is ignored |
 | CPU health | FSMv2 | none. `USE_FSMV2_CPU` is ignored from v0.45.4 |
+| Memory health (early access) | FSMv2 | off unless `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](../container/README.md#configuration) |
+| Container memory and disk | FSMv1 | none |
 | Bridges, stand-alone flows, stream processors | FSMv1 | none |
 | Reading the Benthos metrics of bridges, stand-alone flows and stream processors | FSMv1, or FSMv2 with `USE_FSMV2_BENTHOS_METRICS=true` | `USE_FSMV2_BENTHOS_METRICS=true` switches the reading to FSMv2. See [Environment Variables](../../../reference/environment-variables.md) |
 | Topic Browser, Redpanda, agent monitor | FSMv1 | none |
-| Container memory and disk | FSMv1 | none |
-| Memory health (early access) | FSMv2 | off unless `USE_FSMV2_MEMORY_MONITOR=true`. See [Container: Configuration](../container/README.md#configuration) |
 
 A switch is an environment variable of the container. umh-core reads it once at startup. To change it, remove the container and start it again with the same `docker run` command plus the variable. `docker restart` keeps the old environment. See [Environment Variables](../../../reference/environment-variables.md).
 
