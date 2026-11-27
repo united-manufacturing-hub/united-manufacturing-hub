@@ -2,7 +2,7 @@
 
 For some jobs, UMH Core offers more than one way to get them done. This page says which way we intend you to use, and what we promise about each of the others, so that you can tell a route we will keep working from one you will have to leave later.
 
-Three kinds of thing appear in this documentation.
+Three kinds of thing appear in this documentation. Each page says which kind it describes, near the top, so you do not have to come back here to find out.
 
 ## Product features
 
@@ -20,21 +20,11 @@ If a supported path is not enough for what you need, tell us what you are trying
 
 When such a feature ships, the supported path keeps working. Moving to the feature is your choice, not something we make you do.
 
-### Supported paths today
-
-**Stand-alone flows.** A [stand-alone flow](usage/data-flows/stand-alone-flow.md) gives you direct access to Benthos for a job that bridges and stream processors do not cover, such as reading from a database or writing a file. We will keep stand-alone flows working. The product features we build for data flows are bridges and stream processors.
-
 ## Provisional paths
 
 A provisional path works today and may change. If it changes, you may have to move your setup to something else.
 
-Use a provisional path when you need it, and tell us when you do, so that we know who to warn. Where we already know what will end one, the list below says so.
-
-### Provisional paths today
-
-**Unchecked data contracts.** A write flow needs a data contract, and today only time-series contracts exist. An instance started with `BYPASS_WRITE_FLOW_VALIDATION=true` accepts a contract name it does not know, so a write flow can carry data that no data model describes. The bridge stays degraded for as long as it uses one, and the Management Console names the contracts it could not check. This path ends when custom data contracts ship, and setups that use it will have to move to a real contract.
-
-**Linking two UMH Core instances with Kafka bridges.** Two instances can exchange data over Kafka today. This path ends when the `umh-core-API` plugin ships, which is the intended way to connect one instance to another.
+Use a provisional path when you need it, and tell us when you do, so that we know who to warn. Where we already know what will end one, the page that describes it says so.
 
 ## Escape hatches
 
