@@ -2,9 +2,9 @@
 
 > **Prerequisite:** Complete the [Getting Started guide](../../getting-started/) to understand basic connections and data organization.
 
-Data flows move and transform industrial data in UMH Core. Three types serve different purposes:
+Data flows move and transform industrial data in UMH Core. Three types serve different purposes.
 
-Data flows are a [product feature](../../product-features-and-supported-paths.md).
+Bridges and stream processors are [product features](../../product-features-and-supported-paths.md#product-features). Stand-alone flows are a [supported path](../../product-features-and-supported-paths.md#supported-paths).
 
 ## The Data Flows card
 

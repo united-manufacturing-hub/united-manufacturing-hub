@@ -33,7 +33,7 @@ agent:
   enableResourceLimitBlocking: false
 ```
 
-The setting takes effect without a restart. While it is `false`, the instance shows as degraded with the reason "Bridge admission is off", so it is not left in place by accident. It is an escape hatch, not a permanent configuration: while bridge admission is off, nothing stops a new bridge from loading an instance that is already short on resources. Set it back to `true` once the resource problem is fixed.
+The setting takes effect without a restart. While it is `false`, the instance shows as degraded with the reason "Bridge admission is off", so the setting is not left in place by accident. The setting is an [escape hatch](../../product-features-and-supported-paths.md#escape-hatches): while bridge admission is off, nothing stops a new bridge from loading an instance that is already short on resources. Set it back to `true` once the resource problem is fixed.
 
 ## After a restart
 

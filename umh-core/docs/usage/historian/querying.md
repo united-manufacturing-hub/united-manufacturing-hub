@@ -4,12 +4,12 @@ Once a [Historian bridge](save-to-historian.md) is storing a contract, the data 
 TimescaleDB, and any SQL client or Grafana can read it. The fastest route is to copy a query out of
 the topic browser; the schema further down is for when you write your own.
 
+The Management Console never runs these queries. It generates the SQL and you paste it into Grafana
+or psql.
+
 {% hint style="info" %}
 **Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
 {% endhint %}
-
-The Management Console never runs these queries. It generates the SQL and you paste it into Grafana
-or psql.
 
 ## Copy a query from the topic browser
 
