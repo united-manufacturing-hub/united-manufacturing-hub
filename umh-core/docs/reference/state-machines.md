@@ -66,7 +66,7 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | **active**                         | Processing data through flows.                               | `""` (empty when fully healthy)                                 | *data\_received*                                 | *no\_data\_timeout* → **idle**<br>*degraded* events → **degraded\_***<br>*stop* → **stopping**   |
 | ⚠️ **degraded\_connection**        | External system unreachable after a successful start. | `"connection degraded: probe timeout after 30s"`                | *connection\_unhealthy*                          | *recovered* → **idle**<br>*stop* → **stopping**                                               |
 | ⚠️ **degraded\_redpanda**          | Message broker issues after successful start.                | `"redpanda degraded: not responding"`                           | *redpanda\_degraded*                             | *recovered* → **idle**<br>*stop* → **stopping**                                               |
-| ⚠️ **degraded\_dfc**               | Flow component issues after successful start.                | `"flow degraded: benthos service not running"`                  | *dfc\_degraded*                                  | *recovered* → **idle**<br>*stop* → **stopping**                                               |
+| ⚠️ **degraded\_dfc**               | The read or write flow is degraded after a successful start. The reason is the flow's own. | `"flow degraded: degraded: benthos reported 6484 processor errors"` | *dfc\_degraded*                                  | *recovered* → **idle**<br>*stop* → **stopping**                                               |
 | ⚠️ **degraded\_other**             | Inconsistent component states detected.                      | `"other degraded: inconsistent states"`                         | *degraded\_other*                                | *recovered* → **idle**<br>*stop* → **stopping**                                               |
 | *stopping*                         | Stopping all components.                                     | `"stopping"`                                                     | *stop*                                           | *stop\_done* → **stopped**                                                                     |
 
@@ -92,10 +92,12 @@ Each component inherits lifecycle states (`to_be_created`, `creating`, `removing
 | *starting\_waiting\_for\_service\_to\_remain\_running* | Stability grace period.                                |
 | **idle**                                               | Flow running, no msgs for idle window.                 |
 | **active**                                             | Processing messages.                                   |
-| ⚠️ **degraded**                                        | Flow running but in an error state (e.g., retries to reach the external system). |
+| ⚠️ **degraded**                                        | A check on the running flow failed: process, uptime, logs, output errors, processor errors or health checks, in that order. |
 | *stopping*                                             | Graceful SIGTERM underway.                             |
 
 > **Idle/Active timeout:** default 30 s (`BRIDGE_IDLE_WINDOW`).
+
+The status shows the reason of the first check that fails, so output errors show before processor errors. Each error count is the sum over all output paths or all processor paths, nested processors included. It counts errors, not failed messages, from the start of the Benthos process, so a degraded flow with counted errors recovers only after the process restarts. Stream processors show only their state, not this reason. [Why a Data Flow Is Degraded](../usage/data-flows/why-a-flow-is-degraded.md) explains the checks, the counts and recovery.
 
 ---
 

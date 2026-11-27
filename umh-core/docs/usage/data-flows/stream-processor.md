@@ -134,6 +134,10 @@ See the [Stream Processors configuration guide](../data-modeling/stream-processo
 | **Stream Processors** | Transform data WITHIN the UNS | UNS topics | UNS model topics |
 | **Stand-alone Flows** | Custom processing | Any input | Any output |
 
+## Degraded status
+
+A stream processor shows degraded when its internal flow or Redpanda is degraded. The status shows only the state, for example `Stream processor degraded_dfc`. It does not show the reason or the error count of the internal flow. To find the cause, open **Metrics** and the logs. [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the checks and how the flow recovers.
+
 ## Metrics
 
 The Management Console shows each stream processor's message counts. Open the stream processor and select **Metrics** on the Monitoring card. The view shows messages received and sent, errors and latency. Port 8080, umh-core's Prometheus endpoint, does not carry message counts. It carries the stream processor's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stream processors and what the labels and the state values mean.

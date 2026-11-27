@@ -155,6 +155,10 @@ dataFlow:
           stdout: {}
 ```
 
+## Degraded status
+
+A stand-alone flow shows degraded when a check on its Benthos process fails, for example when the process logged an error in the last 10 minutes or counted output or processor errors. The status shows the reason of the first failing check. Output errors come before processor errors. A processor error count is the sum over all processors of the flow, nested ones included, for example `benthos reported 6484 processor errors` for 6 and 6,478 errors at two processors. It counts errors, not failed messages, and counts from the start of the Benthos process. Messages that succeed later do not clear it, so the flow stays degraded until the process restarts. [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) explains the checks, the counts and how to recover.
+
 ## Metrics
 
 The Management Console shows each flow's message counts. Select **Metrics** in the flow's context menu. The view shows messages received and sent, errors and latency for the flow's input, processors and output. Port 8080, umh-core's Prometheus endpoint, does not carry these counts. It carries the flow's state and error counts. [Metrics](../instances/agent/metrics.md) explains how to read them, which framework runs stand-alone flows and what the labels and the state values mean.
@@ -183,3 +187,4 @@ The definitions are in [`pkg/metrics/metrics.go`](https://github.com/united-manu
 - Learn about [Bridges](bridges.md) to read from and write to external systems
 - Explore [Stream Processors](stream-processor.md) for data transformation
 - See [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh) for all processors
+- Read [Why a Data Flow Is Degraded](why-a-flow-is-degraded.md) when a flow shows degraded

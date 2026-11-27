@@ -121,6 +121,8 @@ dataFlow:
 | `pipeline.processors` | Standard Benthos processors **plus** `tag_processor` & `nodered_js`.           |
 | `output.*`            | Usually `uns: {}` for Unified Namespace. MQTT, HTTP, SQL, etc. also available. |
 
+umh-core passes only these top-level keys of `benthos` to Benthos: `input`, `pipeline`, `output`, `buffer`, `cache_resources` and `rate_limit_resources`. It drops any other key without an error, for example `processor_resources`. Define processors inline under `pipeline.processors` instead.
+
 _For complete input/output syntax see [Benthos-UMH Documentation](https://docs.umh.app/benthos-umh)_
 
 ### Bridge
