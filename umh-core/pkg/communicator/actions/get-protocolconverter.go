@@ -231,7 +231,8 @@ func connectionInfoFromSpec(
 		}
 	}
 
-	if !hasConnectionVars {
+	// a historian bridge's nmap port is the unrendered {{ .historian.timescale.port }}; the caller reads its resolved connection instead
+	if !hasConnectionVars && !writesToHistorian(spec.Config.DataflowComponentWriteServiceConfig) {
 		if nmap := spec.Config.ConnectionServiceConfig.NmapTemplate; nmap != nil {
 			ip = nmap.Target
 			if nmap.Port != "" {
@@ -338,7 +339,7 @@ func (a *GetProtocolConverterAction) Execute() (interface{}, map[string]interfac
 					return nil, nil, fmt.Errorf("no observed state found for protocol converter %s", instance.ID)
 				}
 
-				// Get IP, port, and template info from observed, rendered spec config
+				// Get IP, port, and template info from the observed spec config, which is not rendered
 				specConfig := observedState.ObservedProtocolConverterSpecConfig
 				ip, port, templateInfo := connectionInfoFromSpec(specConfig, a.actionLogger)
 

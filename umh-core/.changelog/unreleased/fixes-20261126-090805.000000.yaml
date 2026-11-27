@@ -1,0 +1,3 @@
+kind: fixes
+body: 'Historian bridges no longer fill the umh-core log with "Failed to parse port number" warnings while the Management Console shows them.'
+time: 2026-11-26T09:08:05.000000+01:00
