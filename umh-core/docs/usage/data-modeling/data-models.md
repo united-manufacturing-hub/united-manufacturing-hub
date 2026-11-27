@@ -4,6 +4,8 @@
 
 Data models define the hierarchical structure of your industrial data. They create the virtual paths and fields that organize raw data into meaningful information.
 
+Data models are a [product feature](../../product-features-and-supported-paths.md).
+
 ## Overview
 
 In the [component chain](README.md#the-component-chain), models provide the structure:

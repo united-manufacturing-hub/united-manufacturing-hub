@@ -4,6 +4,8 @@ The Topic Browser shows your topics as a tree, with the current value and the re
 
 If the tree stays empty while your instance is producing data, or a topic you expect never appears, see [Topic does not appear in the Topic Browser](topic-does-not-appear-in-the-topic-browser.md). If a value changes at uneven times or its age grows longer than you expect, see [Values are not updating at regular intervals](values-are-not-updating-at-regular-intervals.md).
 
+The Topic Browser is a [product feature](../../product-features-and-supported-paths.md).
+
 ## How live updates work
 
 A topic reaches the tree in three steps:

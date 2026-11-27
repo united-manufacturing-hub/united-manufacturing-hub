@@ -6,6 +6,8 @@ A bridge (UI: "Bridges", YAML: `protocolConverter:`) connects the Unified Namesp
 
 It combines a **connection probe**, a **read flow** and a **write flow** under a single name and lifecycle. [Connection Probe](connection-probe.md) and [Read Flow](read-flow.md) describe the parts. To create a bridge, see [Create a bridge](create-a-bridge.md).
 
+Bridges are a [product feature](../../product-features-and-supported-paths.md).
+
 ## UI Capabilities
 
 | Action | Available | Notes |

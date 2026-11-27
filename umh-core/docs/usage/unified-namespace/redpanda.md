@@ -4,6 +4,8 @@ Redpanda is the message broker inside the UMH Core container, and it uses the Ka
 
 umh-core starts one Redpanda inside the container and restarts it when it fails. Redpanda keeps its data in `/data/redpanda`.
 
+Redpanda is a [product feature](../../product-features-and-supported-paths.md).
+
 ## Redpanda states
 
 Redpanda is always in one of the states below. The **Redpanda** card on the instance details page in the Management Console shows the state as a badge. The badge tooltip shows the reason for the state.

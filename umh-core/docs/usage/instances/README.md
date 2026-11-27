@@ -2,6 +2,8 @@
 
 An instance is a running UMH Core container: a single Docker container that hosts your Unified Namespace, your bridges and your flows. Each instance has a location path like `enterprise.site.area.line`, which decides where its data appears in the Unified Namespace. The Instance UUID identifies the instance.
 
+Instances are a [product feature](../../product-features-and-supported-paths.md).
+
 ## The instance list
 
 **Instances** lists every instance you can access, one row each:

@@ -2,6 +2,8 @@
 
 The agent is the `umh-core` process inside the UMH Core container. It starts, watches and restarts the components inside the container. These components are the bridges, the stand-alone flows, the stream processors and Redpanda.
 
+The agent is a [product feature](../../../product-features-and-supported-paths.md).
+
 ## The Agent card
 
 The Agent card on the instance details page shows the identity and the version of the instance.

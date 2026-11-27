@@ -6,6 +6,10 @@ TimescaleDB. You create one bridge per contract you want to keep.
 The bridge has only a write flow: it subscribes to UNS topics and writes their messages to TimescaleDB, so it
 has no read flow.
 
+{% hint style="info" %}
+**Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
+{% endhint %}
+
 ## Before you start
 
 Set up the instance's [Historian connection](README.md#set-up-the-connection) first. Without it, the

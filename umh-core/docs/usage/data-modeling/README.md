@@ -2,6 +2,8 @@
 
 Data modeling in UMH Core transforms device data into business-ready information through structured schemas and validation.
 
+Data modeling is a [product feature](../../product-features-and-supported-paths.md).
+
 ## The Component Chain
 
 ```mermaid

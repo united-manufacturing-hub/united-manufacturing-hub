@@ -4,6 +4,8 @@
 
 The Unified Namespace (UNS) is where ALL your industrial data lives in one organized, accessible place. Instead of hunting through 50 different systems to find a temperature reading, everything flows through one central hub.
 
+The Unified Namespace is a [product feature](../../product-features-and-supported-paths.md).
+
 ## The Problem: Spaghetti Diagrams
 
 Traditional manufacturing IT looks like this:

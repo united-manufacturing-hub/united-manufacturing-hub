@@ -4,6 +4,8 @@ The read flow is the part of a [bridge](bridges.md) that reads from the external
 
 A bridge can have only a read flow, only a write flow, or both. The read flow and the write flow start, stop and report their state separately. To configure a read flow in the Management Console, see [Set up a read flow](set-up-a-read-flow.md).
 
+The read flow is a [product feature](../../product-features-and-supported-paths.md).
+
 ## What the Management Console shows
 
 The bridge's overview page shows the read flow as its own card, next to the connection and the write flow. The card shows a badge and the throughput of the read flow in messages per second. The icon next to the badge shows the state of the read flow, such as "Flow is idle". A read flow stopped with `readDFCDesiredState: stopped` shows the badge Stopped. **Metrics** opens the message counts of the read flow, and **Logs** opens its log.

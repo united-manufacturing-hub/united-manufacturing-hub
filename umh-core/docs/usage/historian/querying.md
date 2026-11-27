@@ -7,6 +7,10 @@ the topic browser; the schema further down is for when you write your own.
 The Management Console never runs these queries. It generates the SQL and you paste it into Grafana
 or psql.
 
+{% hint style="info" %}
+**Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
+{% endhint %}
+
 ## Copy a query from the topic browser
 
 1. Open the **Topic Browser** and select a tag.

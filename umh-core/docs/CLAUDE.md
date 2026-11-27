@@ -72,6 +72,27 @@ Use one word per concept on every page. Literal UI labels, error messages, YAML 
 
 <!-- vale on -->
 
+### Product features and paths
+
+<!-- vale off -->
+
+| Concept | Use | Instead of |
+|---|---|---|
+| A documented way to do a job that no product feature covers, which we keep working | **supported path** | workaround |
+| A documented way that works now and may need a migration later | **provisional path** | workaround, temporary solution |
+| A setting that lets a user past a check umh-core makes | **escape hatch** | emergency fallback, emergency setting |
+
+<!-- vale on -->
+
+[Product Features and Supported Paths](product-features-and-supported-paths.md) defines all three for readers, and is the only page that does. "Fallback" has no rule, because it is correct in Emergency Access and in "the FSMv1 fallback is gone". Do not use it to name a path.
+
+Every page that names a component or a part of one states its status, because a reader cannot tell an unlabelled page from one nobody has got to yet. A guide or a troubleshooting page below it has the component's status and does not state it.
+
+- A product feature gets one plain sentence after the opening prose, such as "Bridges are a [product feature](../../product-features-and-supported-paths.md)." It gets no hint block, because a product feature needs no warning.
+- A supported path, a provisional path or an early access feature gets a `{% hint style="info" %}` block with a bold lead, because each one changes what a reader should build on. Follow the shape `usage/historian/sizing.md` already uses.
+
+An early access notice is the exception to the rule for child pages: it repeats on every page of the feature, guides and troubleshooting pages included, because a reader who arrives from search never passes the parent page.
+
 The words in the table that are wrong in every context, and the direction words, are also [Vale](https://vale.sh) rules in `.vale/styles/UMH/`. Change the table and the rules together. To check your pages, run `make docs-lint` from `umh-core`. It runs Vale in Docker. CI adds the same warnings to a pull request, on the lines it adds. Vale flags the direction words, such as sends or receives, only right after a bridge or a flow. Words that are right in some contexts, such as device, endpoint or connection, have no rule. Check them in review.
 
 - The read flow publishes what it reads to the UNS, and the write flow writes to the external system what it subscribed to. "Reads from the PLC" and "writes to the MES" need no direction words.
