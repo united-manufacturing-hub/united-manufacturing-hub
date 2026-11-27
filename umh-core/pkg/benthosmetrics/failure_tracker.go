@@ -172,8 +172,9 @@ func (ft *failureTracker) judge(fired []diagnosis.Fired, current failureReading)
 		}
 
 		count, _ := ft.engine.Reduction(string(c.name), string(c.name)).Get()
-		// Through a local: nilaway panics on *c.field(...) = ... because
-		// field is a func-typed struct field, not a declared function.
+		// Both loops bind c.field(&report) before assigning through it:
+		// nilaway panics on `*c.field(&report) = ...` because field is a
+		// func-typed struct field, not a function.
 		slot := c.field(&report)
 		*slot = &RecentErrors{
 			Count:       int64(count),

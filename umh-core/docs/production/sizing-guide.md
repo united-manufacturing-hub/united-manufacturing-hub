@@ -26,7 +26,7 @@ UMH Core needs 1 vCPU for the [Unified Namespace](../usage/unified-namespace/REA
 
 Part of the 0.2 vCPU monitoring overhead goes to reading each flow's metrics. By default, a separate monitoring service does this for each flow. Adding `-e USE_FSMV2_BENTHOS_METRICS=true` to the `docker run` command moves this work into the UMH Core process, where it costs less CPU. Remove and recreate the container for the change to apply, because `docker restart` keeps the old environment. Still plan 0.2 vCPU per flow: it is a conservative budget that also covers the log analysis, which this variable does not change.
 
-Your flows' own work comes on top of that overhead, and depends on what they do. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags, and a single high-rate bridge can need more than the overhead budget by itself. Above an estimated 10,000 messages per second on the instance, plan more vCPU and [contact us](https://discord.gg/F9mqkZnm8U).
+Your flows' own work comes on top of that overhead, and depends on what they do. An OPC UA bridge polling 10,000 tags needs more CPU than an MQTT bridge with 100 tags, and a single high-rate bridge can need more than the overhead budget by itself. Above an estimated 10,000 messages per second on the instance, plan more vCPU and [contact us](../get-help.md).
 
 On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full physical core, as on AWS Graviton, the same vCPU count gives at least as much. UMH Core counts each vCPU as one core.
 
@@ -34,7 +34,7 @@ On the example instances, 1 vCPU is one hyperthread. Where 1 vCPU is a full phys
 
 All CPU figures in these docs assume vCPUs as fast as those of the [example instances](#recommended-machine), not overcommitted, with no other software on the machine. Each of these reduces what UMH Core can do:
 
-- **Overcommitted virtual machines.** Set a CPU reservation for UMH Core's VM. If [CPU Health](../usage/instances/container/cpu-health/README.md#thresholds) shows Steal above 10% (status "CPU taken by the server"), the host is giving the VM's cores to other VMs. VMware shows the same on the host as CPU Ready. Even an idle-looking VM can wait for its cores, see [CPU contention while cores are free](../usage/instances/container/cpu-health/cpu-contention-while-cores-are-free.md).
+- **Overcommitted virtual machines.** Set a CPU reservation for UMH Core's VM. If the [CPU Technical Details](../usage/instances/container/README.md#cpu-technical-details) show Steal above 10% (status "CPU taken by the server"), the host is giving the VM's cores to other VMs. VMware shows the same on the host as CPU Ready. Even an idle-looking VM can wait for its cores, see [CPU contention while cores are free](../usage/instances/container/cpu-contention-while-cores-are-free.md).
 - **Older or slower CPUs.** Each flow takes a larger share of an older or slower core.
 - **Other software on the machine.** Antivirus, compliance agents and other containers use CPU, memory and disk on top of UMH Core. Exclude the host directory behind the `/data` volume from real-time antivirus scanning.
 
@@ -74,9 +74,9 @@ To use less disk:
 
 ## Headroom and resizing
 
-Size the machine so that, under normal load, memory stays below 70% and disk below 75%, as shown on the [Container card](../usage/instances/container/README.md#when-the-container-shows-degraded), and [CPU Health](../usage/instances/container/cpu-health/README.md) stays healthy.
+Size the machine so that, under normal load, memory stays below 70% and disk below 75%, as shown on the [Container card](../usage/instances/container/README.md#the-container-card), and [CPU health](../usage/instances/container/cpu-health.md) stays healthy.
 
-Grow the machine when the Container card shows CPU, memory or disk as degraded, or when new bridges wait at the [bridge limit](../usage/data-flows/bridges-do-not-start.md#bridge-limit). For CPU, [CPU Health](../usage/instances/container/cpu-health/README.md) explains each status and what to do.
+Grow the machine when the Container card shows CPU, memory or disk as degraded, or when new bridges wait at the [bridge limit](../usage/data-flows/bridges-do-not-start.md#bridge-limit). For CPU, [What to do for each CPU status](../usage/instances/container/container-shows-degraded.md#cpu) lists the steps.
 
 UMH Core keeps all its state in the `/data` volume. To grow the machine:
 

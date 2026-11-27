@@ -264,9 +264,9 @@ Two consequences to be aware of:
   more than a compacted snapshot. See the [Sizing Guide](../production/sizing-guide.md)
   before running a high-throughput instance, and cap the topic with
   `defaultTopicRetentionBytes` if disk is tighter than the retention window.
-* **The Topic Browser tree is rebuilt from the retained window.** After a restart, a tag
-  that has not published for more than seven days is missing from the tree until it
-  publishes again.
+* **The Topic Browser reads the retained window only when it has no committed offset,**
+  normally on its first run. After that it resumes from the offset it committed, so a
+  restart does not replay older records.
 
 Instances that already have a `config.yaml` keep the policy they run on today, which is
 `compact` unless it was set explicitly — upgrading never changes their retention. To move

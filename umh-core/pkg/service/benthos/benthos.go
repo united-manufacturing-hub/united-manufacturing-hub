@@ -1122,11 +1122,9 @@ func (s *BenthosService) IsMetricsErrorFree(metrics benthos_monitor.BenthosMetri
 		return false, fmt.Sprintf("benthos reported %d output errors", total)
 	}
 
-	// Check processor errors
-	for _, proc := range metrics.Metrics.Process.Processors {
-		if proc.Error > 0 {
-			return false, fmt.Sprintf("benthos reported %d processor errors", proc.Error)
-		}
+	// Check processor errors.
+	if total := metrics.Metrics.ProcessorErrorTotal(); total > 0 {
+		return false, fmt.Sprintf("benthos reported %d processor errors", total)
 	}
 
 	return true, ""

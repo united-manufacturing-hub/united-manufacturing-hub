@@ -80,7 +80,7 @@ S6_OVERLAY_VERSION = 3.2.0.2
 REDPANDA_VERSION = 24.3.18
 ## Benthos version is a tag or a sha-<commit hash> (e.g. 0.9.4 or sha-a51a685) to be used in the docker image
 ## Each benthos-umh release opens a PR (author umh-cross-repo-automation) that bumps this value. Review that PR instead of bumping by hand, and add a changelog fragment to it.
-BENTHOS_UMH_VERSION = 0.17.0
+BENTHOS_UMH_VERSION = 0.17.1
 BUF_VERSION = 1.55.1
 PROTOC_GEN_GO_VERSION = 1.36.6
 
