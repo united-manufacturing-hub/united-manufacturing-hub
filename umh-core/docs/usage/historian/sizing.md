@@ -1,6 +1,6 @@
 # Historian Sizing
 
-This page tells you what to add to a machine for the Historian and how much disk it needs per year. The figures assume the Historian output's standard settings. Count the values that reach the Unified Namespace, not the values a bridge reads from its device, because a time-series read flow drops unchanged values, as [umh-core adds a downsampler](../data-flows/read-flow.md#umh-core-adds-a-downsampler) describes.
+This page tells you what to add to a machine for the Historian and how much disk it needs per year. The figures assume the Historian output's standard settings. Count the values that reach the Unified Namespace. A time-series read flow drops unchanged values before they get there, as [umh-core adds a downsampler](../data-flows/read-flow.md#umh-core-adds-a-downsampler) describes.
 
 {% hint style="info" %}
 **Early access.** The Historian is not switched on by default. See [Historian](README.md) for how to get started.
