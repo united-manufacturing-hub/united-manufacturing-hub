@@ -28,7 +28,7 @@ Use a provisional path when you need it, and tell us when you do, so that we kno
 
 ## Escape hatches
 
-An escape hatch is a setting that lets you past a check UMH Core makes. A path is a way of working, so the two are different things, and something can be both: you reach the unchecked-data-contract path above by setting an escape hatch.
+An escape hatch is a setting that lets you past a check UMH Core makes. A path is a way of working, so the two are different things. They can meet: where a path exists only because a check can be switched off, the page that describes the path names the setting that opens it.
 
 An escape hatch stays available for as long as the check does, because the two exist together. While one is set, the instance tells you so, which is how it does not stay set by accident. [Turn off bridge admission](usage/data-flows/bridges-do-not-start.md) is one.
 
