@@ -4,6 +4,8 @@
 
 Payload shapes define the structure and validation rules for message payloads. While built-in shapes handle most time-series data, custom shapes enable relational data modeling for complex business records.
 
+Payload shapes are a [product feature](../../product-features-and-supported-paths.md).
+
 ## Overview
 
 In the [component chain](README.md#the-component-chain), payload shapes provide the foundation:

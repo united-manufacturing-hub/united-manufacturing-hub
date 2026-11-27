@@ -4,6 +4,8 @@
 
 Data contracts are the enforcement mechanism that makes data models mandatory. Without a contract, models are just documentation - contracts make validation happen.
 
+Data contracts are a [product feature](../../product-features-and-supported-paths.md).
+
 ## Overview
 
 In the [component chain](README.md#the-component-chain), contracts sit between models and execution:

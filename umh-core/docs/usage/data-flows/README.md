@@ -4,6 +4,8 @@
 
 Data flows move and transform industrial data in UMH Core. Three types serve different purposes:
 
+Data flows are a [product feature](../../product-features-and-supported-paths.md).
+
 ## The Data Flows card
 
 The Data Flows card on the instance details page counts the data flows of the instance.

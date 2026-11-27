@@ -4,6 +4,8 @@
 
 Stream processors transform data already inside the Unified Namespace, aggregating data from several devices into business KPIs and metrics. They're the third type of data flow, specialized for transforming device models into business models.
 
+Stream processors are a [product feature](../../product-features-and-supported-paths.md).
+
 ## When to Use
 
 Use stream processors for:

@@ -2,6 +2,8 @@
 
 The container is the Docker container that UMH Core runs in. Its CPU, memory and disk are shared by every bridge, flow and Redpanda. When one of them crosses its threshold, the Container card shows Degraded, and new bridges wait to start.
 
+The container is a [product feature](../../../product-features-and-supported-paths.md).
+
 ## The Container card
 
 The Container card on the instance details page shows the CPU, memory and disk of the container, its CPU architecture and the Hardware ID of the installation.

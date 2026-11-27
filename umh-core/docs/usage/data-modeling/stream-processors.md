@@ -4,6 +4,8 @@
 
 Stream processors are one way to create business models by transforming multiple device model streams into KPIs and metrics.
 
+Stream processors are a [product feature](../../product-features-and-supported-paths.md).
+
 ## Overview
 
 Stream processors aggregate device data into business KPIs:

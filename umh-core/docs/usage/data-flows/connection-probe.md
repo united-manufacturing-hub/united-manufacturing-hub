@@ -4,6 +4,8 @@ The connection probe is the part of a [bridge](bridges.md) that checks whether t
 
 A bridge's flows start only once the connection is up. [How the connection affects the bridge](#how-the-connection-affects-the-bridge) describes what happens when it goes down.
 
+The connection probe is a [product feature](../../product-features-and-supported-paths.md).
+
 ## What the Management Console shows
 
 The bridge's overview page shows the connection as its own card, next to the read flow and the write flow. The card shows a badge. The icon next to the badge shows the connection's state, or, when the last probe failed, the reason. For example, the external system refused the connection on its port, or the host name could not be found.
